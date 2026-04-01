@@ -113,6 +113,12 @@ export default function Warehouse() {
         .replace(/\s+/g, "_")
         .replace(/[^A-Z0-9_]/g, "");
 
+      if (!zoneId) {
+        setModalError("El nombre no puede contener solo caracteres especiales");
+        setIsCreatingZone(false);
+        return;
+      }
+
       await createCompleteZone(
         zoneId,
         newZoneName,
@@ -145,9 +151,16 @@ export default function Warehouse() {
       setNewZoneLayout("horizontal");
       setNewZonePositions([{ name: "A", locations: 10 }]);
       setIsNewZoneModalOpen(false);
-    } catch (error) {
-      setModalError("Error al crear la zona. Intenta de nuevo.");
-      console.error(error);
+    } catch (error: any) {
+      const msg = error?.message ?? String(error);
+      console.error("❌ Error creando zona:", error);
+      if (msg.includes("permission") || msg.includes("PERMISSION_DENIED")) {
+        setModalError("Sin permisos en Firebase. Revisa las reglas de Firestore.");
+      } else if (msg.includes("offline") || msg.includes("network")) {
+        setModalError("Sin conexión. Comprueba tu internet.");
+      } else {
+        setModalError(`Error: ${msg}`);
+      }
     } finally {
       setIsCreatingZone(false);
     }
