@@ -32,3 +32,4 @@ dist-ssr
 
 # Firebase admin key (MUY IMPORTANTE)
 serviceAccountKey.json
+triniglassdb-firebase-adminsdk-*.json
