@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import Stock from './components/Stock'; 
 import Warehouse from './components/Warehouse';
+import Login from './components/Login';
 
 // Componentes temporales para rellenar las otras pantallas
 const Resumen = () => (
@@ -22,6 +23,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/login" element={<Login />} />
         <Route path="/" element={<Layout />}>
           {/* Rutas conectadas con los enlaces de tu nuevo menú */}
           <Route index element={<Resumen />} />
