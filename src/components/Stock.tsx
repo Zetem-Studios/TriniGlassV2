@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
-import { Search, Filter, ArrowUpDown, Plus, Eye, MapPin, MoreVertical, X, Edit, Trash2 } from "lucide-react";
+import { Search, Filter, ArrowUpDown, Plus, Eye, MapPin, MoreVertical, X, Edit, Trash2, Camera } from "lucide-react";
+import QRScanner from "./QRScanner";
 
 interface Palet {
   id: string;
@@ -14,6 +15,7 @@ interface Palet {
 export default function Stock() {
   const [inventory, setInventory] = useState<Palet[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isScanning, setIsScanning] = useState(false);
 
   // --- ESTADOS DE BÚSQUEDA Y FILTROS ---
   const [searchTerm, setSearchTerm] = useState("");
@@ -158,6 +160,12 @@ export default function Stock() {
               className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-slate-100 placeholder-slate-400"
             />
           </div>
+          <button 
+            onClick={() => setIsScanning(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800"
+          >
+            <Camera size={18} /> Escanear
+          </button>
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
@@ -332,6 +340,26 @@ export default function Stock() {
           </div>
         </div>
       </div>
+
+      {/* --- MODAL LECTOR QR --- */}
+      {isScanning && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden relative">
+            <div className="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-800">
+              <h3 className="font-bold text-slate-900 dark:text-white">Escanear Código</h3>
+              <button onClick={() => setIsScanning(false)} className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-4">
+              <QRScanner onScanSuccess={(text) => {
+                setSearchTerm(text);
+                setIsScanning(false);
+              }} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* --- PANEL LATERAL DE EDICIÓN --- */}
       {isPanelOpen && <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 transition-opacity" onClick={() => setIsPanelOpen(false)} />}
