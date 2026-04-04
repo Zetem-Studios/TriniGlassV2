@@ -46,16 +46,16 @@ export default function Warehouse() {
   const [zones, setZones] = useState<any[]>(INITIAL_ZONES);
   const [blocks] = useState(ALL_BLOCKS);
 
-  // Cargar zonas creadas en Firebase y añadirlas al dropdown (sin tocar las hardcodeadas)
+  // Cargar zonas nuevas de Firebase y añadirlas al dropdown (sin duplicar las hardcodeadas)
   useEffect(() => {
     getZones().then(data => {
       const normalized = data.map((z: any) => ({
-        id: z.id,
+        id: z.id.toLowerCase(),
         name: z.name,
-        areas: z.posiciones.length > 0 ? z.posiciones : Object.keys(z.subzones),
-        layout: z.layout ?? "horizontal",
+        areas: z.posiciones,
+        layout: "horizontal",
       }));
-      const nuevas = normalized.filter(fz => !INITIAL_ZONES.some(iz => iz.id === fz.id));
+      const nuevas = normalized.filter(fz => !INITIAL_ZONES.some(iz => iz.id.toLowerCase() === fz.id.toLowerCase()));
       if (nuevas.length > 0) setZones([...INITIAL_ZONES, ...nuevas]);
     }).catch(() => {});
   }, []);
@@ -80,14 +80,14 @@ export default function Warehouse() {
   const handleZoneCreated = async (zoneId: string) => {
     const data = await getZones();
     const normalized = data.map((z: any) => ({
-      id: z.id,
+      id: z.id.toLowerCase(),
       name: z.name,
-      areas: z.posiciones.length > 0 ? z.posiciones : Object.keys(z.subzones),
-      layout: z.layout ?? "horizontal",
+      areas: z.posiciones,
+      layout: "horizontal",
     }));
-    const nuevas = normalized.filter(fz => !INITIAL_ZONES.some(iz => iz.id === fz.id));
+    const nuevas = normalized.filter(fz => !INITIAL_ZONES.some(iz => iz.id.toLowerCase() === fz.id.toLowerCase()));
     setZones([...INITIAL_ZONES, ...nuevas]);
-    setSelectedZone(zoneId);
+    setSelectedZone(zoneId.toLowerCase());
     setIsNewZoneModalOpen(false);
   };
 

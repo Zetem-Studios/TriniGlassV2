@@ -16,20 +16,20 @@ export const db = getFirestore(app);
 
 export const getZones = async () => {
   const snapshot = await getDocs(collection(db, "zonas"));
-  return snapshot.docs.map(d => {
-    const data = d.data() as any;
-    const posicionesRaw: any[] = data.posiciones ?? [];
-    const posiciones: string[] = posicionesRaw.map((p: any) =>
-      typeof p === "string" ? p : (p.nombre ?? p.name ?? String(p))
-    );
-    return {
-      id: d.id,
-      name: data.nombre ?? data.name,
-      posiciones,
-      subzones: data.subzones ?? {},
-      layout: data.layout ?? "horizontal"
-    };
-  });
+  return snapshot.docs
+    .filter(d => {
+      const posiciones = d.data().posiciones;
+      return Array.isArray(posiciones) && posiciones.every(p => typeof p === "string");
+    })
+    .map(d => {
+      const data = d.data() as any;
+      return {
+        id: d.id,
+        name: data.nombre ?? data.name,
+        posiciones: data.posiciones as string[],
+        subzones: data.subzones ?? {},
+      };
+    });
 };
 
 // Crear zona 
