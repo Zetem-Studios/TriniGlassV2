@@ -9,50 +9,34 @@ interface NewZoneModalProps {
 }
 
 export default function NewZoneModal({ isOpen, onClose, onZoneCreated }: NewZoneModalProps) {
-  const [newZoneName, setNewZoneName] = useState("");
-  const [newZoneType, setNewZoneType] = useState<"produccion" | "almacenamiento" | "expedicion">("almacenamiento");
-  const [newZoneLayout, setNewZoneLayout] = useState<"horizontal" | "vertical">("horizontal");
-  const [newZonePositions, setNewZonePositions] = useState<Array<{ name: string; locations: number }>>([{ name: "A", locations: 10 }]);
+  const [nombre, setNombre] = useState("");
+  const [tipo, setTipo] = useState<"produccion" | "almacenamiento" | "expedicion">("almacenamiento");
+  const [posiciones, setPosiciones] = useState<string[]>(["A"]);
+  const [descripcion, setDescripcion] = useState("");
   const [modalError, setModalError] = useState("");
   const [isCreatingZone, setIsCreatingZone] = useState(false);
 
   const handleAddZone = async () => {
     setModalError("");
 
-    if (!newZoneName.trim()) {
+    if (!nombre.trim()) {
       setModalError("El nombre de la zona es obligatorio");
       return;
     }
-    if (newZonePositions.length === 0) {
+    if (posiciones.length === 0) {
       setModalError("Debes agregar al menos una posición");
       return;
     }
-    if (newZonePositions.some(p => !p.name.trim() || p.locations <= 0)) {
-      setModalError("Todas las posiciones deben tener nombre y ubicaciones > 0");
+    if (posiciones.some(p => !p.trim())) {
+      setModalError("Las posiciones no pueden estar vacías");
       return;
     }
 
     setIsCreatingZone(true);
     try {
-      const zoneId = newZoneName
-        .toUpperCase()
-        .replace(/\s+/g, "_")
-        .replace(/[^A-Z0-9_]/g, "");
-
-      if (!zoneId) {
-        setModalError("El nombre no puede contener solo caracteres especiales");
-        setIsCreatingZone(false);
-        return;
-      }
-
-      await createCompleteZone(zoneId, newZoneName, newZoneType, newZoneLayout, newZonePositions);
-
-      setNewZoneName("");
-      setNewZoneType("almacenamiento");
-      setNewZoneLayout("horizontal");
-      setNewZonePositions([{ name: "A", locations: 10 }]);
-      setModalError("");
-      onZoneCreated(zoneId);
+      const codigo = await createCompleteZone(nombre, tipo, posiciones, descripcion);
+      resetForm();
+      onZoneCreated(codigo);
     } catch (error: any) {
       const msg = error?.message ?? String(error);
       console.error("❌ Error creando zona:", error);
@@ -68,12 +52,16 @@ export default function NewZoneModal({ isOpen, onClose, onZoneCreated }: NewZone
     }
   };
 
-  const closeModal = () => {
-    setNewZoneName("");
-    setNewZoneType("almacenamiento");
-    setNewZoneLayout("horizontal");
-    setNewZonePositions([{ name: "A", locations: 10 }]);
+  const resetForm = () => {
+    setNombre("");
+    setTipo("almacenamiento");
+    setPosiciones(["A"]);
+    setDescripcion("");
     setModalError("");
+  };
+
+  const closeModal = () => {
+    resetForm();
     onClose();
   };
 
@@ -110,9 +98,9 @@ export default function NewZoneModal({ isOpen, onClose, onZoneCreated }: NewZone
               <label className="text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">Nombre de la Zona</label>
               <input
                 type="text"
-                value={newZoneName}
-                onChange={(e) => { setNewZoneName(e.target.value); setModalError(""); }}
-                placeholder="Ej: CMS"
+                value={nombre}
+                onChange={(e) => { setNombre(e.target.value); setModalError(""); }}
+                placeholder="Ej: Expediciones"
                 className="w-full px-5 py-4 border border-slate-200 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-semibold"
               />
             </div>
@@ -120,8 +108,8 @@ export default function NewZoneModal({ isOpen, onClose, onZoneCreated }: NewZone
             <div className="flex flex-col gap-3 col-span-1">
               <label className="text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">Tipo de Zona</label>
               <select
-                value={newZoneType}
-                onChange={(e) => setNewZoneType(e.target.value as "produccion" | "almacenamiento" | "expedicion")}
+                value={tipo}
+                onChange={(e) => setTipo(e.target.value as "produccion" | "almacenamiento" | "expedicion")}
                 className="w-full px-5 py-4 border border-slate-200 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-semibold"
               >
                 <option value="produccion">Producción</option>
@@ -131,85 +119,38 @@ export default function NewZoneModal({ isOpen, onClose, onZoneCreated }: NewZone
             </div>
           </div>
 
-          {/* Layout */}
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">Layout de posiciones</label>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setNewZoneLayout("horizontal")}
-                className={`flex-1 py-3 rounded-xl font-bold text-sm uppercase tracking-wider border-2 transition-colors ${
-                  newZoneLayout === "horizontal"
-                    ? "bg-blue-600 border-blue-600 text-white"
-                    : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400"
-                }`}
-              >
-                ↔ Horizontal
-              </button>
-              <button
-                onClick={() => setNewZoneLayout("vertical")}
-                className={`flex-1 py-3 rounded-xl font-bold text-sm uppercase tracking-wider border-2 transition-colors ${
-                  newZoneLayout === "vertical"
-                    ? "bg-blue-600 border-blue-600 text-white"
-                    : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400"
-                }`}
-              >
-                ↕ Vertical
-              </button>
-            </div>
-          </div>
-
           {/* Posiciones */}
           <div className="flex flex-col gap-3">
             <div className="flex justify-between items-center">
-              <label className="text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">Posiciones con Ubicaciones</label>
+              <label className="text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">Posiciones</label>
               <button
-                onClick={() => setNewZonePositions([...newZonePositions, { name: String.fromCharCode(65 + newZonePositions.length), locations: 10 }])}
+                onClick={() => setPosiciones([...posiciones, String.fromCharCode(65 + posiciones.length)])}
                 className="text-xs font-bold text-blue-600 hover:text-blue-500 uppercase tracking-wider flex items-center gap-1"
               >
                 <Plus size={14} /> Agregar
               </button>
             </div>
-            <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
-              {newZonePositions.map((pos, idx) => (
-                <div key={idx} className="flex gap-3 items-end p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-xl">
-                  <div className="flex-1">
-                    <label className="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5 block">Posición</label>
-                    <input
-                      type="text"
-                      value={pos.name}
-                      onChange={(e) => {
-                        const updated = [...newZonePositions];
-                        updated[idx].name = e.target.value.toUpperCase();
-                        setNewZonePositions(updated);
-                        setModalError("");
-                      }}
-                      placeholder="A, B, C..."
-                      maxLength={3}
-                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500/50 font-bold text-center text-sm"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <label className="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5 block">Ubicaciones</label>
-                    <input
-                      type="number"
-                      value={pos.locations}
-                      onChange={(e) => {
-                        const updated = [...newZonePositions];
-                        updated[idx].locations = parseInt(e.target.value) || 1;
-                        setNewZonePositions(updated);
-                        setModalError("");
-                      }}
-                      min="1"
-                      placeholder="10"
-                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500/50 font-bold text-center text-sm"
-                    />
-                  </div>
-                  {newZonePositions.length > 1 && (
+            <div className="flex flex-wrap gap-2">
+              {posiciones.map((pos, idx) => (
+                <div key={idx} className="flex items-center gap-1">
+                  <input
+                    type="text"
+                    value={pos}
+                    onChange={(e) => {
+                      const updated = [...posiciones];
+                      updated[idx] = e.target.value.toUpperCase();
+                      setPosiciones(updated);
+                      setModalError("");
+                    }}
+                    maxLength={20}
+                    className="w-24 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500/50 font-bold text-center text-sm"
+                  />
+                  {posiciones.length > 1 && (
                     <button
-                      onClick={() => setNewZonePositions(newZonePositions.filter((_, i) => i !== idx))}
-                      className="p-2 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg text-red-500 transition-colors flex-shrink-0"
+                      onClick={() => setPosiciones(posiciones.filter((_, i) => i !== idx))}
+                      className="p-1 hover:bg-red-50 dark:hover:bg-red-950/30 rounded text-red-500 transition-colors"
                     >
-                      <Trash2 size={18} />
+                      <Trash2 size={14} />
                     </button>
                   )}
                 </div>
@@ -217,11 +158,16 @@ export default function NewZoneModal({ isOpen, onClose, onZoneCreated }: NewZone
             </div>
           </div>
 
-          {/* Resumen */}
-          <div className="p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/30 rounded-2xl">
-            <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">
-              📊 Se crearán: <strong>{newZonePositions.length} posiciones con {newZonePositions.reduce((sum, p) => sum + p.locations, 0)} ubicaciones totales</strong>
-            </p>
+          {/* Descripción */}
+          <div className="flex flex-col gap-3">
+            <label className="text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">Descripción (opcional)</label>
+            <textarea
+              value={descripcion}
+              onChange={(e) => setDescripcion(e.target.value)}
+              placeholder="Ej: Zona de salida de material terminado..."
+              rows={2}
+              className="w-full px-5 py-3 border border-slate-200 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all resize-none"
+            />
           </div>
         </div>
 

@@ -44,25 +44,20 @@ export default function Warehouse() {
   const [isZoneDropdownOpen, setIsZoneDropdownOpen] = useState(false);
   const [isNewZoneModalOpen, setIsNewZoneModalOpen] = useState(false);
   const [zones, setZones] = useState<any[]>(INITIAL_ZONES);
-  const [blocks, setBlocks] = useState(() => ALL_BLOCKS);
+  const [blocks] = useState(ALL_BLOCKS);
 
+  // Cargar zonas creadas en Firebase y añadirlas al dropdown (sin tocar las hardcodeadas)
   useEffect(() => {
     getZones().then(data => {
-      if (data.length > 0) {
-        const normalized = data.map((z: any) => ({
-          id: z.id,
-          name: z.name,
-          areas: Object.keys(z.subzones || {}),  // Extraer nombres de subzones
-          layout: z.layout ?? "horizontal",
-        }));
-        setZones(normalized);
-        setSelectedZone(normalized[0].id);
-        // Generar bloques simulados a partir de las zonas reales
-        setBlocks(normalized.flatMap((z: any) =>
-          z.areas.flatMap((area: string) => generatePallets(z.id, area, 12))
-        ));
-      }
-    });
+      const normalized = data.map((z: any) => ({
+        id: z.id,
+        name: z.name,
+        areas: z.posiciones.length > 0 ? z.posiciones : Object.keys(z.subzones),
+        layout: z.layout ?? "horizontal",
+      }));
+      const nuevas = normalized.filter(fz => !INITIAL_ZONES.some(iz => iz.id === fz.id));
+      if (nuevas.length > 0) setZones([...INITIAL_ZONES, ...nuevas]);
+    }).catch(() => {});
   }, []);
 
 
@@ -84,19 +79,15 @@ export default function Warehouse() {
 
   const handleZoneCreated = async (zoneId: string) => {
     const data = await getZones();
-    if (data.length > 0) {
-      const normalized = data.map((z: any) => ({
-        id: z.id,
-        name: z.name,
-        areas: Object.keys(z.subzones || {}),  // Extraer nombres de subzones
-        layout: z.layout ?? "horizontal",
-      }));
-      setZones(normalized);
-      setBlocks(normalized.flatMap((z: any) =>
-        z.areas.flatMap((area: string) => generatePallets(z.id, area, 12))
-      ));
-      setSelectedZone(zoneId);
-    }
+    const normalized = data.map((z: any) => ({
+      id: z.id,
+      name: z.name,
+      areas: z.posiciones.length > 0 ? z.posiciones : Object.keys(z.subzones),
+      layout: z.layout ?? "horizontal",
+    }));
+    const nuevas = normalized.filter(fz => !INITIAL_ZONES.some(iz => iz.id === fz.id));
+    setZones([...INITIAL_ZONES, ...nuevas]);
+    setSelectedZone(zoneId);
     setIsNewZoneModalOpen(false);
   };
 
@@ -185,7 +176,7 @@ export default function Warehouse() {
               <span className="text-[12px] font-black uppercase vertical-text">Entrada Exp</span>
             </div>
 
-            {zones.map(zone => (
+            {INITIAL_ZONES.map(zone => (
               <button 
                 key={zone.id} 
                 onClick={() => setSelectedZone(zone.id)}
