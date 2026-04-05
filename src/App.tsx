@@ -2,14 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import Stock from './components/Stock'; 
 import Warehouse from './components/Warehouse';
-
-// Componentes temporales para rellenar las otras pantallas
-const Resumen = () => (
-  <div>
-    <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">Panel de Control</h1>
-    <p className="text-slate-600 dark:text-slate-400">Aquí irán las tarjetas de resumen (Camiones en ruta, Tiempo medio, etc).</p>
-  </div>
-);
+import Resumen from './components/Resumen';
 
 const Alertas = () => (
   <div>
