@@ -15,6 +15,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/login" element={<Login />} />
         <Route path="/" element={<Layout />}>
           {/* Rutas conectadas con los enlaces de tu nuevo menú */}
           <Route index element={<Resumen />} />
