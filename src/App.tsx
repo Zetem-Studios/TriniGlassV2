@@ -3,6 +3,7 @@ import Layout from './components/Layout';
 import Stock from './components/Stock'; 
 import Warehouse from './components/Warehouse';
 import Resumen from './components/Resumen';
+import Login from './components/Login';
 
 const Alertas = () => (
   <div>

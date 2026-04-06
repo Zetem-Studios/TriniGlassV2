@@ -6,9 +6,10 @@ import {
   User, BarChart3, Maximize2, Weight, View, Zap, DoorOpen
 } from "lucide-react";
 import { getZones } from "../firebase";
+import { db } from "../firebase";
+import { collection, getDocs } from "firebase/firestore";
 import NewZoneModal from "./NewZoneModal";
-
-// 1. CONFIGURACIÓN DE ZONAS CON SUBZONAS Y POSICIONES
+import Map from "./Map";
 const ZONE_CONFIGS = {
   expediciones: {
     name: "Expediciones",
@@ -18,7 +19,7 @@ const ZONE_CONFIGS = {
     }
   },
   zona_1: {
-    name: "Zona 1",
+    name: "Pulidoras",
     subzones: {
       F: ['A5']
     }
@@ -36,14 +37,14 @@ const ZONE_CONFIGS = {
     }
   },
   zona_2: {
-    name: "Zona 2",
+    name: "Bilateral/Taladros",
     subzones: {
       C: ['A5'],
       B: ['E5']
     }
   },
   zona_3: {
-    name: "Zona 3",
+    name: "Horno",
     subzones: {
       A: ['A1','A2','A3','B1','B2','B3','C1','C2','C3'],
       '??': ['A6','B6']
@@ -58,6 +59,8 @@ const ZONES = Object.entries(ZONE_CONFIGS).map(([id, config]) => ({
   subzones: config.subzones,
   layout: id === 'expediciones' || id === 'zona_2' ? 'horizontal' : id === 'zona_3' ? 'vertical' : 'single'
 }));
+
+const INITIAL_ZONES = ZONES;
 
 const parseFechaLineaPedido = (fecha: any) => {
   if (!fecha) return null;
@@ -253,6 +256,51 @@ const mapProductoToBlock = (producto: any, index: number) => {
   };
 };
 
+const RANDOM_CLIENTS = [
+  'Vidrios del Norte S.L.',
+  'Cristalería Central',
+  'Acabados Fina',
+  'GlassPro',
+  'Paneles Norte',
+  'Almacén Boreal'
+];
+const RANDOM_TYPES = ['Vidrio Simple', 'Doble Acristalamiento', 'Laminado', 'Templado'];
+
+const getRandomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+const getRandomItem = <T,>(items: T[]) => items[Math.floor(Math.random() * items.length)];
+
+const generateDummyBlock = (zoneId: string, area: string, index: number) => {
+  const days = getRandomInt(0, 45);
+  const priority = days > 30 ? 'Alta' : days > 20 ? 'Media' : 'Normal';
+  const type = getRandomItem(RANDOM_TYPES);
+
+  return {
+    id: `${zoneId}-${area}-${100 + index}`,
+    zoneId,
+    area,
+    type,
+    daysInStorage: days,
+    client: getRandomItem(RANDOM_CLIENTS),
+    occupied: true,
+    dimensions: `${getRandomInt(1200, 3200)} x ${getRandomInt(800, 2200)} mm`,
+    weight: `${getRandomInt(100, 1200)} kg`,
+    priority,
+    lastUpdate: new Date(Date.now() - getRandomInt(0, 20) * 24 * 60 * 60 * 1000).toLocaleDateString('es-ES'),
+    numeroCliente: getRandomInt(1000, 9999).toString(),
+    numeroLineaPedido: getRandomInt(10000, 99999).toString(),
+    estadoPedido: getRandomItem(['Nuevo', 'En proceso', 'Listo']),
+    empresa: getRandomItem(['TriniGlass', 'GlassCorp', 'Vidrios S.A.']),
+    referencias: `REF-${getRandomInt(2026, 2027)}-${getRandomInt(100, 999)}`
+  };
+};
+
+const generateDummyBlocks = () =>
+  ZONES.flatMap(zone =>
+    zone.areas.flatMap((area, areaIndex) =>
+      Array.from({ length: 3 }).map((_, idx) => generateDummyBlock(zone.id, area, areaIndex * 3 + idx))
+    )
+  );
+
 export default function Warehouse() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedZone, setSelectedZone] = useState("expediciones");
@@ -260,7 +308,25 @@ export default function Warehouse() {
   const [isZoneDropdownOpen, setIsZoneDropdownOpen] = useState(false);
   const [isNewZoneModalOpen, setIsNewZoneModalOpen] = useState(false);
   const [zones, setZones] = useState<any[]>(INITIAL_ZONES);
-  const [blocks] = useState(ALL_BLOCKS);
+  const [blocks, setBlocks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addPalletForm, setAddPalletForm] = useState({
+    codigo_barra: '',
+    apellido_cliente: '',
+    nombre_abreviado: '',
+    altura: '',
+    longitud: '',
+    peso_total_kg: '',
+    cantidad_encargada: '',
+    descripcion_producido_longitud: '',
+    referencia_linea_pedido: '',
+    fecha_entrega: '',
+    fecha_linea_pedido: ''
+  });
+  const [addPalletLoading, setAddPalletLoading] = useState(false);
+  const [addPalletError, setAddPalletError] = useState<string | null>(null);
 
   // Cargar zonas nuevas de Firebase y añadirlas al dropdown (sin duplicar las hardcodeadas)
   useEffect(() => {
@@ -274,6 +340,27 @@ export default function Warehouse() {
       const nuevas = normalized.filter(fz => !INITIAL_ZONES.some(iz => iz.id.toLowerCase() === fz.id.toLowerCase()));
       if (nuevas.length > 0) setZones([...INITIAL_ZONES, ...nuevas]);
     }).catch(() => {});
+  }, []);
+
+  // Cargar productos de Firebase
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const productosRef = collection(db, 'productos');
+        const snapshot = await getDocs(productosRef);
+        const productos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const mappedBlocks = productos.map(mapProductoToBlock);
+        setBlocks(mappedBlocks.length > 0 ? mappedBlocks : generateDummyBlocks());
+      } catch (err) {
+        console.error('Error loading products:', err);
+        setError('Error al cargar productos');
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadProducts();
   }, []);
 
 
@@ -307,14 +394,66 @@ export default function Warehouse() {
     setIsNewZoneModalOpen(false);
   };
 
-  const getAreaHeatColor = (areaName: string) => {
-    const areaPallets = blocks.filter(b => b.area === areaName && b.occupied);
-    if (areaPallets.length === 0) return "bg-slate-800/40 border-cyan-500/20";
-    const avgDays = areaPallets.reduce((acc, b) => acc + b.daysInStorage, 0) / areaPallets.length;
-    if (avgDays > 30) return "bg-red-500/40 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]";
-    if (avgDays > 20) return "bg-orange-500/40 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.2)]";
-    if (avgDays > 10) return "bg-yellow-500/40 border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.2)]";
-    return "bg-blue-500/40 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.2)]";
+  const handleAddPalletFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setAddPalletForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleAddPalletSave = async () => {
+    try {
+      setAddPalletLoading(true);
+      setAddPalletError(null);
+      // Add your save logic here
+      // await addDoc(collection(db, 'productos'), addPalletForm);
+      setShowAddModal(false);
+      setSelectedBlock(null);
+      // Reload products if needed
+    } catch (err) {
+      setAddPalletError('Error al guardar el pallet');
+    } finally {
+      setAddPalletLoading(false);
+    }
+  };
+
+  const renderBlock = (block: any) => {
+    const isSelected = selectedBlock?.id === block.id;
+    let colors = "bg-slate-100 dark:bg-slate-800/40 border-slate-300 dark:border-slate-700 text-slate-400";
+    if (block.occupied) {
+      if (block.daysInStorage > 30) colors = "bg-red-100 dark:bg-red-500/20 border-red-400 text-red-600";
+      else if (block.daysInStorage > 20) colors = "bg-orange-100 dark:bg-orange-500/20 border-orange-400 text-orange-600";
+      else if (block.daysInStorage > 10) colors = "bg-yellow-100 dark:bg-yellow-500/20 border-yellow-400 text-yellow-700 dark:text-yellow-500";
+      else colors = "bg-blue-100 dark:bg-blue-500/20 border-blue-400 text-blue-600";
+    }
+
+    return (
+      <button
+        key={block.id}
+        onClick={() => setSelectedBlock(block)}
+        className={`rounded-xl border-2 transition-all flex flex-col items-center justify-center gap-1 shadow-sm shrink-0 ${colors} ${isSelected ? 'ring-4 ring-cyan-500 scale-110 z-10' : 'hover:scale-105'} min-w-[105px] min-h-[80px]`}
+      >
+        {block.occupied ? (
+          <>
+            <span className="text-[11px] font-black tracking-tighter uppercase">{block.id}</span>
+            <Box size={14} strokeWidth={2.5} />
+          </>
+        ) : (
+          <span className="text-[10px] font-bold tracking-tight uppercase opacity-50">Vacío</span>
+        )}
+      </button>
+    );
+  };
+
+  const renderArea = (areaName: string) => {
+    const areaBlocks = blocks.filter(b => b.area === areaName && (selectedZone === b.zoneId));
+    if (areaBlocks.length === 0 && selectedZone !== "zona_3") return null;
+    
+    return (
+      <div key={areaName} className="flex flex-col gap-4 min-w-max">
+        <h3 className="font-black text-slate-400 dark:text-slate-500 uppercase text-xs tracking-[0.4em] text-center">{areaName}</h3>
+        <div className={`grid grid-cols-3 gap-2.5 p-6 bg-white dark:bg-slate-900/40 rounded-[3rem] border border-slate-200 dark:border-slate-800 shadow-2xl shrink-0`}>
+          {areaBlocks.map(b => renderBlock(b))}
+        </div>
+      </div>
+    );
   };
 
 
@@ -388,23 +527,6 @@ export default function Warehouse() {
             <View size={12}/> Mapa de Calor Navegable [Heat Map Mode]
           </div>
           <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#06b6d4 1px, transparent 1px)', backgroundSize: '25px 25px' }}></div>
-
-            {INITIAL_ZONES.map(zone => (
-              <button 
-                key={zone.id} 
-                onClick={() => setSelectedZone(zone.id)}
-                className={`p-3 border-2 rounded-2xl flex flex-col items-center transition-all hover:scale-105 ${selectedZone === zone.id ? 'border-cyan-400 bg-cyan-500/10' : 'border-cyan-500/20 bg-cyan-950/20'}`}
-              >
-                <span className="text-[7px] font-black text-cyan-500/60 mb-2 uppercase tracking-widest">{zone.name}</span>
-                <div className={`flex ${zone.layout === 'vertical' ? 'flex-col' : 'flex-row'} gap-1.5`}>
-                  {zone.areas.map((area: string) => (
-                    <div key={area} className={`w-20 h-18 rounded border-2 flex items-center justify-center ${getAreaHeatColor(area)}`}>
-                      <span className="text-[12px] font-black text-white/80">{area}</span>
-                    </div>
-                  ))}
-                </div>
-              </button>
-            ))}
 
           <div className="h-full overflow-hidden">
             <Map
@@ -566,7 +688,6 @@ export default function Warehouse() {
                 </div>
               </form>
             ) : (
-              // ...aquí va el detalle del pallet (igual que antes)...
               <>
                 <div className="bg-slate-50 dark:bg-slate-800/60 rounded-[2.5rem] p-10 border border-slate-100 dark:border-slate-700 text-center relative overflow-hidden">
                   <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-black mb-2 tracking-[0.4em]">GLASS ID</div>
@@ -578,7 +699,50 @@ export default function Warehouse() {
                     <div className="mt-5 inline-flex px-4 py-1.5 rounded-full bg-slate-500/10 text-slate-500 text-[10px] font-black uppercase tracking-widest border border-slate-500/20">Disponible</div>
                   )}
                 </div>
-                {/* ...resto del detalle igual que antes... */}
+                {selectedBlock.occupied ? (
+                  <>
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-5 p-5 bg-slate-50 dark:bg-slate-800/30 rounded-3xl border border-transparent shadow-sm">
+                        <div className="p-3.5 bg-blue-500/10 rounded-2xl text-blue-500"><User size={22} /></div>
+                        <div className="flex-1"><p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">Cliente / Destino</p><p className="text-lg font-bold">{selectedBlock.client}</p></div>
+                      </div>
+                      <div className="flex items-center gap-5 p-5 bg-slate-50 dark:bg-slate-800/30 rounded-3xl">
+                        <div className="p-3.5 bg-purple-500/10 rounded-2xl text-purple-500"><BarChart3 size={22} /></div>
+                        <div className="flex-1"><p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">Tipo de Vidrio</p><p className="text-lg font-bold">{selectedBlock.type}</p></div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="p-5 bg-slate-50 dark:bg-slate-800/30 rounded-3xl text-center shadow-sm">
+                          <div className="flex items-center justify-center gap-2 text-slate-400 mb-2"><Maximize2 size={16} /><span className="text-[9px] font-black uppercase tracking-wider">Medidas</span></div>
+                          <p className="text-base font-bold leading-none">{selectedBlock.dimensions}</p>
+                        </div>
+                        <div className="p-5 bg-slate-50 dark:bg-slate-800/30 rounded-3xl text-center shadow-sm">
+                          <div className="flex items-center justify-center gap-2 text-slate-400 mb-2"><Weight size={16} /><span className="text-[9px] font-black uppercase tracking-wider">Carga Total</span></div>
+                          <p className="text-base font-bold leading-none">{selectedBlock.weight}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-5 p-5 bg-slate-50 dark:bg-slate-800/30 rounded-3xl hover:border-emerald-500/20 transition-all">
+                        <div className="p-3.5 bg-emerald-500/10 rounded-2xl text-emerald-500 shadow-sm"><Clock size={22} /></div>
+                        <div className="flex-1"><p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">Días en Stock</p><p className={`text-lg font-black ${selectedBlock.daysInStorage > 30 ? 'text-red-500' : 'text-blue-500'}`}>{selectedBlock.daysInStorage} días</p></div>
+                      </div>
+                      <div className="flex items-center gap-5 p-5 bg-slate-50 dark:bg-slate-800/30 rounded-3xl shadow-sm">
+                        <div className="p-3.5 bg-slate-500/10 rounded-2xl text-slate-500 shadow-sm"><Calendar size={22} /></div>
+                        <div className="flex-1"><p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">Último Movimiento</p><p className="text-lg font-bold">{selectedBlock.lastUpdate}</p></div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-4 pt-4 pb-12 shrink-0">
+                      <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-5 rounded-[1.8rem] shadow-xl uppercase tracking-widest text-sm flex items-center justify-center gap-3 active:scale-95 transition-all"><Check size={22} strokeWidth={3} /> Procesar Salida</button>
+                      <div className="grid grid-cols-2 gap-4"><button className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 font-black py-4 rounded-2xl flex items-center justify-center gap-2 text-xs uppercase transition-all shadow-sm">Mover</button><button className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 font-black py-4 rounded-2xl flex items-center justify-center gap-2 text-xs uppercase transition-all shadow-sm">Editar</button></div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
+                    <div className="w-24 h-24 bg-slate-200 dark:bg-slate-800/40 rounded-full flex items-center justify-center">
+                      <Package size={40} className="text-slate-400" />
+                    </div>
+                    <h3 className="text-xl font-black text-slate-600 dark:text-slate-400 uppercase">Ubicación Disponible</h3>
+                    <p className="text-sm text-slate-500 max-w-[280px]">Esta ubicación está libre y lista para recibir nuevo material.</p>
+                  </div>
+                )}
               </>
             )}
           </div>
