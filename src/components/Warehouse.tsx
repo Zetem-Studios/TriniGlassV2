@@ -335,6 +335,7 @@ export default function Warehouse() {
         id: z.id.toLowerCase(),
         name: z.name,
         areas: z.posiciones,
+        subzones: z.subzones,
         layout: "horizontal",
       }));
       const nuevas = normalized.filter(fz => !INITIAL_ZONES.some(iz => iz.id.toLowerCase() === fz.id.toLowerCase()));
