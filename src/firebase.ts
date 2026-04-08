@@ -39,13 +39,16 @@ export const createCompleteZone = async (
   zoneName: string,
   tipo: "produccion" | "almacenamiento" | "expedicion",
   posiciones: string[],
-  descripcion?: string
+  descripcion: string,
+  capacidadMaxima: number
 ) => {
   try {
+    // Generar código de las primeras letras mayúsculas de cada palabra (separadas por espacios, guiones o guiones bajos)
     const codigo = zoneName
-      .toUpperCase()
-      .replace(/\s+/g, "_")
-      .replace(/[^A-Z0-9_]/g, "");
+      .split(/[\s_\-]+/)
+      .filter(word => word.length > 0)
+      .map(word => word[0].toUpperCase())
+      .join("");
 
     if (!codigo) throw new Error("El nombre no puede contener solo caracteres especiales");
 
@@ -54,14 +57,14 @@ export const createCompleteZone = async (
       codigo,
       nombre: zoneName,
       tipo,
-      capacidadMaxima: posiciones.length,
-      ocupacionActual: posiciones.length,
+      capacidadMaxima,
+      ocupacionActual: 0,
       posiciones,
       descripcion: descripcion ?? "",
       fechaCreacion: new Date(),
     });
 
-    console.log(`✅ Zona "${zoneName}" creada (${posiciones.length} posiciones)`);
+    console.log(`✅ Zona "${zoneName}" creada con código "${codigo}" (capacidad: ${capacidadMaxima})`);
     return codigo;
   } catch (error) {
     console.error("❌ Error creando zona:", error);

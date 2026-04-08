@@ -18,6 +18,7 @@ interface ZoneProps {
 }
 
 const Zone: React.FC<ZoneProps> = ({ zoneId, zoneName, subzones, blocks, selectedBlock, onBlockClick, onEmptySlotClick, preview = false }) => {
+  subzones = subzones ?? {};
   // Create a map of position to block
   const positionToBlock: { [key: string]: any } = {};
 

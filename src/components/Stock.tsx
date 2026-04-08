@@ -5,7 +5,7 @@ import { collection, getDocs, query, where, orderBy, limit, Timestamp } from "fi
 import { db } from "../firebase";
 
 // Límite máximo de resultados por query en Firestore
-const MAX_FIRESTORE_RESULTS = 2000;
+const MAX_FIRESTORE_RESULTS = 200;
 
 const useDebounce = (value: string, delay: number) => {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -23,6 +23,7 @@ const useDebounce = (value: string, delay: number) => {
 
 interface Palet {
   id: string;
+  docId: string; // ID único de Firestore para key de React
   type: string;
   dimensions: string;
   client: string;
@@ -144,11 +145,12 @@ export default function Stock() {
           const ancho = Number(data.longitud ?? 0);
           const alto = Number(data.altura ?? 0);
           const grosor = Number(data.peso_pieza_kg ?? 0);
-          const locationValue = data.numero_caballete ? `Caballete ${data.numero_caballete}` : (data.referencia_linea_pedido || "Sin ubicación");
+          const locationValue = data.subzona ? String(data.subzona) : "Sin zona";
           const estado = data.estado_pedido || data.estado_linea_pdd || "Pendiente";
 
           return {
             id: data.numero_linea_pedido || doc.id,
+            docId: doc.id,
             type: data.descripcion_producido_longitud || data.estado_linea_pdd || "Sin descripción",
             dimensions: `${ancho || alto || 0}x${alto || 0}x${grosor || 0}`,
             client: data.apellido_cliente || data.nombre_abreviado || "Cliente desconocido",
@@ -352,22 +354,17 @@ export default function Stock() {
                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Estado</label>
                 <select value={serverFilters.status} onChange={(e) => updateServerFilter("status", e.target.value)} className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg focus:ring-2 focus:ring-blue-500 dark:text-slate-200 outline-none">
                   <option value="">Todos los estados</option>
-                  <option value="Pendiente">Pendiente</option>
-                  <option value="Almacenado">Almacenado</option>
-                  <option value="Reservado">Reservado</option>
-                  <option value="Listo para carga">Listo para carga</option>
+                  <option value="Para verificar">Para verificar</option>
+                  <option value="Codificada">Codificada</option>
+                  <option value="Producción">Producción</option>
+                  <option value="Producida">Producida</option>
+                  <option value="Bloqueada">Bloqueada</option>
                 </select>
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Zona del almacén</label>
-                <select value={serverFilters.zone} onChange={(e) => updateServerFilter("zone", e.target.value)} className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg focus:ring-2 focus:ring-blue-500 dark:text-slate-200 outline-none">
-                  <option value="">Todas las zonas</option>
-                  <option value="zona a">Zona A</option>
-                  <option value="zona b">Zona B</option>
-                  <option value="zona c">Zona C</option>
-                  <option value="zona d">Zona D</option>
-                </select>
+                <input type="text" placeholder="Ej: A, B, H, D..." value={serverFilters.zone} onChange={(e) => updateServerFilter("zone", e.target.value)} className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg focus:ring-2 focus:ring-blue-500 dark:text-slate-200 outline-none" />
               </div>
 
               <div className="space-y-1.5">
@@ -439,7 +436,7 @@ export default function Stock() {
                 <tr><td colSpan={7} className="p-10 text-center text-slate-500">Cargando datos del inventario...</td></tr>
               ) : filteredInventory.length > 0 ? (
                 paginatedInventory.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  <tr key={item.docId} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                     <td className="p-4 font-medium text-slate-900 dark:text-white">{item.id}</td>
                     <td className="p-4">
                       <div className="text-slate-900 dark:text-slate-200 font-medium">{item.type}</div>
