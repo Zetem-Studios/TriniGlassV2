@@ -2,14 +2,15 @@
 import { useState, useEffect } from "react";
 import { 
   Search, Plus, ChevronDown, Check, X, Package, 
-  Box, Layers, Calendar, Clock, 
-  User, BarChart3, Maximize2, Weight, View, Zap, DoorOpen
+  Layers, Maximize2, View, Zap, DoorOpen
 } from "lucide-react";
-import { getZones } from "../firebase";
 import { db } from "../firebase";
-import { collection, getDocs } from "firebase/firestore";
-import NewZoneModal from "./NewZoneModal";
+import { collection, getDocs, addDoc, updateDoc, doc as firestoreDoc } from "firebase/firestore";
 import Map from "./Map";
+import Zone from "./Zone";
+
+
+// 1. CONFIGURACIÓN DE ZONAS CON SUBZONAS Y POSICIONES
 const ZONE_CONFIGS = {
   expediciones: {
     name: "Expediciones",
@@ -18,7 +19,7 @@ const ZONE_CONFIGS = {
       Mamparista: ['D1','D2','D3','D4','D5','E1','E2','E3','E4','E5']
     }
   },
-  zona_1: {
+  pulidoras: {
     name: "Pulidoras",
     subzones: {
       F: ['A5']
@@ -36,14 +37,14 @@ const ZONE_CONFIGS = {
       D: ['A1','A2','A3','A4','B1','B2','B3','B4']
     }
   },
-  zona_2: {
+  bilateral_taladros: {
     name: "Bilateral/Taladros",
     subzones: {
       C: ['A5'],
       B: ['E5']
     }
   },
-  zona_3: {
+  horno: {
     name: "Horno",
     subzones: {
       A: ['A1','A2','A3','B1','B2','B3','C1','C2','C3'],
@@ -57,10 +58,8 @@ const ZONES = Object.entries(ZONE_CONFIGS).map(([id, config]) => ({
   name: config.name,
   areas: Object.keys(config.subzones),
   subzones: config.subzones,
-  layout: id === 'expediciones' || id === 'zona_2' ? 'horizontal' : id === 'zona_3' ? 'vertical' : 'single'
+  layout: id === 'expediciones' || id === 'bilateral_taladros' ? 'horizontal' : id === 'horno' ? 'vertical' : 'single'
 }));
-
-const INITIAL_ZONES = ZONES;
 
 const parseFechaLineaPedido = (fecha: any) => {
   if (!fecha) return null;
@@ -118,7 +117,7 @@ const parseFechaLineaPedido = (fecha: any) => {
 };
 
 // Mapear productos de Firebase a estructura de bloques
-const mapProductoToBlock = (producto: any, index: number) => {
+const mapProductoToBlock = (producto: any, _index: number, id: string) => {
   // Calcular días en storage desde fecha_linea_pedido
   const fechaPedido = parseFechaLineaPedido(producto.fecha_linea_pedido);
   const hoy = new Date();
@@ -140,6 +139,7 @@ const mapProductoToBlock = (producto: any, index: number) => {
   else if (daysInStorage > 20) priority = "Media";
 
   // --- NUEVA LÓGICA: Priorizar subzona si existe ---
+
   let area = "";
   let zoneId = "";
   if (typeof producto.subzona === "string" && producto.subzona.trim() !== "") {
@@ -184,36 +184,36 @@ const mapProductoToBlock = (producto: any, index: number) => {
               const F_KEYS = ["IBERPERFIL", "VALVERDE"];
               if (F_KEYS.some(key => nombre.includes(key))) {
                 area = "F";
-                zoneId = "zona_1";
+                zoneId = "pulidoras";
               } else {
                 const C_KEYS = ["BARCELONA", "COMPANY"];
                 if (C_KEYS.some(key => nombre.includes(key))) {
                   area = "C";
-                  zoneId = "zona_2";
+                  zoneId = "bilateral_taladros";
                 } else {
                   const B_KEYS = ["PONSETI", "ALMANSA"];
                   if (B_KEYS.some(key => nombre.includes(key))) {
                     area = "B";
-                    zoneId = "zona_2";
+                    zoneId = "bilateral_taladros";
                   } else {
                     const A_KEYS = ["GLORIA", "VIELMAR", "GUSTAMAN", "MOLALUM", "THERMIA", "FAURA", "BUCH", "MODUL"];
                     if (A_KEYS.some(key => nombre.includes(key))) {
                       area = "??";
-                      zoneId = "zona_3";
+                      zoneId = "horno";
                     } else {
                       const ALL_KEYS = [
                         "DUSCHOLUX", "VICOMAM", // Mamparista
                         "CENTERGLAS", "REUGLAS", "NAVAS", "MACRISAL", "DINOR", // H
                         "VALLIRANA", "ESPINOSA", "RETANA", "TANCAMENTS", "NOUTEC", "ALGE", "WINDGLASS", "ALVICAT", "FENSTER", // Corte/E
                         "OTERO", "CLEMENTE", "FORNES", // CMS/D
-                        "IBERPERFIL", "VALVERDE", // Zona 1/F
-                        "BARCELONA", "COMPANY", // Zona 2/C
-                        "PONSETI", "ALMANSA", // Zona 2/B
-                        "GLORIA", "VIELMAR", "GUSTAMAN", "MOLALUM", "THERMIA", "FAURA", "BUCH", "MODUL" // Zona 3/??
+                        "IBERPERFIL", "VALVERDE", // Pulidoras/F
+                        "BARCELONA", "COMPANY", // Bilateral/C
+                        "PONSETI", "ALMANSA", // Taladros/B
+                        "GLORIA", "VIELMAR", "GUSTAMAN", "MOLALUM", "THERMIA", "FAURA", "BUCH", "MODUL" // Horno/??
                       ];
                       if (!ALL_KEYS.some(key => nombre.includes(key))) {
                         area = "A";
-                        zoneId = "zona_3";
+                        zoneId = "horno";
                       }
                     }
                   }
@@ -229,7 +229,8 @@ const mapProductoToBlock = (producto: any, index: number) => {
   console.log(`✅ ${producto.nombre_abreviado} (${producto.codigo_barra}) → Zona ${zoneId} / Subzona ${area}`);
 
   return {
-    id: producto.codigo_barra || `P-${index}`,
+    id, // id interno de Firestore
+    codigo_barra: producto.codigo_barra || '', // para mostrar en la UI
     zoneId: zoneId,
     area: area,
     type: tipoVidrio,
@@ -256,113 +257,169 @@ const mapProductoToBlock = (producto: any, index: number) => {
   };
 };
 
-const RANDOM_CLIENTS = [
-  'Vidrios del Norte S.L.',
-  'Cristalería Central',
-  'Acabados Fina',
-  'GlassPro',
-  'Paneles Norte',
-  'Almacén Boreal'
-];
-const RANDOM_TYPES = ['Vidrio Simple', 'Doble Acristalamiento', 'Laminado', 'Templado'];
-
-const getRandomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
-const getRandomItem = <T,>(items: T[]) => items[Math.floor(Math.random() * items.length)];
-
-const generateDummyBlock = (zoneId: string, area: string, index: number) => {
-  const days = getRandomInt(0, 45);
-  const priority = days > 30 ? 'Alta' : days > 20 ? 'Media' : 'Normal';
-  const type = getRandomItem(RANDOM_TYPES);
-
-  return {
-    id: `${zoneId}-${area}-${100 + index}`,
-    zoneId,
-    area,
-    type,
-    daysInStorage: days,
-    client: getRandomItem(RANDOM_CLIENTS),
-    occupied: true,
-    dimensions: `${getRandomInt(1200, 3200)} x ${getRandomInt(800, 2200)} mm`,
-    weight: `${getRandomInt(100, 1200)} kg`,
-    priority,
-    lastUpdate: new Date(Date.now() - getRandomInt(0, 20) * 24 * 60 * 60 * 1000).toLocaleDateString('es-ES'),
-    numeroCliente: getRandomInt(1000, 9999).toString(),
-    numeroLineaPedido: getRandomInt(10000, 99999).toString(),
-    estadoPedido: getRandomItem(['Nuevo', 'En proceso', 'Listo']),
-    empresa: getRandomItem(['TriniGlass', 'GlassCorp', 'Vidrios S.A.']),
-    referencias: `REF-${getRandomInt(2026, 2027)}-${getRandomInt(100, 999)}`
-  };
-};
-
-const generateDummyBlocks = () =>
-  ZONES.flatMap(zone =>
-    zone.areas.flatMap((area, areaIndex) =>
-      Array.from({ length: 3 }).map((_, idx) => generateDummyBlock(zone.id, area, areaIndex * 3 + idx))
-    )
-  );
-
 export default function Warehouse() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedZone, setSelectedZone] = useState("expediciones");
   const [selectedBlock, setSelectedBlock] = useState<any>(null);
   const [isZoneDropdownOpen, setIsZoneDropdownOpen] = useState(false);
-  const [isNewZoneModalOpen, setIsNewZoneModalOpen] = useState(false);
-  const [zones, setZones] = useState<any[]>(INITIAL_ZONES);
+  const [zones] = useState(ZONES);
   const [blocks, setBlocks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Estado para alta de pallet
   const [showAddModal, setShowAddModal] = useState(false);
-  const [addPalletForm, setAddPalletForm] = useState({
+  const [addPalletZone, setAddPalletZone] = useState<string | null>(null);
+  const [addPalletSubzone, setAddPalletSubzone] = useState<string | null>(null);
+  const [addPalletForm, setAddPalletForm] = useState<any>({
     codigo_barra: '',
     apellido_cliente: '',
     nombre_abreviado: '',
     altura: '',
     longitud: '',
     peso_total_kg: '',
-    cantidad_encargada: '',
+    cantidad_encargada: 1,
     descripcion_producido_longitud: '',
     referencia_linea_pedido: '',
     fecha_entrega: '',
-    fecha_linea_pedido: ''
+    fecha_linea_pedido: '',
+    subzona: '',
   });
   const [addPalletLoading, setAddPalletLoading] = useState(false);
   const [addPalletError, setAddPalletError] = useState<string | null>(null);
+  // Estado para mover pallet
+  const [moveMode, setMoveMode] = useState(false);
+  const [moveLoading, setMoveLoading] = useState(false);
+  const [moveError, setMoveError] = useState<string | null>(null);
 
-  // Cargar zonas nuevas de Firebase y añadirlas al dropdown (sin duplicar las hardcodeadas)
-  useEffect(() => {
-    getZones().then(data => {
-      const normalized = data.map((z: any) => ({
-        id: z.id.toLowerCase(),
-        name: z.name,
-        areas: z.posiciones,
-        layout: "horizontal",
-      }));
-      const nuevas = normalized.filter(fz => !INITIAL_ZONES.some(iz => iz.id.toLowerCase() === fz.id.toLowerCase()));
-      if (nuevas.length > 0) setZones([...INITIAL_ZONES, ...nuevas]);
-    }).catch(() => {});
-  }, []);
+  // Handler para click en hueco vacío
+  const handleEmptySlotClick = (zoneId: string, subzone: string) => {
+    setAddPalletZone(zoneId);
+    setAddPalletSubzone(subzone);
+    setAddPalletForm((prev: any) => ({ ...prev, subzona: subzone }));
+    setShowAddModal(true);
+  };
 
-  // Cargar productos de Firebase
+  // Handler para guardar el nuevo pallet
+  const handleAddPalletSave = async () => {
+    setAddPalletLoading(true);
+    setAddPalletError(null);
+    try {
+      await addDoc(collection(db, "productos"), {
+        ...addPalletForm,
+        subzona: addPalletSubzone,
+        zona: addPalletZone,
+        ocupado: true,
+        fecha_entrega: addPalletForm.fecha_entrega ? new Date(addPalletForm.fecha_entrega) : null,
+        fecha_linea_pedido: addPalletForm.fecha_linea_pedido ? new Date(addPalletForm.fecha_linea_pedido) : null,
+      });
+      setShowAddModal(false);
+      setAddPalletLoading(false);
+      setAddPalletForm({
+        codigo_barra: '', apellido_cliente: '', nombre_abreviado: '', altura: '', longitud: '', peso_total_kg: '', cantidad_encargada: 1, descripcion_producido_longitud: '', referencia_linea_pedido: '', fecha_entrega: '', fecha_linea_pedido: '', subzona: '',
+      });
+      // Refrescar productos
+      window.location.reload(); // Simple recarga para forzar refresco
+    } catch (err: any) {
+      setAddPalletError(err.message || 'Error al guardar');
+      setAddPalletLoading(false);
+    }
+  };
+
+  // Handler para cambio en formulario
+  const handleAddPalletFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setAddPalletForm((prev: any) => ({ ...prev, [name]: value }));
+  };
+
+  // Cargar productos desde Firebase
   useEffect(() => {
-    const loadProducts = async () => {
+    const fetchProductos = async () => {
       try {
         setLoading(true);
+        console.log("🔥 Iniciando conexión a Firebase...");
+        console.log("Proyecto:", db.app.options.projectId);
+        console.log("📦 Buscando colección: 'productos'");
+        
+        const productosCollection = collection(db, "productos");
+        const snapshot = await getDocs(productosCollection);
+        
+        console.log(`✅ Conexión exitosa. Documentos encontrados: ${snapshot.size}`);
+        
+        if (snapshot.size === 0) {
+          console.warn("⚠️ La colección 'productos' está vacía o no existe.");
+          setError("La colección 'productos' está vacía");
+          setBlocks([]);
+          setLoading(false);
+          return;
+        }
+        
+
+
+          // Filtrar productos para Mamparista, H, Corte/E y CMS/D según lógica robusta
+          const productos = snapshot.docs
+            .map((doc, index) => {
+              const data = doc.data() as any;
+              // Pasar el id de Firestore explícitamente
+              return { ...data, id: doc.id, docIndex: index };
+            })
+            .filter((prod: any) => {
+              if (typeof prod.nombre_abreviado !== "string") return false;
+              const nombre = prod.nombre_abreviado.toUpperCase().trim();
+              // Mamparista: solo DUSCHOLUX y VICOMAM exactos
+              if (nombre === "DUSCHOLUX" || nombre === "VICOMAM") return true;
+              // H: flexible, incluye variantes y espacios
+              const H_KEYS = ["CENTERGLAS", "REUGLAS", "NAVAS", "MACRISAL", "DINOR"];
+              if (H_KEYS.some(key => nombre.includes(key))) return true;
+              // Corte/E: contiene alguna de las cadenas
+              const E_KEYS = ["VALLIRANA", "ESPINOSA", "RETANA", "TANCAMENTS", "NOUTEC", "ALGE", "WINDGLASS", "ALVICAT", "FENSTER"];
+              if (E_KEYS.some(key => nombre.includes(key))) return true;
+              // CMS/D: contiene alguna de las cadenas
+              const D_KEYS = ["OTERO", "CLEMENTE", "FORNES"];
+              if (D_KEYS.some(key => nombre.includes(key))) return true;
+              // Zona 1/F: contiene alguna de las cadenas
+              const F_KEYS = ["IBERPERFIL", "VALVERDE"];
+              if (F_KEYS.some(key => nombre.includes(key))) return true;
+              // Zona 2/C: contiene BARCELONA o COMPANY
+              const C_KEYS = ["BARCELONA", "COMPANY"];
+              if (C_KEYS.some(key => nombre.includes(key))) return true;
+              // Zona 2/B: contiene PONSETI o ALMANSA
+              const B_KEYS = ["PONSETI", "ALMANSA"];
+              if (B_KEYS.some(key => nombre.includes(key))) return true;
+              // Zona 3/??: contiene GLORIA, VIELMAR, GUSTAMAN, MOLALUM, THERMIA, FAURA, BUCH o MODUL
+              const A_KEYS = ["GLORIA", "VIELMAR", "GUSTAMAN", "MOLALUM", "THERMIA", "FAURA", "BUCH", "MODUL"];
+              if (A_KEYS.some(key => nombre.includes(key))) return true;
+              // Zona 3/A: no contiene ninguna de las cadenas de todas las zonas y subzonas anteriores
+              const ALL_KEYS = [
+                "DUSCHOLUX", "VICOMAM", // Mamparista
+                "CENTERGLAS", "REUGLAS", "NAVAS", "MACRISAL", "DINOR", // H
+                "VALLIRANA", "ESPINOSA", "RETANA", "TANCAMENTS", "NOUTEC", "ALGE", "WINDGLASS", "ALVICAT", "FENSTER", // Corte/E
+                "OTERO", "CLEMENTE", "FORNES", // CMS/D
+                "IBERPERFIL", "VALVERDE", // Zona 1/F
+                "BARCELONA", "COMPANY", // Zona 2/C
+                "PONSETI", "ALMANSA", // Zona 2/B
+                "GLORIA", "VIELMAR", "GUSTAMAN", "MOLALUM", "THERMIA", "FAURA", "BUCH", "MODUL" // Zona 3/??
+              ];
+              if (!ALL_KEYS.some(key => nombre.includes(key))) return true;
+              return false;
+            })
+            .map((prod: any, index: number) => mapProductoToBlock(prod, index, prod.id));
+        
+        console.log(`✅ ${productos.length} productos MAFER mapeados correctamente`);
+        setBlocks(productos);
         setError(null);
-        const productosRef = collection(db, 'productos');
-        const snapshot = await getDocs(productosRef);
-        const productos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const mappedBlocks = productos.map(mapProductoToBlock);
-        setBlocks(mappedBlocks.length > 0 ? mappedBlocks : generateDummyBlocks());
       } catch (err) {
-        console.error('Error loading products:', err);
-        setError('Error al cargar productos');
+        console.error("❌ Error cargando productos:", err);
+        console.error("   Tipo de error:", (err as Error).name);
+        console.error("   Mensaje:", (err as Error).message);
+        setError(`Error: ${(err as Error).message}`);
+        setBlocks([]);
       } finally {
         setLoading(false);
       }
     };
-    loadProducts();
-  }, []);
 
+    fetchProductos();
+  }, []);
 
   // Lógica de búsqueda automática: te lleva a la zona y abre detalles
   useEffect(() => {
@@ -380,81 +437,6 @@ export default function Warehouse() {
     }
   }, [searchTerm, blocks]);
 
-  const handleZoneCreated = async (zoneId: string) => {
-    const data = await getZones();
-    const normalized = data.map((z: any) => ({
-      id: z.id.toLowerCase(),
-      name: z.name,
-      areas: z.posiciones,
-      layout: "horizontal",
-    }));
-    const nuevas = normalized.filter(fz => !INITIAL_ZONES.some(iz => iz.id.toLowerCase() === fz.id.toLowerCase()));
-    setZones([...INITIAL_ZONES, ...nuevas]);
-    setSelectedZone(zoneId.toLowerCase());
-    setIsNewZoneModalOpen(false);
-  };
-
-  const handleAddPalletFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setAddPalletForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
-  };
-
-  const handleAddPalletSave = async () => {
-    try {
-      setAddPalletLoading(true);
-      setAddPalletError(null);
-      // Add your save logic here
-      // await addDoc(collection(db, 'productos'), addPalletForm);
-      setShowAddModal(false);
-      setSelectedBlock(null);
-      // Reload products if needed
-    } catch (err) {
-      setAddPalletError('Error al guardar el pallet');
-    } finally {
-      setAddPalletLoading(false);
-    }
-  };
-
-  const renderBlock = (block: any) => {
-    const isSelected = selectedBlock?.id === block.id;
-    let colors = "bg-slate-100 dark:bg-slate-800/40 border-slate-300 dark:border-slate-700 text-slate-400";
-    if (block.occupied) {
-      if (block.daysInStorage > 30) colors = "bg-red-100 dark:bg-red-500/20 border-red-400 text-red-600";
-      else if (block.daysInStorage > 20) colors = "bg-orange-100 dark:bg-orange-500/20 border-orange-400 text-orange-600";
-      else if (block.daysInStorage > 10) colors = "bg-yellow-100 dark:bg-yellow-500/20 border-yellow-400 text-yellow-700 dark:text-yellow-500";
-      else colors = "bg-blue-100 dark:bg-blue-500/20 border-blue-400 text-blue-600";
-    }
-
-    return (
-      <button
-        key={block.id}
-        onClick={() => setSelectedBlock(block)}
-        className={`rounded-xl border-2 transition-all flex flex-col items-center justify-center gap-1 shadow-sm shrink-0 ${colors} ${isSelected ? 'ring-4 ring-cyan-500 scale-110 z-10' : 'hover:scale-105'} min-w-[105px] min-h-[80px]`}
-      >
-        {block.occupied ? (
-          <>
-            <span className="text-[11px] font-black tracking-tighter uppercase">{block.id}</span>
-            <Box size={14} strokeWidth={2.5} />
-          </>
-        ) : (
-          <span className="text-[10px] font-bold tracking-tight uppercase opacity-50">Vacío</span>
-        )}
-      </button>
-    );
-  };
-
-  const renderArea = (areaName: string) => {
-    const areaBlocks = blocks.filter(b => b.area === areaName && (selectedZone === b.zoneId));
-    if (areaBlocks.length === 0 && selectedZone !== "zona_3") return null;
-    
-    return (
-      <div key={areaName} className="flex flex-col gap-4 min-w-max">
-        <h3 className="font-black text-slate-400 dark:text-slate-500 uppercase text-xs tracking-[0.4em] text-center">{areaName}</h3>
-        <div className={`grid grid-cols-3 gap-2.5 p-6 bg-white dark:bg-slate-900/40 rounded-[3rem] border border-slate-200 dark:border-slate-800 shadow-2xl shrink-0`}>
-          {areaBlocks.map(b => renderBlock(b))}
-        </div>
-      </div>
-    );
-  };
 
 
   return (
@@ -491,11 +473,11 @@ export default function Warehouse() {
                 {
                   total: blocks.length,
                   "expediciones": blocks.filter(b => b.zoneId === "expediciones").length,
-                  "zona_1": blocks.filter(b => b.zoneId === "zona_1").length,
+                  "pulidoras": blocks.filter(b => b.zoneId === "pulidoras").length,
                   "corte": blocks.filter(b => b.zoneId === "corte").length,
                   "cms": blocks.filter(b => b.zoneId === "cms").length,
-                  "zona_2": blocks.filter(b => b.zoneId === "zona_2").length,
-                  "zona_3": blocks.filter(b => b.zoneId === "zona_3").length,
+                  "bilateral_taladros": blocks.filter(b => b.zoneId === "bilateral_taladros").length,
+                  "horno": blocks.filter(b => b.zoneId === "horno").length,
                 },
                 null,
                 2
@@ -528,14 +510,21 @@ export default function Warehouse() {
           </div>
           <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#06b6d4 1px, transparent 1px)', backgroundSize: '25px 25px' }}></div>
 
+          {/* PUERTA ENTRADA EXP (Izquierda, más alejada y texto vertical) */}
+          <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 text-cyan-500/30 px-3">
+            <DoorOpen size={28} />
+            <span className="text-[12px] font-black uppercase" style={{ writingMode: 'vertical-rl', letterSpacing: '0.1em' }}>Entrada Exp</span>
+          </div>
+
           <div className="h-full overflow-hidden">
             <Map
               zones={zones}
               blocks={blocks}
               selectedZone={selectedZone}
               selectedBlock={selectedBlock}
-              onBlockClick={setSelectedBlock}
+              onBlockClick={() => {}}
               preview={true}
+              disableInteraction={true}
             />
           </div>
 
@@ -569,38 +558,22 @@ export default function Warehouse() {
               <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <input type="text" placeholder="Buscar por ID (H-105) o cliente..." className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 pl-14 pr-6 text-sm outline-none shadow-sm focus:ring-2 focus:ring-blue-500/50" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
-            <button onClick={() => setIsNewZoneModalOpen(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-7 py-3.5 rounded-2xl text-sm font-black flex items-center gap-2 shadow-lg active:scale-95 transition-all"><Plus size={20} /> Nueva Zona</button>
+            <button className="bg-blue-600 hover:bg-blue-500 text-white px-7 py-3.5 rounded-2xl text-sm font-black flex items-center gap-2 shadow-lg active:scale-95 transition-all"><Plus size={20} /> Nueva Zona</button>
           </div>
 
           <div className="bg-white/40 dark:bg-slate-950/40 rounded-[3rem] border border-slate-200 dark:border-slate-800 p-12 overflow-x-auto shadow-inner relative">
-            <div className="min-w-max flex items-center justify-center">
-               {/* CORRECCIÓN: El contenedor de áreas ahora respeta la propiedad layout (flex-col para Zona 3) */}
-               <div className={`flex ${zones.find(z => z.id === selectedZone)?.layout === 'vertical' ? 'flex-col' : 'flex-row'} items-center gap-16`}>
-                 {zones.find(z => z.id === selectedZone)?.areas.map((area: string, index: number) => (
-                   <div key={area} className={`flex ${zones.find(z => z.id === selectedZone)?.layout === 'vertical' ? 'flex-col' : 'flex-row'} items-center gap-16`}>
-                     {/* Pasillo vertical entre H y Mamparista */}
-                     {selectedZone === "expediciones" && index === 1 && (
-                       <div className="w-14 bg-slate-200 dark:bg-slate-800/30 rounded-xl min-h-[350px] border-2 border-dashed border-slate-300 dark:border-slate-700 flex items-center justify-center">
-                          <span className="rotate-90 text-[10px] font-black text-slate-500 uppercase tracking-[0.5em]">Pasillo</span>
-                       </div>
-                     )}
-                     {/* Pasillo vertical entre C y B */}
-                     {selectedZone === "zona_2" && index === 1 && (
-                       <div className="w-14 bg-slate-200 dark:bg-slate-800/30 rounded-xl min-h-[350px] border-2 border-dashed border-slate-300 dark:border-slate-700 flex items-center justify-center">
-                          <span className="rotate-90 text-[10px] font-black text-slate-500 uppercase tracking-[0.5em]">Pasillo</span>
-                       </div>
-                     )}
-                     {/* Pasillo horizontal entre A y ?? */}
-                     {selectedZone === "zona_3" && index === 1 && (
-                       <div className="h-14 bg-slate-200 dark:bg-slate-800/30 rounded-xl min-w-[350px] border-2 border-dashed border-slate-300 dark:border-slate-700 flex items-center justify-center">
-                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em]">Pasillo</span>
-                       </div>
-                     )}
-                     {renderArea(area)}
-                   </div>
-                 ))}
-               </div>
-            </div>
+            {zones.find(z => z.id === selectedZone) && (
+              <Zone
+                zoneId={selectedZone}
+                zoneName={zones.find(z => z.id === selectedZone)?.name || ''}
+                subzones={zones.find(z => z.id === selectedZone)?.subzones || {}}
+                blocks={blocks.filter(b => b.zoneId === selectedZone)}
+                selectedBlock={selectedBlock}
+                onBlockClick={setSelectedBlock}
+                onEmptySlotClick={handleEmptySlotClick}
+                preview={false}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -688,59 +661,82 @@ export default function Warehouse() {
                 </div>
               </form>
             ) : (
+              // Detalle del pallet con fallback de datos por defecto si faltan atributos
               <>
-                <div className="bg-slate-50 dark:bg-slate-800/60 rounded-[2.5rem] p-10 border border-slate-100 dark:border-slate-700 text-center relative overflow-hidden">
-                  <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-black mb-2 tracking-[0.4em]">GLASS ID</div>
-                  <div className="text-5xl font-black tracking-tighter text-blue-600 dark:text-blue-400 leading-none break-all uppercase">{selectedBlock.id}</div>
-                  {selectedBlock.occupied && (
-                    <div className="mt-5 inline-flex px-4 py-1.5 rounded-full bg-blue-500/10 text-blue-500 text-[10px] font-black uppercase tracking-widest border border-blue-500/20">Prioridad {selectedBlock.priority}</div>
-                  )}
-                  {!selectedBlock.occupied && (
-                    <div className="mt-5 inline-flex px-4 py-1.5 rounded-full bg-slate-500/10 text-slate-500 text-[10px] font-black uppercase tracking-widest border border-slate-500/20">Disponible</div>
-                  )}
+                {/* Cabecera visual destacada */}
+                <div className="bg-gradient-to-br from-blue-100 via-blue-50 to-white dark:from-blue-900 dark:via-slate-900 dark:to-slate-800 rounded-[2.5rem] p-10 border border-slate-100 dark:border-slate-700 text-center relative overflow-hidden shadow-lg">
+                  <div className="text-[11px] uppercase text-slate-400 dark:text-slate-500 font-black mb-2 tracking-[0.4em]">GLASS ID</div>
+                  <div className="text-5xl font-black tracking-tighter text-blue-600 dark:text-blue-400 leading-none break-all uppercase drop-shadow-lg">{selectedBlock.codigo_barra || 'Sin código'}</div>
+                  <div className="flex justify-center gap-2 mt-6">
+                    {selectedBlock.occupied && (
+                      <div className="inline-flex px-4 py-1.5 rounded-full bg-blue-500/10 text-blue-500 text-[11px] font-black uppercase tracking-widest border border-blue-500/20">Prioridad {selectedBlock.priority || 'N/A'}</div>
+                    )}
+                    {!selectedBlock.occupied && (
+                      <div className="inline-flex px-4 py-1.5 rounded-full bg-slate-500/10 text-slate-500 text-[11px] font-black uppercase tracking-widest border border-slate-500/20">Disponible</div>
+                    )}
+                  </div>
                 </div>
-                {selectedBlock.occupied ? (
-                  <>
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-5 p-5 bg-slate-50 dark:bg-slate-800/30 rounded-3xl border border-transparent shadow-sm">
-                        <div className="p-3.5 bg-blue-500/10 rounded-2xl text-blue-500"><User size={22} /></div>
-                        <div className="flex-1"><p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">Cliente / Destino</p><p className="text-lg font-bold">{selectedBlock.client}</p></div>
+                {/* Detalles del pallet */}
+                <div className="bg-white dark:bg-slate-800/60 rounded-2xl p-6 border border-slate-100 dark:border-slate-700 mt-2 grid grid-cols-1 gap-3 shadow-inner">
+                  <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Código de barras</span><span className="text-sm font-mono">{selectedBlock.codigo_barra || 'Sin código'}</span></div>
+                  <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Cliente</span><span className="text-sm font-mono">{selectedBlock.client || 'Desconocido'}</span></div>
+                  <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Dimensiones</span><span className="text-sm font-mono">{selectedBlock.dimensions || 'N/A'}</span></div>
+                  <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Peso total</span><span className="text-sm font-mono">{selectedBlock.weight || 'N/A'}</span></div>
+                  <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Estado pedido</span><span className="text-sm font-mono">{selectedBlock.estadoPedido || 'N/A'}</span></div>
+                  <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Referencia pedido</span><span className="text-sm font-mono">{selectedBlock.referencias || 'N/A'}</span></div>
+                  <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Fecha entrega</span><span className="text-sm font-mono">{selectedBlock.lastUpdate || 'N/A'}</span></div>
+                  <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Zona</span><span className="text-sm font-mono">{selectedBlock.zoneId || 'N/A'}</span></div>
+                  <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Subzona</span><span className="text-sm font-mono">{selectedBlock.area || 'N/A'}</span></div>
+                </div>
+                {/* Botones de acción debajo */}
+                <div className="flex flex-row gap-3 mt-6 mb-2 justify-center">
+                  <button
+                    className={`bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow active:scale-95 transition-all ${moveMode ? 'ring-2 ring-green-400' : ''}`}
+                    onClick={() => setMoveMode(m => !m)}
+                    disabled={moveLoading}
+                  >
+                    <Maximize2 size={16}/> {moveMode ? 'Cancelar' : 'Mover'}
+                  </button>
+                  <button className="bg-yellow-400 hover:bg-yellow-500 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow active:scale-95 transition-all"><Package size={16}/> Despachar</button>
+                  <button className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow active:scale-95 transition-all"><X size={16}/> Eliminar</button>
+                </div>
+                {moveMode && (
+                  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
+                    <div className="bg-white dark:bg-slate-900 rounded-3xl border border-blue-200 dark:border-blue-700 shadow-2xl p-8 flex flex-col items-center min-w-[320px] max-w-[400px] w-full mx-4 relative">
+                      <div className="text-lg font-black mb-6 text-blue-700 dark:text-blue-300 text-center">Selecciona la nueva subzona</div>
+                      <div className="w-full grid grid-cols-2 gap-4 mb-4">
+                        {zones.flatMap(zone => Object.keys(zone.subzones).map(subzone => ({ zoneId: zone.id, zoneName: zone.name, subzone }))).map(({ zoneId, zoneName, subzone }) => (
+                          <button
+                            key={zoneId + '-' + subzone}
+                            className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 font-bold py-4 rounded-xl text-base hover:bg-blue-200 dark:hover:bg-blue-800 transition-all border border-blue-200 dark:border-blue-700 shadow"
+                            onClick={async () => {
+                              setMoveLoading(true);
+                              setMoveError(null);
+                              try {
+                                const docRef = firestoreDoc(db, 'productos', selectedBlock.id);
+                                await updateDoc(docRef, { subzona: subzone, zona: zoneId });
+                                setMoveMode(false);
+                                setSelectedBlock(null);
+                                window.location.reload();
+                              } catch (err) {
+                                setMoveError('Error al mover el pallet');
+                              } finally {
+                                setMoveLoading(false);
+                              }
+                            }}
+                            disabled={moveLoading}
+                          >
+                            {zoneName} - {subzone}
+                          </button>
+                        ))}
                       </div>
-                      <div className="flex items-center gap-5 p-5 bg-slate-50 dark:bg-slate-800/30 rounded-3xl">
-                        <div className="p-3.5 bg-purple-500/10 rounded-2xl text-purple-500"><BarChart3 size={22} /></div>
-                        <div className="flex-1"><p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">Tipo de Vidrio</p><p className="text-lg font-bold">{selectedBlock.type}</p></div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="p-5 bg-slate-50 dark:bg-slate-800/30 rounded-3xl text-center shadow-sm">
-                          <div className="flex items-center justify-center gap-2 text-slate-400 mb-2"><Maximize2 size={16} /><span className="text-[9px] font-black uppercase tracking-wider">Medidas</span></div>
-                          <p className="text-base font-bold leading-none">{selectedBlock.dimensions}</p>
-                        </div>
-                        <div className="p-5 bg-slate-50 dark:bg-slate-800/30 rounded-3xl text-center shadow-sm">
-                          <div className="flex items-center justify-center gap-2 text-slate-400 mb-2"><Weight size={16} /><span className="text-[9px] font-black uppercase tracking-wider">Carga Total</span></div>
-                          <p className="text-base font-bold leading-none">{selectedBlock.weight}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-5 p-5 bg-slate-50 dark:bg-slate-800/30 rounded-3xl hover:border-emerald-500/20 transition-all">
-                        <div className="p-3.5 bg-emerald-500/10 rounded-2xl text-emerald-500 shadow-sm"><Clock size={22} /></div>
-                        <div className="flex-1"><p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">Días en Stock</p><p className={`text-lg font-black ${selectedBlock.daysInStorage > 30 ? 'text-red-500' : 'text-blue-500'}`}>{selectedBlock.daysInStorage} días</p></div>
-                      </div>
-                      <div className="flex items-center gap-5 p-5 bg-slate-50 dark:bg-slate-800/30 rounded-3xl shadow-sm">
-                        <div className="p-3.5 bg-slate-500/10 rounded-2xl text-slate-500 shadow-sm"><Calendar size={22} /></div>
-                        <div className="flex-1"><p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">Último Movimiento</p><p className="text-lg font-bold">{selectedBlock.lastUpdate}</p></div>
-                      </div>
+                      {moveError && <div className="text-red-500 text-xs mb-2 text-center">{moveError}</div>}
+                      <button
+                        className="mt-2 px-6 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-white font-bold text-xs hover:bg-slate-300 dark:hover:bg-slate-600 transition-all"
+                        onClick={() => setMoveMode(false)}
+                        disabled={moveLoading}
+                      >Cancelar</button>
                     </div>
-                    <div className="flex flex-col gap-4 pt-4 pb-12 shrink-0">
-                      <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-5 rounded-[1.8rem] shadow-xl uppercase tracking-widest text-sm flex items-center justify-center gap-3 active:scale-95 transition-all"><Check size={22} strokeWidth={3} /> Procesar Salida</button>
-                      <div className="grid grid-cols-2 gap-4"><button className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 font-black py-4 rounded-2xl flex items-center justify-center gap-2 text-xs uppercase transition-all shadow-sm">Mover</button><button className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 font-black py-4 rounded-2xl flex items-center justify-center gap-2 text-xs uppercase transition-all shadow-sm">Editar</button></div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
-                    <div className="w-24 h-24 bg-slate-200 dark:bg-slate-800/40 rounded-full flex items-center justify-center">
-                      <Package size={40} className="text-slate-400" />
-                    </div>
-                    <h3 className="text-xl font-black text-slate-600 dark:text-slate-400 uppercase">Ubicación Disponible</h3>
-                    <p className="text-sm text-slate-500 max-w-[280px]">Esta ubicación está libre y lista para recibir nuevo material.</p>
                   </div>
                 )}
               </>
@@ -748,13 +744,6 @@ export default function Warehouse() {
           </div>
         </div>
       )}
-
-      <NewZoneModal
-        isOpen={isNewZoneModalOpen}
-        onClose={() => setIsNewZoneModalOpen(false)}
-        onZoneCreated={handleZoneCreated}
-      />
-
     </div>
   );
 }
