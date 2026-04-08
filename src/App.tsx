@@ -4,7 +4,7 @@ import Stock from './components/Stock';
 import Warehouse from './components/Warehouse';
 import Resumen from './components/Resumen';
 import Login from './components/Login';
-import  AddUser  from "./components/addUser";
+import  AddUser  from "./components/AddUser";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 const Alertas = () => (

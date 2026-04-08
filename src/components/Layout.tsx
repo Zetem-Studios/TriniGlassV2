@@ -2,15 +2,12 @@ import { useState, useEffect } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import { LayoutDashboard, Package, Building2, Bell, Settings, Sun, Moon, Menu, UserPlus } from 'lucide-react';
 
-// 🔥 NUEVO
 import { useAuth } from '../context/AuthProvider';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 
 export default function Layout() {
   const [isDarkMode, setIsDarkMode] = useState(true);
-
-  // 🔥 NUEVO
   const { user } = useAuth();
 
   useEffect(() => {
@@ -20,8 +17,6 @@ export default function Layout() {
       document.documentElement.classList.remove('dark');
     }
   }, [isDarkMode]);
-
-  // 🔥 NUEVO
   const handleLogout = async () => {
     try {
       await signOut(auth);
