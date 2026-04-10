@@ -6,6 +6,7 @@ import Resumen from './components/Resumen';
 import Login from './components/Login';
 import  AddUser  from "./components/AddUser";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import MobileScanner from "./components/Scanner";
 
 const Alertas = () => (
   <div>
@@ -31,6 +32,7 @@ function App() {
           <Route path="add-user" element={<AddUser />} />
           <Route path="inventario" element={<Stock />} />
           <Route path="almacen" element={<Warehouse />} />
+          <Route path="scanner" element={<MobileScanner />} />
           <Route path="alertas" element={<Alertas />} />
           <Route
             path="configuracion"
@@ -41,6 +43,5 @@ function App() {
     </BrowserRouter>
   );
 }
-
 
 export default App;

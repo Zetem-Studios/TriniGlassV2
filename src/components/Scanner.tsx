@@ -1,0 +1,563 @@
+import { useState } from "react";
+import QRScanner from "./QRScanner";
+
+
+import {
+  CheckCircle2, AlertCircle, Smartphone, User, Clock, Truck, Search, Loader2,
+  ChevronLeft, Navigation, Box, Maximize2, ArrowRightLeft, Map as MapIcon
+} from "lucide-react";
+import { db } from "../firebase";
+import { collection, getDocs, query, where } from "firebase/firestore";
+
+// Tipos para los estados
+type ResultType = "success" | "waiting" | "error" | "notfound" | null;
+
+
+type PaletData = {
+  id: string;
+  prioridad: string;
+  ubicacion: string;
+  tipoVidrio: string;
+  camionRuta: string;
+  medidas: string;
+  diasStock: number;
+  nombreAbreviado?: string;
+};
+
+type LookupDebug = {
+  query: string;
+  queryType: string;
+  queryLength: number;
+  queryHex: string;
+  queryNormalized: string;
+  found: boolean;
+  tried: number;
+  firestoreCodigoBarra?: string;
+  firestoreCodigoBarraLength?: number;
+  firestoreCodigoBarraHex?: string;
+  firestoreCodigoBarraNormalized?: string;
+  normalizedMatch?: boolean;
+} | null;
+
+export default function MobileScanner() {
+      // Copiado de Warehouse.tsx
+      const parseFechaLineaPedido = (fecha: any) => {
+        if (!fecha) return null;
+        if (fecha instanceof Date) return fecha;
+        if (typeof fecha === 'object' && fecha.toDate instanceof Function) return fecha.toDate();
+        if (typeof fecha !== 'string') {
+          const parsed = Date.parse(String(fecha));
+          return isNaN(parsed) ? null : new Date(parsed);
+        }
+        const normalized = fecha.replace(/\//g, '-');
+        const parsed = Date.parse(normalized);
+        return isNaN(parsed) ? null : new Date(parsed);
+      };
+
+      const mapProductoToBlock = (producto: any, _index: number, id: string) => {
+        const fechaPedido = parseFechaLineaPedido(producto.fecha_linea_pedido);
+        const hoy = new Date();
+        let daysInStorage = 0;
+        if (fechaPedido) {
+          daysInStorage = Math.max(0, Math.floor((hoy.getTime() - fechaPedido.getTime()) / (1000 * 60 * 60 * 24)));
+        }
+        const tipoVidrio = producto.vidrio_simple ? "Vidrio Simple" : "Doble Acristalamiento";
+        let priority = "Normal";
+        if (daysInStorage > 30) priority = "Alta";
+        else if (daysInStorage > 20) priority = "Media";
+        let area = "";
+        let zoneId = "";
+        if (typeof producto.subzona === "string" && producto.subzona.trim() !== "") {
+          area = producto.subzona.trim();
+          // No se incluye ZONE_CONFIGS aquí por simplicidad, fallback a lógica antigua
+        }
+        if (!area) {
+          area = "H";
+          zoneId = "expediciones";
+          if (typeof producto.nombre_abreviado === "string") {
+            const nombre = producto.nombre_abreviado.toUpperCase().trim();
+            if (nombre === "DUSCHOLUX" || nombre === "VICOMAM") {
+              area = "Mamparista";
+              zoneId = "expediciones";
+            } else {
+              const H_KEYS = ["CENTERGLAS", "REUGLAS", "NAVAS", "MACRISAL", "DINOR"];
+              if (H_KEYS.some(key => nombre.includes(key))) {
+                area = "H";
+                zoneId = "expediciones";
+              } else {
+                const E_KEYS = ["VALLIRANA", "ESPINOSA", "RETANA", "TANCAMENTS", "NOUTEC", "ALGE", "WINDGLASS", "ALVICAT", "FENSTER"];
+                if (E_KEYS.some(key => nombre.includes(key))) {
+                  area = "E";
+                  zoneId = "corte";
+                } else {
+                  const D_KEYS = ["OTERO", "CLEMENTE", "FORNES"];
+                  if (D_KEYS.some(key => nombre.includes(key))) {
+                    area = "D";
+                    zoneId = "cms";
+                  } else {
+                    const F_KEYS = ["IBERPERFIL", "VALVERDE"];
+                    if (F_KEYS.some(key => nombre.includes(key))) {
+                      area = "F";
+                      zoneId = "pulidoras";
+                    } else {
+                      const C_KEYS = ["BARCELONA", "COMPANY"];
+                      if (C_KEYS.some(key => nombre.includes(key))) {
+                        area = "C";
+                        zoneId = "bilateral_taladros";
+                      } else {
+                        const B_KEYS = ["PONSETI", "ALMANSA"];
+                        if (B_KEYS.some(key => nombre.includes(key))) {
+                          area = "B";
+                          zoneId = "bilateral_taladros";
+                        } else {
+                          const A_KEYS = ["GLORIA", "VIELMAR", "GUSTAMAN", "MOLALUM", "THERMIA", "FAURA", "BUCH", "MODUL"];
+                          if (A_KEYS.some(key => nombre.includes(key))) {
+                            area = "??";
+                            zoneId = "horno";
+                          } else {
+                            const ALL_KEYS = [
+                              "DUSCHOLUX", "VICOMAM", "CENTERGLAS", "REUGLAS", "NAVAS", "MACRISAL", "DINOR",
+                              "VALLIRANA", "ESPINOSA", "RETANA", "TANCAMENTS", "NOUTEC", "ALGE", "WINDGLASS", "ALVICAT", "FENSTER",
+                              "OTERO", "CLEMENTE", "FORNES", "IBERPERFIL", "VALVERDE", "BARCELONA", "COMPANY", "PONSETI", "ALMANSA",
+                              "GLORIA", "VIELMAR", "GUSTAMAN", "MOLALUM", "THERMIA", "FAURA", "BUCH", "MODUL"
+                            ];
+                            if (!ALL_KEYS.some(key => nombre.includes(key))) {
+                              area = "A";
+                              zoneId = "horno";
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        return {
+          id,
+          codigo_barra: producto.codigo_barra || '',
+          zoneId: zoneId,
+          area: area,
+          type: tipoVidrio,
+          daysInStorage: daysInStorage,
+          client: producto.apellido_cliente || producto.nombre_abreviado || "Cliente Desconocido",
+          occupied: true,
+          dimensions: `${producto.altura || 0} x ${producto.longitud || 0} mm`,
+          weight: `${producto.peso_total_kg || 0} kg`,
+          priority: priority,
+          lastUpdate: (() => {
+            const fechaEntregaDate = parseFechaLineaPedido(producto.fecha_entrega);
+            if (fechaEntregaDate) return fechaEntregaDate.toLocaleDateString('es-ES');
+            if (producto.fecha_entrega) {
+              const fechaPlain = Date.parse(String(producto.fecha_entrega));
+              if (!isNaN(fechaPlain)) return new Date(fechaPlain).toLocaleDateString('es-ES');
+            }
+            return "N/A";
+          })(),
+          numeroCliente: producto.numero_cliente,
+          numeroLineaPedido: producto.numero_linea_pedido,
+          estadoPedido: producto.estado_pedido,
+          nombre_abreviado: producto.nombre_abreviado,
+          referencias: producto.referencia_linea_pedido
+        };
+      };
+    // Utilidad para obtener el primer valor definido
+    function getFirstDefined<T>(...args: (T | undefined | null)[]): T | undefined {
+      return args.find((v) => v !== undefined && v !== null);
+    }
+  const [activeTab, setActiveTab] = useState("scan");
+  const [scanning, setScanning] = useState(false); // true = mostrando loader
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [result, setResult] = useState<ResultType>(null);
+  const [showDetails, setShowDetails] = useState(false);
+  const [showMap, setShowMap] = useState(false);
+  const [lastScan, setLastScan] = useState<string | null>(null);
+  const [palets, setPalets] = useState<PaletData[]>([]);
+  // Estado para controlar qué palet está desplegado
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+
+  // Acción de escaneo: solo animación visual (botones manuales)
+  const handleScanAction = (type: "success" | "waiting" | "error") => {
+    setScanning(true);
+    setShowDetails(false);
+    setShowMap(false);
+    setTimeout(() => {
+      setScanning(false);
+      setResult(type);
+      setShowDetails(true);
+    }, 1200);
+  };
+
+  // Búsqueda manual: busca por ID de bloque (igual que escaneo, pero usando searchQuery)
+  const handleManualSearch = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    setIsSearching(true);
+    setShowDetails(false);
+    setResult(null);
+    setPalets([]);
+    setExpandedIdx(null);
+    setLastScan(searchQuery); // Para mostrar el texto buscado si no se encuentra
+    try {
+      const productosCol = collection(db, "productos");
+      const cleanedQuery = searchQuery.replace(/\s+/g, "").toUpperCase();
+      const q = query(productosCol, where("codigo_barra", ">=", cleanedQuery), where("codigo_barra", "<=", cleanedQuery + '\uf8ff'));
+      const snapshot = await getDocs(q);
+      let found: any[] = [];
+      if (!snapshot.empty) {
+        const exactMatches = snapshot.docs
+          .map(doc => mapProductoToBlock(doc.data(), 0, doc.id))
+          .filter(f => (f.codigo_barra || '').replace(/\s+/g, '').toUpperCase() === cleanedQuery);
+        found = exactMatches;
+      }
+      if (found.length > 0) {
+        setPalets(found.map(f => ({
+          id: f.codigo_barra || f.id || cleanedQuery,
+          prioridad: f.priority || "Normal",
+          ubicacion: f.area || f.zoneId || "---",
+          tipoVidrio: f.type || "---",
+          camionRuta: f.empresa || "Ruta por asignar",
+          medidas: f.dimensions || "---",
+          diasStock: f.daysInStorage || 0,
+          nombreAbreviado: f.nombre_abreviado || f.client || "---"
+        })));
+        setResult("success");
+      } else {
+        setPalets([]);
+        setResult("notfound");
+      }
+    } catch (err) {
+      setPalets([]);
+      setResult("notfound");
+    } finally {
+      setIsSearching(false);
+      setShowDetails(true);
+      setActiveTab("scan");
+    }
+  };
+
+  // Nuevo: callback para QRScanner
+  // Para depuración: guardar el resultado de búsqueda
+  const [lookupDebug, setLookupDebug] = useState<LookupDebug>(null);
+
+  const onScanSuccess = async (decodedText: string) => {
+    setLastScan(decodedText);
+    setShowDetails(false);
+    setScanning(true);
+    setResult(null);
+    setPalets([]);
+    // Funciones utilitarias para debug
+    function toHex(str: string) {
+      return Array.from(str).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' ');
+    }
+    function normalize(str: string) {
+      return str.replace(/\s+/g, '').toUpperCase();
+    }
+    try {
+      // Buscar solo el producto cuyo codigo_barra coincida (normalizado)
+      const productosCol = collection(db, "productos");
+      // Limpiar el código escaneado de saltos de línea y espacios invisibles
+      const cleanedScan = decodedText.replace(/\s+/g, "").toUpperCase();
+      // Buscar todos los productos cuyo codigo_barra normalizado coincida
+      const q = query(productosCol, where("codigo_barra", ">=", cleanedScan), where("codigo_barra", "<=", cleanedScan + '\uf8ff'));
+      const snapshot = await getDocs(q);
+      let found: any[] = [];
+      let tried = 0;
+      let debugInfo: any = {
+        query: decodedText,
+        queryType: typeof decodedText,
+        queryLength: decodedText.length,
+        queryHex: toHex(decodedText),
+        queryNormalized: cleanedScan,
+        found: false,
+        tried: 0,
+        firestoreCodigoBarra: undefined,
+        firestoreCodigoBarraLength: undefined,
+        firestoreCodigoBarraHex: undefined,
+        firestoreCodigoBarraNormalized: undefined,
+        normalizedMatch: undefined
+      };
+      if (!snapshot.empty) {
+        // Buscar todas las coincidencias exactas normalizadas (filtrado estricto)
+        const exactMatches = snapshot.docs
+          .map(doc => mapProductoToBlock(doc.data(), 0, doc.id))
+          .filter(f => (f.codigo_barra || '').replace(/\s+/g, '').toUpperCase() === cleanedScan);
+        found = exactMatches;
+        debugInfo.tried = snapshot.docs.length;
+        debugInfo.found = found.length > 0;
+        if (found.length > 0) {
+          const first = found[0];
+          debugInfo.firestoreCodigoBarra = first.codigo_barra;
+          debugInfo.firestoreCodigoBarraLength = first.codigo_barra.length;
+          debugInfo.firestoreCodigoBarraHex = toHex(first.codigo_barra);
+          debugInfo.firestoreCodigoBarraNormalized = (first.codigo_barra || "").replace(/\s+/g, "").toUpperCase();
+          debugInfo.normalizedMatch = true;
+        } else {
+          debugInfo.normalizedMatch = false;
+        }
+      } else {
+        debugInfo.tried = 0;
+      }
+      setLookupDebug(debugInfo);
+      // ...se eliminó el window.alert de depuración...
+      if (found.length > 0) {
+        setPalets(found.map(f => ({
+          id: f.codigo_barra || f.id || cleanedScan,
+          prioridad: f.priority || "Normal",
+          ubicacion: f.area || f.zoneId || "---",
+          tipoVidrio: f.type || "---",
+          camionRuta: f.empresa || "Ruta por asignar",
+          medidas: f.dimensions || "---",
+          diasStock: f.daysInStorage || 0,
+          nombreAbreviado: f.nombre_abreviado || f.client || "---"
+        })));
+        setResult("success");
+      } else {
+        setPalets([]);
+        setResult("notfound");
+      }
+    } catch (err) {
+      const errorDebug = {
+        query: decodedText,
+        queryType: typeof decodedText,
+        queryLength: decodedText.length,
+        queryHex: toHex(decodedText),
+        queryNormalized: normalize(decodedText),
+        found: false,
+        tried: 0,
+        firestoreCodigoBarra: undefined,
+        firestoreCodigoBarraLength: undefined,
+        firestoreCodigoBarraHex: undefined,
+        firestoreCodigoBarraNormalized: undefined,
+        normalizedMatch: undefined
+      };
+      setLookupDebug(errorDebug);
+      // ...se eliminó el window.alert de depuración...
+      setResult("notfound");
+    } finally {
+      setScanning(false);
+      setShowDetails(true);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#0f172a] text-white font-sans flex flex-col overflow-hidden select-none">
+      {!showMap && (
+        <div className={`p-6 pt-12 pb-8 transition-colors duration-500 ${
+          showDetails ? (result === 'success' ? 'bg-emerald-600' : result === 'error' ? 'bg-red-600' : 'bg-blue-600') : 'bg-blue-600'
+        }`}>
+          <div className="flex justify-between items-center mb-6 text-left">
+            <h1 className="text-2xl font-black italic uppercase leading-none tracking-tighter">Triniglass <span className="opacity-60 font-light not-italic">Móvil</span></h1>
+            <Smartphone size={20} className="opacity-40" />
+          </div>
+          <div className="flex bg-black/20 p-1 rounded-2xl backdrop-blur-md">
+            <button onClick={() => { setActiveTab("scan"); setShowDetails(false); }} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === "scan" ? "bg-white text-blue-600 shadow-lg" : "text-white/60"}`}>Escanear</button>
+            <button onClick={() => { setActiveTab("search"); setShowMap(false); }} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === "search" ? "bg-white text-blue-600 shadow-lg" : "text-white/60"}`}>Buscar</button>
+          </div>
+        </div>
+      )}
+      <div className="flex-1 relative flex flex-col p-6 overflow-y-auto">
+        {/* VISTA MAPA INTEGRADA (placeholder visual) */}
+        {showMap && (
+          <div className="animate-in fade-in zoom-in-95 duration-300 flex flex-col h-full space-y-6">
+            <div className="flex items-center gap-4">
+              <button onClick={() => setShowMap(false)} className="p-3 bg-slate-800 rounded-2xl active:scale-90 transition-all"><ChevronLeft size={24} /></button>
+              <div className="text-left">
+                <h2 className="text-lg font-black uppercase leading-none mb-1">Localización</h2>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Zona - Área</p>
+              </div>
+            </div>
+            <div className="flex-1 bg-slate-900/50 rounded-[2.5rem] border border-slate-800 p-8 flex flex-col items-center justify-center relative shadow-inner overflow-hidden">
+              <div className="text-center space-y-3">
+                <div className="w-20 h-20 mx-auto bg-blue-500/10 rounded-full flex items-center justify-center border-2 border-blue-500/30">
+                  <Clock size={40} className="text-blue-500" />
+                </div>
+                <h3 className="text-xl font-black uppercase text-blue-400">En Zona de Espera</h3>
+                <p className="text-sm text-slate-400 max-w-[250px] mx-auto">Este palet está en zona de espera temporal. Ubicación asignada: <span className="font-bold text-white">---</span></p>
+              </div>
+            </div>
+            <button onClick={() => setShowMap(false)} className="w-full bg-blue-600 py-5 rounded-3xl font-black uppercase text-xs shadow-lg">Volver a detalles</button>
+          </div>
+        )}
+        {/* PESTAÑA BUSCAR */}
+        {activeTab === "search" && !showMap && (
+          <div className="animate-in fade-in slide-in-from-right duration-300">
+            <form onSubmit={handleManualSearch} className="space-y-4">
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="ID de bloque (Ej: H-105)..." className="w-full bg-slate-900 border border-slate-700 rounded-2xl py-5 pl-12 pr-4 text-sm outline-none focus:border-blue-500 transition-all text-white" />
+              </div>
+              <button type="submit" className="w-full bg-blue-600 py-4 rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-3 shadow-lg">
+                {isSearching ? <Loader2 className="animate-spin" /> : "Localizar Bloque"}
+              </button>
+            </form>
+          </div>
+        )}
+        {/* VISOR ESCANEO REAL o LOADER */}
+        {!showDetails && !showMap && activeTab === "scan" && (
+          <div className="flex-1 flex flex-col items-center justify-center animate-in fade-in">
+            {scanning ? (
+              <div className="flex flex-col items-center justify-center gap-6">
+                <Loader2 className="animate-spin text-blue-400" size={64} />
+                <span className="text-blue-400 font-black text-lg uppercase tracking-widest">Buscando...</span>
+              </div>
+            ) : (
+              <>
+                <QRScanner onScanSuccess={onScanSuccess} />
+                <div className="text-center space-y-4 mt-8">
+                  <h2 className="text-lg font-black uppercase tracking-tight leading-none">Enfoque el código</h2>
+                  <p className="text-slate-500 text-xs max-w-[200px] mx-auto leading-relaxed font-medium">Lectura con cámara para validar ubicación.</p>
+                  {/* Botones manuales opcionales para pruebas */}
+                  <div className="mt-8 grid grid-cols-3 gap-3 w-full">
+                    <button onClick={() => handleScanAction('success')} className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 py-3 rounded-xl text-[9px] font-black uppercase active:bg-emerald-500 active:text-white transition-all">Colocado</button>
+                    <button onClick={() => handleScanAction('waiting')} className="bg-blue-500/10 border border-blue-500/30 text-blue-500 py-3 rounded-xl text-[9px] font-black uppercase active:bg-blue-500 active:text-white transition-all">Espera</button>
+                    <button onClick={() => handleScanAction('error')} className="bg-red-500/10 border border-red-500/30 text-red-500 py-3 rounded-xl text-[9px] font-black uppercase active:bg-red-500 active:text-white transition-all">Error</button>
+                  </div>
+                  {lastScan && (
+                    <div className="mt-4 text-xs text-slate-400">Último QR: <span className="font-mono text-white">{lastScan}</span></div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+        {/* DETALLES DEL BLOQUE (encontrado/no encontrado) */}
+        {showDetails && !showMap && activeTab === "scan" && (
+          <div className="animate-in slide-in-from-bottom duration-500 space-y-4 pb-12">
+            {result === "success" && palets.length > 0 ? (
+              <>
+                <div className="mb-4 max-w-3xl mx-auto flex flex-col gap-2">
+                  <button
+                    onClick={() => { setShowDetails(false); setResult(null); setPalets([]); setLastScan(null); setActiveTab('scan'); }}
+                    className="w-full py-4 text-[10px] font-black uppercase tracking-widest rounded-xl bg-red-600 text-white shadow-lg hover:bg-red-700 transition-all mb-2"
+                  >
+                    Volver a escanear
+                  </button>
+                  <div className="bg-blue-900/80 border border-blue-500/30 rounded-xl px-6 py-3 text-sm font-bold text-blue-200 shadow flex items-center gap-2">
+                    <span className="text-lg font-black text-blue-300">{palets.length}</span>
+                    <span>resultado{palets.length === 1 ? '' : 's'} encontrado{palets.length === 1 ? '' : 's'}:</span>
+                  </div>
+                </div>
+                {palets.map((palet, idx) => {
+                  const expanded = expandedIdx === idx;
+                  return (
+                    <div
+                      key={palet.id + idx}
+                      className={`transition-all duration-300 bg-slate-900 border border-slate-800 rounded-2xl shadow-lg max-w-3xl mx-auto mb-4 cursor-pointer ${expanded ? 'ring-2 ring-blue-400' : 'hover:border-blue-500/40'}`}
+                      onClick={() => setExpandedIdx(expanded ? null : idx)}
+                    >
+                      {/* Vista resumida */}
+                      <div className="flex items-center gap-4 p-5">
+                        <div className="flex flex-col items-center justify-center w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-400/30">
+                          <CheckCircle2 size={24} className="text-blue-400" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex flex-wrap gap-2 items-center">
+                            <span className="font-black text-blue-400 text-base md:text-lg uppercase tracking-tight leading-none">{palet.id}</span>
+                            <span className="text-xs font-bold text-slate-400 uppercase">{palet.nombreAbreviado || '---'}</span>
+                            <span className="text-xs font-bold text-emerald-400 uppercase">{palet.prioridad || '---'}</span>
+                            <span className="text-xs font-bold text-purple-400 uppercase">{palet.ubicacion || '---'}</span>
+                          </div>
+                        </div>
+                        <div className="ml-2">
+                          <span
+                            className={`inline-block w-6 h-6 rounded-full flex items-center justify-center transition-all select-none ${expanded ? 'bg-blue-500 text-white' : 'bg-slate-800 text-blue-400'}`}
+                            style={{ lineHeight: '1', fontSize: '1.35rem', fontWeight: 700, textAlign: 'center', verticalAlign: 'middle', paddingTop: '1px' }}
+                          >
+                            {expanded ? '-' : '+'}
+                          </span>
+                        </div>
+                      </div>
+                      {/* Vista detallada desplegable */}
+                      {expanded && (
+                        <div className="p-5 pt-0 space-y-3 text-left animate-in fade-in slide-in-from-top">
+                          <div className="flex items-center gap-4 p-4 bg-slate-800/40 rounded-2xl border border-white/5 shadow-sm">
+                            <User size={20} className="text-slate-500" />
+                            <div className="flex-1"><p className="text-[9px] font-black text-slate-500 uppercase mb-1">Nombre abreviado</p><p className="text-sm font-bold leading-tight">{palet.nombreAbreviado || "---"}</p></div>
+                          </div>
+                          <div className={`flex items-center gap-4 p-4 rounded-2xl border shadow-sm bg-purple-500/10 border-purple-500/20`}>
+                            <Navigation size={20} className="text-purple-400" />
+                            <div className="flex-1">
+                              <p className="text-[9px] font-black uppercase mb-1" style={{ color: '#c084fc' }}>Ubicación Asignada</p>
+                              <p className="text-base md:text-lg font-bold leading-tight break-words">
+                                {palet.ubicacion || "---"}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4 p-4 bg-cyan-500/10 border border-cyan-500/20 rounded-2xl shadow-sm">
+                            <Box size={20} className="text-cyan-400" />
+                            <div className="flex-1">
+                              <p className="text-[9px] font-black text-cyan-400 uppercase mb-1">Tipo de Vidrio</p>
+                              <p className="text-base md:text-lg font-bold leading-tight break-words">
+                                {palet.tipoVidrio || "---"}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4 p-4 bg-orange-500/10 border border-orange-500/20 rounded-2xl shadow-sm">
+                            <Truck size={20} className="text-orange-400" />
+                            <div className="flex-1">
+                              <p className="text-[9px] font-black text-orange-400 uppercase mb-1">Camión / Ruta</p>
+                              <p className="text-base md:text-lg font-bold leading-tight break-words">
+                                {palet.camionRuta || "Ruta por asignar"}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="p-4 bg-slate-800/40 rounded-2xl border border-white/5 text-center">
+                              <Maximize2 size={16} className="text-slate-500 mx-auto mb-1" />
+                              <p className="text-[8px] font-black text-slate-500 uppercase mb-1 leading-none">Medidas</p>
+                              <p className="text-sm md:text-base font-bold leading-none break-words">
+                                {palet.medidas || "---"}
+                              </p>
+                            </div>
+                            <div className="p-4 rounded-2xl border border-white/5 text-center bg-blue-500 border-blue-400">
+                              <Clock size={16} className="text-white mx-auto mb-1 opacity-70" />
+                              <p className="text-[8px] font-black text-white uppercase mb-1 opacity-70 leading-none">Stock</p>
+                              <p className="text-xs font-black text-white leading-none">{palet.diasStock !== undefined ? `${palet.diasStock} Días` : "--- Días"}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            ) : result === "notfound" ? (
+              <div className={`p-5 rounded-[2rem] flex items-center gap-4 bg-red-500/10 border border-red-500/20`}>
+                <div className={`p-3 rounded-2xl bg-red-500 text-white shadow-lg`}>
+                  <AlertCircle size={24} />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="font-black uppercase text-[9px] tracking-widest opacity-60 mb-0.5 leading-none">Palet no encontrado</p>
+                  <p className="text-lg font-black uppercase tracking-tight leading-none">ID: {lastScan}</p>
+                </div>
+              </div>
+            ) : null}
+            <div className="flex flex-col gap-2 w-full">
+              <button
+                onClick={() => { setShowDetails(false); setResult(null); setPalets([]); setLastScan(null); }}
+                className="w-full py-4 text-[9px] font-black uppercase text-slate-600 tracking-widest active:text-white border-b border-slate-700"
+              >
+                Nuevo Escaneo
+              </button>
+              <button
+                onClick={() => { setShowDetails(false); setResult(null); setPalets([]); setLastScan(null); setActiveTab('scan'); }}
+                className="w-full py-4 text-[9px] font-black uppercase text-blue-500 tracking-widest active:text-white"
+              >
+                Volver a escanear
+              </button>
+            </div>
+          </div>
+        )}
+        {/* ...se eliminó la sección de depuración... */}
+      </div>
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes scan-line { 0% { top: 24px; } 100% { top: calc(100% - 24px); } }
+        .animate-scan-line { animation: scan-line 2.5s ease-in-out infinite; }
+      `}} />
+    </div>
+  );
+}
