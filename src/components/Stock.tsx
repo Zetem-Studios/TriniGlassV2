@@ -90,6 +90,18 @@ export default function Stock() {
   };
 
   useEffect(() => {
+    const parseFirestoreDateToISO = (value: any) => {
+      if (!value) return "";
+      if (value instanceof Date) return value.toISOString().split("T")[0];
+      if (value?.toDate && typeof value.toDate === "function") {
+        return value.toDate().toISOString().split("T")[0];
+      }
+      if (typeof value === "string") {
+        return value.includes("/") ? value.split("/").reverse().join("-") : value;
+      }
+      return "";
+    };
+
     const fetchStock = async () => {
       setLoading(true);
       try {
@@ -211,11 +223,6 @@ export default function Stock() {
     setCurrentPage(1);
   };
 
-  const parseDimensions = (dimensions: string) => {
-    const [width, height, thickness] = dimensions.split("x").map(Number);
-    return { width: width || 0, height: height || 0, thickness: thickness || 0 };
-  };
-
   const filteredInventory = useMemo(() => {
     return inventory.filter((item) => {
       const search = searchTerm.toLowerCase().trim();
@@ -272,20 +279,39 @@ export default function Stock() {
     }
   }, [totalPages, currentPage]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredInventory.length / rowsPerPage));
+
+  const statusOptions = useMemo(() => {
+    const statuses = new Set<string>();
+    inventory.forEach((item) => {
+      if (item.status?.trim()) statuses.add(item.status.trim());
+    });
+
+    if (statuses.size === 0) {
+      ["Pendiente", "Almacenado", "Reservado", "Listo para carga"].forEach((status) => statuses.add(status));
+    }
+
+    return [...statuses].sort();
+  }, [inventory]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filteredInventory, rowsPerPage]);
+
+  const paginatedInventory = useMemo(() => {
+    const start = (currentPage - 1) * rowsPerPage;
+    return filteredInventory.slice(start, start + rowsPerPage);
+  }, [filteredInventory, currentPage, rowsPerPage]);
+
   // Formatear fecha a prueba de fallos
   const formatDateForDisplay = (dateString: string) => {
-    // Si la fecha ya tiene barras (ej: 28/2/2026), la devolvemos tal cual
     if (dateString.includes('/')) {
       return dateString;
     }
-    
-    // Si tiene guiones (ej: 2026-02-28), le damos la vuelta
     if (dateString.includes('-')) {
       const [year, month, day] = dateString.split('-');
       return `${day}/${month}/${year}`;
     }
-
-    // Por si acaso llega algo raro, mostramos lo que llegue
     return dateString;
   };
 
@@ -317,12 +343,6 @@ export default function Stock() {
               className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-slate-100 placeholder-slate-400"
             />
           </div>
-          <button 
-            onClick={() => setIsScanning(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800"
-          >
-            <Camera size={18} /> Escanear
-          </button>
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
@@ -529,28 +549,18 @@ export default function Stock() {
               </button>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* --- MODAL LECTOR QR --- */}
-      {isScanning && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden relative">
-            <div className="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-800">
-              <h3 className="font-bold text-slate-900 dark:text-white">Escanear Código</h3>
-              <button onClick={() => setIsScanning(false)} className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-4">
-              <QRScanner onScanSuccess={(text) => {
-                setSearchTerm(text);
-                setIsScanning(false);
-              }} />
-            </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))} disabled={currentPage === 1} className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-white dark:hover:bg-slate-800 transition-colors disabled:opacity-50">
+              Anterior
+            </button>
+            <span className="px-2">Página {currentPage} de {totalPages}</span>
+            <button onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-white dark:hover:bg-slate-800 transition-colors disabled:opacity-50">
+              Siguiente
+            </button>
           </div>
         </div>
-      )}
+      </div>
 
       {/* --- PANEL LATERAL DE EDICIÓN --- */}
       {isPanelOpen && <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 transition-opacity" onClick={() => setIsPanelOpen(false)} />}

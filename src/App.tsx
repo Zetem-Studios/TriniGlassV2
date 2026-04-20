@@ -4,6 +4,8 @@ import Stock from './components/Stock';
 import Warehouse from './components/Warehouse';
 import Resumen from './components/Resumen';
 import Login from './components/Login';
+import  AddUser  from "./components/AddUser";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 
 const Alertas = () => (
   <div>
@@ -17,17 +19,28 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/" element={<Layout />}>
-          {/* Rutas conectadas con los enlaces de tu nuevo menú */}
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
           <Route index element={<Resumen />} />
+          <Route path="add-user" element={<AddUser />} />
           <Route path="inventario" element={<Stock />} />
           <Route path="almacen" element={<Warehouse />} />
           <Route path="alertas" element={<Alertas />} />
-          <Route path="configuracion" element={<div className="text-slate-900 dark:text-white">Configuración general</div>} />
+          <Route
+            path="configuracion"
+            element={<div className="text-slate-900 dark:text-white">Configuración general</div>}
+          />
         </Route>
       </Routes>
     </BrowserRouter>
   );
 }
+
 
 export default App;
