@@ -6,13 +6,19 @@
 import React from 'react';
 import BlockCard from './BlockCard';
 
+interface Block {
+  id: string;
+  area?: string;
+  [key: string]: unknown;
+}
+
 interface ZoneProps {
   zoneId: string;
   zoneName: string;
   subzones: { [key: string]: string[] };
-  blocks: any[];
-  selectedBlock: any;
-  onBlockClick: (block: any) => void;
+  blocks: Block[];
+  selectedBlock: Block | null;
+  onBlockClick: (block: Block) => void;
   onEmptySlotClick?: (zoneId: string, subzone: string, position: string) => void;
   preview?: boolean;
 }
@@ -20,7 +26,7 @@ interface ZoneProps {
 const Zone: React.FC<ZoneProps> = ({ zoneId, zoneName, subzones, blocks, selectedBlock, onBlockClick, onEmptySlotClick, preview = false }) => {
   subzones = subzones ?? {};
   // Create a map of position to block
-  const positionToBlock: { [key: string]: any } = {};
+  const positionToBlock: { [key: string]: Block } = {};
 
   // For each subzone, assign blocks to positions
   Object.entries(subzones).forEach(([subzoneName, positions]) => {
@@ -80,19 +86,16 @@ const Zone: React.FC<ZoneProps> = ({ zoneId, zoneName, subzones, blocks, selecte
             // Determinar color según el pallet más antiguo de la subzona
             const subzoneBlocks = blocks.filter(b => b.area === subzoneName && b.occupied);
             let colorClass = "bg-blue-400 dark:bg-blue-600 border-blue-700 dark:border-blue-900";
-            let showWarning = false;
             if (subzoneBlocks.length > 0) {
               // Buscar el pallet con más días en storage
-              const oldest = subzoneBlocks.reduce((max, b) => b.daysInStorage > max.daysInStorage ? b : max, subzoneBlocks[0]);
-              if (oldest.daysInStorage > 30) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const oldest = subzoneBlocks.reduce((max: any, b: any) => (b.daysInStorage as number) > (max.daysInStorage as number) ? b : max, subzoneBlocks[0]);
+              if ((oldest.daysInStorage as number) > 30) {
                 colorClass = "bg-red-500 dark:bg-red-700 border-red-700 dark:border-red-900";
-                showWarning = true;
-              } else if (oldest.daysInStorage > 20) {
+              } else if ((oldest.daysInStorage as number) > 20) {
                 colorClass = "bg-orange-400 dark:bg-orange-600 border-orange-600 dark:border-orange-900";
-                showWarning = true;
-              } else if (oldest.daysInStorage > 10) {
+              } else if ((oldest.daysInStorage as number) > 10) {
                 colorClass = "bg-yellow-300 dark:bg-yellow-600 border-yellow-500 dark:border-yellow-900";
-                showWarning = true;
               } else {
                 colorClass = "bg-blue-400 dark:bg-blue-600 border-blue-700 dark:border-blue-900";
               }
@@ -139,15 +142,19 @@ const Zone: React.FC<ZoneProps> = ({ zoneId, zoneName, subzones, blocks, selecte
                     {subzoneBlocks.length === 0 ? (
                       <div className="text-slate-400 text-center w-full col-span-full py-6 select-none opacity-60">Sin pallets</div>
                     ) : (
-                      subzoneBlocks.map(block => (
-                        <div key={block.id} className="aspect-square min-w-[80px] max-w-[120px] w-full">
-                          <BlockCard
-                            block={block}
-                            isSelected={selectedBlock?.id === block.id}
-                            onClick={() => onBlockClick(block)}
-                          />
-                        </div>
-                      ))
+                      subzoneBlocks.map((block: unknown) => {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        const anyBlock = block as any;
+                        return (
+                          <div key={anyBlock.id} className="aspect-square min-w-[80px] max-w-[120px] w-full">
+                            <BlockCard
+                              block={anyBlock}
+                              isSelected={selectedBlock?.id === anyBlock.id}
+                              onClick={() => onBlockClick(anyBlock)}
+                            />
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                 </div>

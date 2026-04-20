@@ -62,15 +62,17 @@ const ZONES = Object.entries(ZONE_CONFIGS).map(([id, config]) => ({
 
 const INITIAL_ZONES = ZONES;
 
-const parseFechaLineaPedido = (fecha: any) => {
+const parseFechaLineaPedido = (fecha: unknown): Date | null => {
   if (!fecha) return null;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const anyFecha = fecha as any;
   if (fecha instanceof Date) {
     return fecha;
   }
 
-  if (typeof fecha === 'object' && fecha.toDate instanceof Function) {
-    return fecha.toDate();
+  if (typeof fecha === 'object' && anyFecha.toDate instanceof Function) {
+    return anyFecha.toDate();
   }
 
   if (typeof fecha !== 'string') {
@@ -98,10 +100,13 @@ const parseFechaLineaPedido = (fecha: any) => {
     const year = Number(yearStr);
     if (mes === undefined || Number.isNaN(dia) || Number.isNaN(year)) return null;
 
-    let [hora, minuto, segundo] = horaStr.split(':').map(Number);
+    const hourParts = horaStr.split(':').map(Number);
+    let hora = hourParts[0];
+    const minuto = hourParts[1];
+    const segundo = hourParts[2];
     if ([hora, minuto, segundo].some(val => Number.isNaN(val))) return null;
 
-    const ampmNormalized = ampm.toLowerCase().replace(/[\.]/g, '').trim();
+    const ampmNormalized = ampm.toLowerCase().replace(/\./g, '').trim();
     if ((ampmNormalized === 'p' || ampmNormalized === 'pm') && hora < 12) hora += 12;
     if ((ampmNormalized === 'a' || ampmNormalized === 'am') && hora === 12) hora = 0;
 
@@ -118,7 +123,21 @@ const parseFechaLineaPedido = (fecha: any) => {
 };
 
 // Mapear productos de Firebase a estructura de bloques
-const mapProductoToBlock = (producto: any, index: number) => {
+interface Producto {
+  codigo_barra?: string;
+  fecha_linea_pedido?: unknown;
+  fecha_entrega?: unknown;
+  altura?: number;
+  longitud?: number;
+  peso_total_kg?: number;
+  vidrio_simple?: boolean;
+  subzona?: string;
+  nombre_abreviado?: string;
+  apellido_cliente?: string;
+  [key: string]: unknown;
+}
+
+const mapProductoToBlock = (producto: Producto, index: number) => {
   // Calcular días en storage desde fecha_linea_pedido
   const fechaPedido = parseFechaLineaPedido(producto.fecha_linea_pedido);
   const hoy = new Date();
@@ -304,11 +323,11 @@ const generateDummyBlocks = () =>
 export default function Warehouse() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedZone, setSelectedZone] = useState("expediciones");
-  const [selectedBlock, setSelectedBlock] = useState<any>(null);
+  const [selectedBlock, setSelectedBlock] = useState<typeof blocks[number] | null>(null);
   const [isZoneDropdownOpen, setIsZoneDropdownOpen] = useState(false);
   const [isNewZoneModalOpen, setIsNewZoneModalOpen] = useState(false);
-  const [zones, setZones] = useState<any[]>(INITIAL_ZONES);
-  const [blocks, setBlocks] = useState<any[]>([]);
+  const [zones, setZones] = useState<typeof INITIAL_ZONES>(INITIAL_ZONES);
+  const [blocks, setBlocks] = useState<ReturnType<typeof mapProductoToBlock>[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -331,11 +350,12 @@ export default function Warehouse() {
   // Cargar zonas nuevas de Firebase y añadirlas al dropdown (sin duplicar las hardcodeadas)
   useEffect(() => {
     getZones().then(data => {
-      const normalized = data.map((z: any) => ({
+      const normalized = data.map((z: typeof data[number]) => ({
         id: z.id.toLowerCase(),
         name: z.name,
         areas: z.posiciones,
         subzones: z.subzones,
+        layout: 'horizontal' as const,
       }));
       const nuevas = normalized.filter(fz => !INITIAL_ZONES.some(iz => iz.id.toLowerCase() === fz.id.toLowerCase()));
       if (nuevas.length > 0) setZones([...INITIAL_ZONES, ...nuevas]);
@@ -383,11 +403,13 @@ export default function Warehouse() {
   const handleZoneCreated = async (zoneId: string) => {
     try {
       const data = await getZones();
-      const normalized = data.map((z: any) => ({
+      const normalized = data.map((z: typeof data[number]) => ({
         id: z.id.toLowerCase(),
         name: z.name,
         areas: z.posiciones,
-        layout: "horizontal",
+        layout: "horizontal" as const,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        subzones: z.subzones as any,
       }));
       const nuevas = normalized.filter(fz => !INITIAL_ZONES.some(iz => iz.id.toLowerCase() === fz.id.toLowerCase()));
       setZones([...INITIAL_ZONES, ...nuevas]);
@@ -413,14 +435,14 @@ export default function Warehouse() {
       setShowAddModal(false);
       setSelectedBlock(null);
       // Reload products if needed
-    } catch (err) {
+    } catch {
       setAddPalletError('Error al guardar el pallet');
     } finally {
       setAddPalletLoading(false);
     }
   };
 
-  const renderBlock = (block: any) => {
+  const renderBlock = (block: ReturnType<typeof mapProductoToBlock>) => {
     const isSelected = selectedBlock?.id === block.id;
     let colors = "bg-slate-100 dark:bg-slate-800/40 border-slate-300 dark:border-slate-700 text-slate-400";
     if (block.occupied) {
@@ -540,7 +562,8 @@ export default function Warehouse() {
               blocks={blocks}
               selectedZone={selectedZone}
               selectedBlock={selectedBlock}
-              onBlockClick={setSelectedBlock}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              onBlockClick={(block: any) => setSelectedBlock(block)}
               preview={true}
             />
           </div>
@@ -693,7 +716,7 @@ export default function Warehouse() {
                   <button type="submit" className="w-1/2 bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 text-xs uppercase transition-all shadow-sm" disabled={addPalletLoading}>{addPalletLoading ? 'Guardando...' : 'Guardar'}</button>
                 </div>
               </form>
-            ) : (
+            ) : selectedBlock ? (
               <>
                 <div className="bg-slate-50 dark:bg-slate-800/60 rounded-[2.5rem] p-10 border border-slate-100 dark:border-slate-700 text-center relative overflow-hidden">
                   <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-black mb-2 tracking-[0.4em]">GLASS ID</div>
@@ -750,6 +773,10 @@ export default function Warehouse() {
                   </div>
                 )}
               </>
+            ) : (
+              <div className="flex items-center justify-center h-64 text-slate-500">
+                <p>Selecciona una ubicación para ver detalles</p>
+              </div>
             )}
           </div>
         </div>

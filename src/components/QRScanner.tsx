@@ -15,6 +15,8 @@ const QRScanner = ({ onScanSuccess }: QRScannerProps) => {
   useEffect(() => {
     if (!wrapperRef.current) return;
     
+    const currentWrapper = wrapperRef.current;
+    
     // Evitamos el doble montaje de StrictMode 
     if (isScannerInitiating) return;
 
@@ -35,8 +37,8 @@ const QRScanner = ({ onScanSuccess }: QRScannerProps) => {
     div.style.height = "100%";
     div.style.overflow = "hidden";
     
-    wrapperRef.current.innerHTML = ""; 
-    wrapperRef.current.appendChild(div);
+    currentWrapper.innerHTML = ""; 
+    currentWrapper.appendChild(div);
 
     globalScannerInstance = new Html5Qrcode(uniqueId);
     isScannerInitiating = true;
@@ -60,7 +62,7 @@ const QRScanner = ({ onScanSuccess }: QRScannerProps) => {
         }
       }
       isScannerInitiating = false;
-      if (wrapperRef.current) wrapperRef.current.innerHTML = "";
+      if (currentWrapper) currentWrapper.innerHTML = "";
     };
   }, [onScanSuccess]);
 

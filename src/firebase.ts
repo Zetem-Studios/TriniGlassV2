@@ -25,6 +25,7 @@ export const getZones = async () => {
       return Array.isArray(posiciones) && posiciones.every(p => typeof p === "string");
     })
     .map(d => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data = d.data() as any;
       return {
         id: d.id,
@@ -46,7 +47,7 @@ export const createCompleteZone = async (
   try {
     // Generar código de las primeras letras mayúsculas de cada palabra (separadas por espacios, guiones o guiones bajos)
     const codigo = zoneName
-      .split(/[\s_\-]+/)
+      .split(/[\s_-]+/)
       .filter(word => word.length > 0)
       .map(word => word[0].toUpperCase())
       .join("");

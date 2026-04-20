@@ -42,8 +42,9 @@ export default function NewZoneModal({ isOpen, onClose, onZoneCreated }: NewZone
       const codigo = await createCompleteZone(nombre, tipo, posiciones, descripcion, Number(capacidadMaxima));
       resetForm();
       onZoneCreated(codigo);
-    } catch (error: any) {
-      const msg = error?.message ?? String(error);
+    } catch (error: unknown) {
+      const errorObject = error instanceof Error ? error : new Error(String(error));
+      const msg = errorObject?.message ?? String(error);
       console.error("❌ Error creando zona:", error);
       if (msg.includes("permission") || msg.includes("PERMISSION_DENIED")) {
         setModalError("Sin permisos en Firebase. Revisa las reglas de Firestore.");

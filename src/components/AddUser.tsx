@@ -15,8 +15,9 @@ export default function AddUser() {
       alert(" Usuario registrado correctamente en el sistema");
       setEmail(""); 
       setPassword("");
-    } catch (error: any) {
-      alert("❌ Error: " + (error.message || "No se pudo crear el usuario"));
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "No se pudo crear el usuario";
+      alert("❌ Error: " + errorMessage);
     } finally {
       setLoading(false);
     }

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import { LayoutDashboard, Package, Building2, Bell, Settings, Sun, Moon, Menu, UserPlus } from 'lucide-react';
 
-import { useAuth } from '../context/AuthProvider';
+import { useAuth } from '../context/useAuth';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 

@@ -1,6 +1,5 @@
-import { useMemo, useState, useEffect, useRef } from "react";
-import { Search, Filter, ArrowUpDown, Plus, Eye, MoreVertical, X, Edit, Trash2, Camera, AlertCircle } from "lucide-react";
-import QRScanner from "./QRScanner";
+﻿import { useMemo, useState, useEffect, useRef } from "react";
+import { Search, Filter, ArrowUpDown, Plus, Eye, MoreVertical, X, Edit, Trash2, AlertCircle } from "lucide-react";
 import { collection, getDocs, query, where, orderBy, limit, Timestamp } from "firebase/firestore";
 import { db } from "../firebase";
 
@@ -40,7 +39,6 @@ interface Palet {
 export default function Stock() {
   const [inventory, setInventory] = useState<Palet[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isScanning, setIsScanning] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [hitLimit, setHitLimit] = useState(false);
@@ -77,24 +75,23 @@ export default function Stock() {
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
-  const parseFirestoreDateToISO = (value: any) => {
-    if (!value) return "";
-    if (value instanceof Date) return value.toISOString().split("T")[0];
-    if (value?.toDate && typeof value.toDate === "function") {
-      return value.toDate().toISOString().split("T")[0];
-    }
-    if (typeof value === "string") {
-      return value.includes("/") ? value.split("/").reverse().join("-") : value;
-    }
-    return "";
+  const parseDimensions = (dimensions: string) => {
+    const parts = dimensions.split('x').map(p => Number(p.trim()) || 0);
+    return {
+      width: parts[0] || 0,
+      height: parts[1] || 0,
+      thickness: parts[2] || 0
+    };
   };
 
   useEffect(() => {
-    const parseFirestoreDateToISO = (value: any) => {
+    const parseFirestoreDateToISO = (value: unknown): string => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const anyValue = value as any;
       if (!value) return "";
       if (value instanceof Date) return value.toISOString().split("T")[0];
-      if (value?.toDate && typeof value.toDate === "function") {
-        return value.toDate().toISOString().split("T")[0];
+      if (anyValue?.toDate && typeof anyValue.toDate === "function") {
+        return anyValue.toDate().toISOString().split("T")[0];
       }
       if (typeof value === "string") {
         return value.includes("/") ? value.split("/").reverse().join("-") : value;
@@ -105,7 +102,7 @@ export default function Stock() {
     const fetchStock = async () => {
       setLoading(true);
       try {
-        const conditions: any[] = [];
+        const conditions: ReturnType<typeof where>[] = [];
 
         if (serverFilters.dateFrom) {
           conditions.push(where("fecha_linea_pedido", ">=", Timestamp.fromDate(new Date(serverFilters.dateFrom))));
@@ -151,6 +148,7 @@ export default function Stock() {
         setHitLimit(querySnapshot.size >= MAX_FIRESTORE_RESULTS);
 
         const firestoreInventory: Palet[] = querySnapshot.docs.map((doc) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const data = doc.data() as any;
           const dateValue = data.fecha_entrega || data.fecha_linea_pedido || data.infos_entrega || "";
           const dateString = parseFirestoreDateToISO(dateValue);
@@ -264,6 +262,7 @@ export default function Stock() {
   }, [searchTerm, debouncedClient, debouncedType, clientFilters, inventory]);
 
   const totalPages = Math.max(1, Math.ceil(filteredInventory.length / rowsPerPage));
+  
   const paginatedInventory = useMemo(() => {
     const startIndex = (currentPage - 1) * rowsPerPage;
     return filteredInventory.slice(startIndex, startIndex + rowsPerPage);
@@ -278,30 +277,6 @@ export default function Stock() {
       setCurrentPage(totalPages);
     }
   }, [totalPages, currentPage]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredInventory.length / rowsPerPage));
-
-  const statusOptions = useMemo(() => {
-    const statuses = new Set<string>();
-    inventory.forEach((item) => {
-      if (item.status?.trim()) statuses.add(item.status.trim());
-    });
-
-    if (statuses.size === 0) {
-      ["Pendiente", "Almacenado", "Reservado", "Listo para carga"].forEach((status) => statuses.add(status));
-    }
-
-    return [...statuses].sort();
-  }, [inventory]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [filteredInventory, rowsPerPage]);
-
-  const paginatedInventory = useMemo(() => {
-    const start = (currentPage - 1) * rowsPerPage;
-    return filteredInventory.slice(start, start + rowsPerPage);
-  }, [filteredInventory, currentPage, rowsPerPage]);
 
   // Formatear fecha a prueba de fallos
   const formatDateForDisplay = (dateString: string) => {
@@ -548,16 +523,6 @@ export default function Stock() {
                 Siguiente
               </button>
             </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))} disabled={currentPage === 1} className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-white dark:hover:bg-slate-800 transition-colors disabled:opacity-50">
-              Anterior
-            </button>
-            <span className="px-2">Página {currentPage} de {totalPages}</span>
-            <button onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-white dark:hover:bg-slate-800 transition-colors disabled:opacity-50">
-              Siguiente
-            </button>
           </div>
         </div>
       </div>
