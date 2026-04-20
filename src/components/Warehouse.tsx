@@ -335,7 +335,7 @@ export default function Warehouse() {
         id: z.id.toLowerCase(),
         name: z.name,
         areas: z.posiciones,
-        layout: "horizontal",
+        subzones: z.subzones,
       }));
       const nuevas = normalized.filter(fz => !INITIAL_ZONES.some(iz => iz.id.toLowerCase() === fz.id.toLowerCase()));
       if (nuevas.length > 0) setZones([...INITIAL_ZONES, ...nuevas]);
@@ -381,17 +381,23 @@ export default function Warehouse() {
   }, [searchTerm, blocks]);
 
   const handleZoneCreated = async (zoneId: string) => {
-    const data = await getZones();
-    const normalized = data.map((z: any) => ({
-      id: z.id.toLowerCase(),
-      name: z.name,
-      areas: z.posiciones,
-      layout: "horizontal",
-    }));
-    const nuevas = normalized.filter(fz => !INITIAL_ZONES.some(iz => iz.id.toLowerCase() === fz.id.toLowerCase()));
-    setZones([...INITIAL_ZONES, ...nuevas]);
-    setSelectedZone(zoneId.toLowerCase());
-    setIsNewZoneModalOpen(false);
+    try {
+      const data = await getZones();
+      const normalized = data.map((z: any) => ({
+        id: z.id.toLowerCase(),
+        name: z.name,
+        areas: z.posiciones,
+        layout: "horizontal",
+      }));
+      const nuevas = normalized.filter(fz => !INITIAL_ZONES.some(iz => iz.id.toLowerCase() === fz.id.toLowerCase()));
+      setZones([...INITIAL_ZONES, ...nuevas]);
+      setSelectedZone(zoneId.toLowerCase());
+    } catch (error) {
+      console.error("❌ Error refrescando zonas después de crear:", error);
+      setError("Error al actualizar la lista de zonas");
+    } finally {
+      setIsNewZoneModalOpen(false);
+    }
   };
 
   const handleAddPalletFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
