@@ -9,6 +9,7 @@ import {
   User,
   AlertCircle,
   PackageOpen,
+  PackagePlus,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Camion, EstadoCamion } from "../../services/CamionService";
@@ -30,6 +31,7 @@ const labelEstado = (estado: EstadoCamion) =>
   ESTADOS_CAMION.find((e) => e.value === estado)?.label ?? estado;
 
 export default function Camiones() {
+  const navigate = useNavigate();
   const [camiones, setCamiones] = useState<Camion[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -223,10 +225,18 @@ export default function Camiones() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filtered.map((c) => (
-              <button
+              <div
                 key={c.matricula}
+                role="button"
+                tabIndex={0}
                 onClick={() => openEdit(c)}
-                className="text-left bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm hover:border-blue-400 hover:shadow-lg transition-all"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openEdit(c);
+                  }
+                }}
+                className="text-left bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm hover:border-blue-400 hover:shadow-lg transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/40"
               >
                 <div className="flex items-start justify-between gap-3 mb-4">
                   <div>
@@ -265,7 +275,20 @@ export default function Camiones() {
                     </span>
                   </div>
                 </div>
-              </button>
+
+                {c.estado === "disponible" && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/camiones/cargar/${encodeURIComponent(c.matricula)}`);
+                    }}
+                    className="mt-4 w-full bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all"
+                  >
+                    <PackagePlus size={14} /> Cargar
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         )}
