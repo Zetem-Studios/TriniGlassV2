@@ -1,4 +1,6 @@
 import React, { useState, useRef } from 'react';
+import { MapDesignsManager } from './MapDesignsManager';
+import { type MapDesign } from '../services/mapDesignsService';
 
 interface GridCell {
   col: string;
@@ -70,6 +72,9 @@ const CanvasGridTest: React.FC = () => {
   const [isResizingSubArea, setIsResizingSubArea] = useState(false);
   const [draggedSubArea, setDraggedSubArea] = useState<string | null>(null);
   const [draggedSubAreaParent, setDraggedSubAreaParent] = useState<string | null>(null);
+  
+  // Estado para el gestor de diseños
+  const [showDesignsManager, setShowDesignsManager] = useState(false);
 
   // Generar letras para columnas (A-Z, AA-AZ, etc.)
   const generateColumnLetters = (start: string, end: string): string[] => {
@@ -426,6 +431,65 @@ const CanvasGridTest: React.FC = () => {
     } else if (e.key === 'Escape') {
       handleNameCancel();
     }
+  };
+
+  // Función para obtener el diseño actual del canvas
+  const getCurrentCanvasDesign = () => {
+    return {
+      areas: areas.map(area => ({
+        id: area.id,
+        name: area.name,
+        col: area.col,
+        row: area.row,
+        x: area.x,
+        y: area.y,
+        width: area.width,
+        height: area.height,
+        subAreas: area.subAreas.map(subArea => ({
+          id: subArea.id,
+          name: subArea.name,
+          col: subArea.col,
+          row: subArea.row,
+          x: subArea.x,
+          y: subArea.y,
+          width: subArea.width,
+          height: subArea.height,
+          areaId: area.id
+        }))
+      })),
+      gridBounds: { ...gridBounds },
+      gridSize: { ...gridSize }
+    };
+  };
+
+  // Función para cargar un diseño
+  const loadDesign = (design: MapDesign) => {
+    // Convertir AreaData[] a Area[]
+    const convertedAreas = design.areas.map(area => ({
+      id: area.id,
+      name: area.name,
+      col: area.col,
+      row: area.row,
+      x: area.x,
+      y: area.y,
+      width: area.width,
+      height: area.height,
+      subAreas: area.subAreas.map(subArea => ({
+        id: subArea.id,
+        parentId: subArea.areaId, // Usar areaId como parentId
+        name: subArea.name,
+        col: subArea.col,
+        row: subArea.row,
+        x: subArea.x,
+        y: subArea.y,
+        width: subArea.width,
+        height: subArea.height
+      }))
+    }));
+    
+    setAreas(convertedAreas);
+    setGridBounds(design.gridBounds);
+    // El gridSize se mantiene constante, pero podríamos actualizarlo si es necesario
   };
 
   // Iniciar drag de área
@@ -1034,6 +1098,13 @@ const CanvasGridTest: React.FC = () => {
             >
               Expandir Vertical (+bloque 00-025)
             </button>
+            <div className="border-l border-gray-300 h-8 mx-2"></div>
+            <button
+              onClick={() => setShowDesignsManager(true)}
+              className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
+            >
+              Gestión de Diseños
+            </button>
           </div>
         </div>
 
@@ -1112,16 +1183,17 @@ const CanvasGridTest: React.FC = () => {
                 {area.subAreas.map((subArea) => (
                   <div
                     key={subArea.id}
-                    className={`absolute border cursor-move hover:bg-opacity-60 transition-colors ${
+                    className={`absolute border cursor-move hover:bg-opacity-60 transition-colors box-border ${
                       selectedSubArea?.subAreaId === subArea.id 
                         ? 'bg-red-600 bg-opacity-60 border-red-800' 
                         : 'bg-red-500 bg-opacity-40 border-red-600'
                     }`}
                     style={{
-                      left: `${subArea.x - area.x}px`,
-                      top: `${subArea.y - area.y}px`,
-                      width: `${subArea.width}px`,
-                      height: `${subArea.height}px`
+                      left: `${subArea.x - area.x - 1}px`,
+                      top: `${subArea.y - area.y - 1}px`,
+                      width: `${subArea.width - 2}px`,
+                      height: `${subArea.height - 2}px`,
+                      boxSizing: 'border-box'
                     }}
                     onMouseDown={(e) => handleSubAreaMouseDown(e, subArea.id, area.id)}
                     onDoubleClick={(e) => handleSubAreaDoubleClick(e, subArea.id, area.id)}
@@ -1229,6 +1301,15 @@ const CanvasGridTest: React.FC = () => {
           </ul>
         </div>
       </div>
+      
+      {/* Gestor de Diseños */}
+      {showDesignsManager && (
+        <MapDesignsManager
+          onLoadDesign={loadDesign}
+          onClose={() => setShowDesignsManager(false)}
+          getCurrentCanvasDesign={getCurrentCanvasDesign}
+        />
+      )}
     </div>
   );
 };
