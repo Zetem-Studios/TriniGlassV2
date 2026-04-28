@@ -8,7 +8,9 @@ import {
   Box,
   User,
   AlertCircle,
+  PackageOpen,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import type { Camion, EstadoCamion } from "../../services/CamionService";
 import { ESTADOS_CAMION, getCamiones } from "../../services/CamionService";
 import CamionPanel from "./CamionPanel";

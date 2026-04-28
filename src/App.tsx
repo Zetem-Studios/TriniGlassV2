@@ -6,6 +6,7 @@ import Resumen from './components/Resumen';
 import Login from './components/Login';
 import  AddUser  from "./components/AddUser";
 import Camiones from './components/Camiones';
+import CargaCamion from './components/CargaCamion';
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 const Alertas = () => (
@@ -33,6 +34,8 @@ function App() {
           <Route path="inventario" element={<Stock />} />
           <Route path="almacen" element={<Warehouse />} />
           <Route path="camiones" element={<Camiones />} />
+          <Route path="camiones/cargar" element={<CargaCamion />} />
+          <Route path="camiones/cargar/:matricula" element={<CargaCamion />} />
           <Route path="alertas" element={<Alertas />} />
           <Route
             path="configuracion"
