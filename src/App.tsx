@@ -7,6 +7,7 @@ import Login from './components/Login';
 import  AddUser  from "./components/AddUser";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import MobileScanner from "./components/Scanner";
+import CanvasGridTest from "./components/CanvasGridTest";
 
 const Alertas = () => (
   <div>
@@ -34,6 +35,7 @@ function App() {
           <Route path="almacen" element={<Warehouse />} />
           <Route path="scanner" element={<MobileScanner />} />
           <Route path="alertas" element={<Alertas />} />
+          <Route path="canvas-test" element={<CanvasGridTest />} />
           <Route
             path="configuracion"
             element={<div className="text-slate-900 dark:text-white">Configuración general</div>}
