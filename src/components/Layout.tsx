@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
-import { LayoutDashboard, Package, Building2, Bell, Settings, Sun, Moon, Menu, UserPlus } from 'lucide-react';
+import { LayoutDashboard, Package, Building2, Bell, Settings, Sun, Moon, Menu, UserPlus, Truck } from 'lucide-react';
 
 import { useAuth } from '../context/useAuth';
 import { signOut } from 'firebase/auth';
@@ -30,6 +30,7 @@ export default function Layout() {
     { to: "/", icon: LayoutDashboard, label: "Resumen", pill: null },
     { to: "/inventario", icon: Package, label: "Inventario", pill: { text: "98", type: "grey" } },
     { to: "/almacen", icon: Building2, label: "Almacén", pill: null },
+    { to: "/camiones", icon: Truck, label: "Flota", pill: null },
     { to: "/alertas", icon: Bell, label: "Alertas", pill: { text: "3", type: "red" } },
     { to: "/configuracion", icon: Settings, label: "Configuración", pill: null },
   ];
