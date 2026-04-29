@@ -258,6 +258,9 @@ const mapProductoToBlock = (producto: any, _index: number, id: string) => {
 };
 
 export default function Warehouse() {
+  // MODO TEST/ENTREGA: Cambiar a false para modo entrega (cargar todos los datos)
+  const TEST_MODE = true; // true = modo test (solo 200 lecturas), false = modo entrega (todos los datos)
+  
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedZone, setSelectedZone] = useState("expediciones");
   const [selectedBlock, setSelectedBlock] = useState<any>(null);
@@ -352,11 +355,17 @@ export default function Warehouse() {
           setLoading(false);
           return;
         }
+
+        // MODO TEST: Limitar a 200 documentos para ahorrar lecturas de Firebase
+        const docsToProcess = TEST_MODE ? snapshot.docs.slice(0, 200) : snapshot.docs;
+        if (TEST_MODE) {
+          console.log(`🧪 MODO TEST: Procesando solo los primeros ${docsToProcess.length} documentos de ${snapshot.size} totales`);
+        }
         
 
 
           // Filtrar productos para Mamparista, H, Corte/E y CMS/D según lógica robusta
-          const productos = snapshot.docs
+          const productos = docsToProcess
             .map((doc, index) => {
               const data = doc.data() as any;
               // Pasar el id de Firestore explícitamente
@@ -465,7 +474,11 @@ export default function Warehouse() {
       {/* Panel de debug - Ver datos cargados */}
       {!loading && blocks.length > 0 && (
         <div className="bg-blue-100 dark:bg-blue-900/30 border border-blue-400 dark:border-blue-700 px-6 py-4 rounded-2xl m-6">
-          <p className="font-bold text-blue-700 dark:text-blue-200">✅ {blocks.length} productos cargados</p>
+          <p className="font-bold text-blue-700 dark:text-blue-200">
+            ✅ {blocks.length} productos cargados 
+            {TEST_MODE && <span className="ml-2 text-xs bg-yellow-400 text-yellow-900 px-2 py-1 rounded-full font-bold">MODO TEST</span>}
+            {!TEST_MODE && <span className="ml-2 text-xs bg-green-400 text-green-900 px-2 py-1 rounded-full font-bold">MODO ENTREGA</span>}
+          </p>
           <details className="text-sm text-blue-600 dark:text-blue-300 mt-2 cursor-pointer">
             <summary>Ver distribución por zonas</summary>
             <pre className="mt-2 text-xs bg-white dark:bg-slate-800 p-3 rounded overflow-auto max-h-40">
