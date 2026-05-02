@@ -479,10 +479,6 @@ export default function Warehouse() {
     }
   };
 
-  const handleAddPalletFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setAddPalletForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
-  };
-
   const handleAddPalletSave = async () => {
     try {
       setAddPalletLoading(true);
