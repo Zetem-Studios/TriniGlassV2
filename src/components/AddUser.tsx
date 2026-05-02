@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { UserPlus, Mail, Lock, Loader2 } from "lucide-react"; // Iconos para que se vea pro
-import { registerUserInSystem } from "../../services/userService"; // Corregido a un solo nivel
+import { registerUserInSystem } from "../../services/UserService";
 
 export default function AddUser() {
   const [email, setEmail] = useState("");
