@@ -8,7 +8,6 @@ import {
   Box,
   User,
   AlertCircle,
-  PackageOpen,
   PackagePlus,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";

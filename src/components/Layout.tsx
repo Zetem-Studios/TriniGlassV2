@@ -8,7 +8,8 @@ import { auth } from '../firebase';
 
 export default function Layout() {
   const [isDarkMode, setIsDarkMode] = useState(true);
-  const { user } = useAuth();
+  const { user, rol } = useAuth();
+  const isAdmin = rol === "admin";
 
   useEffect(() => {
     if (isDarkMode) {
@@ -25,16 +26,18 @@ export default function Layout() {
     }
   };
 
-  const navItems = [
-    { to: "/add-user", icon: UserPlus, label: "Añadir usuario", pill: null },
-    { to: "/", icon: LayoutDashboard, label: "Resumen", pill: null },
-    { to: "/inventario", icon: Package, label: "Inventario", pill: { text: "98", type: "grey" } },
-    { to: "/almacen", icon: Building2, label: "Almacén", pill: null },
-    { to: "/camiones", icon: Truck, label: "Flota", pill: null },
-    { to: "/camiones/cargar", icon: PackageOpen, label: "Carga camión", pill: null },
-    { to: "/alertas", icon: Bell, label: "Alertas", pill: { text: "3", type: "red" } },
-    { to: "/configuracion", icon: Settings, label: "Configuración", pill: null },
+  const allNavItems = [
+    { to: "/add-user", icon: UserPlus, label: "Añadir usuario", pill: null, adminOnly: true },
+    { to: "/", icon: LayoutDashboard, label: "Resumen", pill: null, adminOnly: false },
+    { to: "/inventario", icon: Package, label: "Inventario", pill: { text: "98", type: "grey" }, adminOnly: false },
+    { to: "/almacen", icon: Building2, label: "Almacén", pill: null, adminOnly: false },
+    { to: "/camiones", icon: Truck, label: "Flota", pill: null, adminOnly: false },
+    { to: "/camiones/cargar", icon: PackageOpen, label: "Carga camión", pill: null, adminOnly: false },
+    { to: "/alertas", icon: Bell, label: "Alertas", pill: { text: "3", type: "red" }, adminOnly: false },
+    { to: "/configuracion", icon: Settings, label: "Configuración", pill: null, adminOnly: true },
   ];
+
+  const navItems = allNavItems.filter(item => !item.adminOnly || isAdmin);
 
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-400 font-sans transition-colors duration-300">

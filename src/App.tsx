@@ -1,13 +1,15 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
-import Stock from './components/Stock'; 
+import Stock from './components/Stock';
 import Warehouse from './components/Warehouse';
 import Resumen from './components/Resumen';
 import Login from './components/Login';
-import  AddUser  from "./components/AddUser";
+import AddUser from "./components/AddUser";
 import Camiones from './components/Camiones';
 import CargaCamion from './components/CargaCamion';
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { RoleRoute } from "./components/RoleRoute";
+import Configuracion from "./components/Configuracion";
 
 const Alertas = () => (
   <div>
@@ -30,7 +32,7 @@ function App() {
           }
         >
           <Route index element={<Resumen />} />
-          <Route path="add-user" element={<AddUser />} />
+          <Route path="add-user" element={<RoleRoute requiredRol="admin"><AddUser /></RoleRoute>} />
           <Route path="inventario" element={<Stock />} />
           <Route path="almacen" element={<Warehouse />} />
           <Route path="camiones" element={<Camiones />} />
@@ -39,7 +41,7 @@ function App() {
           <Route path="alertas" element={<Alertas />} />
           <Route
             path="configuracion"
-            element={<div className="text-slate-900 dark:text-white">Configuración general</div>}
+            element={<RoleRoute requiredRol="admin"><Configuracion /></RoleRoute>}
           />
         </Route>
       </Routes>

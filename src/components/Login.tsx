@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Mail, Lock, Box } from 'lucide-react';
-import { loginUser } from "../../services/userService";
+import { loginUser } from "../../services/UserService";
 
 const Login = () => {
   // 1. Estados para capturar los datos
