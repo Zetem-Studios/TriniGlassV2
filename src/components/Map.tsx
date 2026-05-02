@@ -17,9 +17,10 @@ interface MapProps {
   selectedBlock: Block | null;
   onBlockClick: (block: Block) => void;
   preview?: boolean;
+  disableInteraction?: boolean;
 }
 
-const Map: React.FC<MapProps> = ({ zones, blocks, selectedZone, selectedBlock, onBlockClick, preview = false }) => {
+const Map: React.FC<MapProps> = ({ zones, blocks, selectedZone, selectedBlock, onBlockClick, preview = false, disableInteraction = false }) => {
   return (
     <div className="w-full">
       <Zones
@@ -29,6 +30,7 @@ const Map: React.FC<MapProps> = ({ zones, blocks, selectedZone, selectedBlock, o
         selectedBlock={selectedBlock}
         onBlockClick={onBlockClick}
         preview={preview}
+        disableInteraction={disableInteraction}
       />
     </div>
   );
