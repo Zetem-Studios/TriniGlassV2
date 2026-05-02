@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { 
   Search, Plus, ChevronDown, Check, X, Package, 
-  Layers, Maximize2, View, Zap, DoorOpen
+  Layers, Maximize2, View, Zap, DoorOpen, Box
 } from "lucide-react";
 import { db } from "../firebase";
 import { collection, getDocs, addDoc, updateDoc, doc as firestoreDoc } from "firebase/firestore";
@@ -121,6 +121,26 @@ const parseFechaLineaPedido = (fecha: unknown): Date | null => {
   // Fallback: parse directo si posible
   const parsed = Date.parse(normalized.replace('UTC', 'GMT'));
   return isNaN(parsed) ? null : new Date(parsed);
+};
+
+// Función para obtener zonas de Firebase
+const getZones = async () => {
+  try {
+    const zonesCollection = collection(db, "zonas");
+    const snapshot = await getDocs(zonesCollection);
+    return snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        name: data.name || doc.id,
+        posiciones: data.posiciones || [],
+        subzones: data.subzones || {}
+      };
+    });
+  } catch (error) {
+    console.error("Error cargando zonas adicionales:", error);
+    return [];
+  }
 };
 
 // Mapear productos de Firebase a estructura de bloques
@@ -250,7 +270,7 @@ const mapProductoToBlock = (producto: Producto, index: number) => {
   console.log(`✅ ${producto.nombre_abreviado} (${producto.codigo_barra}) → Zona ${zoneId} / Subzona ${area}`);
 
   return {
-    id, // id interno de Firestore
+    id: producto.id, // id interno de Firestore
     codigo_barra: producto.codigo_barra || '', // para mostrar en la UI
     zoneId: zoneId,
     area: area,
@@ -324,6 +344,12 @@ export default function Warehouse() {
     setShowAddModal(true);
   };
 
+  // Handler para cambio en formulario
+  const handleAddPalletFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setAddPalletForm((prev: any) => ({ ...prev, [name]: value }));
+  };
+
   // Cargar zonas nuevas de Firebase y añadirlas al dropdown (sin duplicar las hardcodeadas)
   useEffect(() => {
     getZones().then(data => {
@@ -338,12 +364,6 @@ export default function Warehouse() {
       if (nuevas.length > 0) setZones([...INITIAL_ZONES, ...nuevas]);
     }).catch(() => {});
   }, []);
-
-  // Handler para cambio en formulario
-  const handleAddPalletFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setAddPalletForm((prev: any) => ({ ...prev, [name]: value }));
-  };
 
   // Cargar productos desde Firebase
   useEffect(() => {
@@ -422,7 +442,7 @@ export default function Warehouse() {
               if (!ALL_KEYS.some(key => nombre.includes(key))) return true;
               return false;
             })
-            .map((prod: any, index: number) => mapProductoToBlock(prod, index, prod.id));
+            .map((prod: any, index: number) => mapProductoToBlock(prod, index));
         
         console.log(`✅ ${productos.length} productos MAFER mapeados correctamente`);
         setBlocks(productos);
