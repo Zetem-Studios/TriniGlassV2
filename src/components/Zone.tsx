@@ -21,10 +21,11 @@ interface ZoneProps {
   onBlockClick: (block: Block) => void;
   onEmptySlotClick?: (zoneId: string, subzone: string, position: string) => void;
   preview?: boolean;
+  disableInteraction?: boolean;
 }
 
-const Zone: React.FC<ZoneProps> = ({ zoneId, zoneName, subzones, blocks, selectedBlock, onBlockClick, onEmptySlotClick, preview = false }) => {
-  subzones = subzones ?? {};
+const Zone: React.FC<ZoneProps> = ({ zoneId, zoneName, subzones, blocks, selectedBlock, onBlockClick, onEmptySlotClick, preview = false, disableInteraction = false }) => {
+    subzones = subzones ?? {};
   // Create a map of position to block
   const positionToBlock: { [key: string]: Block } = {};
 
@@ -64,7 +65,7 @@ const Zone: React.FC<ZoneProps> = ({ zoneId, zoneName, subzones, blocks, selecte
       </h2>
       <div className="relative min-h-[280px] bg-white dark:bg-slate-900/30 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm p-1" style={{paddingTop: '2.5rem', paddingRight: '2.5rem', paddingBottom: '2.5rem', paddingLeft: '2.5rem'}}>
         {preview ? (
-          // Renderizar cada subzona como un solo rectángulo absoluto, color según el pallet más antiguo
+          // Renderizar cada subzona como un solo rectángulo absoluto, color según el pallet más antiguo, sin interactividad ni tooltips
           Object.entries(subzones).map(([subzoneName, positions]) => {
             // Calcular bounding box de la subzona
             const colIdxs = positions.map(pos => cols.indexOf(pos[0])).filter(i => i >= 0);
@@ -106,6 +107,9 @@ const Zone: React.FC<ZoneProps> = ({ zoneId, zoneName, subzones, blocks, selecte
                 key={subzoneName}
                 className={`absolute flex items-center justify-center rounded-lg opacity-70 border text-white font-bold text-xs text-center select-none ${colorClass}`}
                 style={{ left, top, width, height }}
+                // No pointer events ni tooltips
+                tabIndex={-1}
+                aria-hidden="true"
               >
                 <span className="w-full text-center pointer-events-none" style={{textShadow: '0 1px 2px #0008'}}>{subzoneName}</span>
               </div>
@@ -113,7 +117,7 @@ const Zone: React.FC<ZoneProps> = ({ zoneId, zoneName, subzones, blocks, selecte
           })
         ) : (
           // Mostrar todos los pallets de las subzonas de la zona seleccionada como lista, sin cuadrícula
-          <div className="flex flex-row gap-6 w-full h-full p-2 overflow-y-auto">
+          <div className="flex flex-row gap-6 w-full h-full p-2">
             {Object.keys(subzones).map(subzoneName => {
               const subzoneBlocks = blocks.filter(b => b.area === subzoneName);
               const hasEmpty = subzoneBlocks.some(b => !b.occupied);
@@ -124,10 +128,7 @@ const Zone: React.FC<ZoneProps> = ({ zoneId, zoneName, subzones, blocks, selecte
                     className="grid gap-y-2 gap-x-px"
                     style={{
                       gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-                      gridAutoRows: '1fr',
-                      maxHeight: '60vh',
-                      overflowY: 'auto',
-                      overflowX: 'hidden',
+                      gridAutoRows: '1fr'
                     }}
                   >
                     {!hasEmpty && (
