@@ -5,6 +5,8 @@ import Warehouse from './components/Warehouse';
 import Resumen from './components/Resumen';
 import Login from './components/Login';
 import  AddUser  from "./components/AddUser";
+import Camiones from './components/Camiones';
+import CargaCamion from './components/CargaCamion';
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import MobileScanner from "./components/Scanner";
 import CanvasGridTest from "./components/CanvasGridTest";
@@ -34,6 +36,9 @@ function App() {
           <Route path="inventario" element={<Stock />} />
           <Route path="almacen" element={<Warehouse />} />
           <Route path="scanner" element={<MobileScanner />} />
+          <Route path="camiones" element={<Camiones />} />
+          <Route path="camiones/cargar" element={<CargaCamion />} />
+          <Route path="camiones/cargar/:matricula" element={<CargaCamion />} />
           <Route path="alertas" element={<Alertas />} />
           <Route path="canvas-test" element={<CanvasGridTest />} />
           <Route

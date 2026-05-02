@@ -2,7 +2,7 @@ console.log("=== INICIO SCRIPT addSubzonaToProductos.ts ===");
 import { db } from "./firebaseAdmin.ts";
 
 // Asignación de subzona según la lógica actual
-function getSubzona(producto: any): string {
+function getSubzona(producto: Record<string, unknown>): string {
   if (typeof producto.nombre_abreviado !== "string") return "";
   const nombre = producto.nombre_abreviado.toUpperCase().trim();
   if (nombre === "DUSCHOLUX" || nombre === "VICOMAM") return "Mamparista";

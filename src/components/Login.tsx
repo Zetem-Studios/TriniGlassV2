@@ -18,9 +18,10 @@ const Login = () => {
     try {
       await loginUser(email, password);
       navigate("/"); // Si todo va bien, vamos al panel principal
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error en login:", error);
-      alert(`Error al iniciar sesión: ${error.code || error.message}`);
+      const errorMessage = error instanceof Error ? error.message : "Error desconocido";
+      alert(`Error al iniciar sesión: ${errorMessage}`);
     } finally {
       setLoading(false);
     }

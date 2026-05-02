@@ -66,9 +66,9 @@ export function useWarehouseStats() {
         let totalDias = 0;
         let productosConFecha = 0;
 
-        productos.forEach((producto: any) => {
-          // Determinar zona del producto
-          const subzona = producto.subzona?.trim() || '';
+        productos.forEach((producto: Record<string, unknown>) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const subzona = (producto.subzona as any)?.trim() || '';
           let zoneId = 'expediciones'; // default
 
           if (subzona) {
@@ -154,10 +154,11 @@ export function useWarehouseStats() {
   return { stats, loading, error };
 }
 
-function parseFecha(fecha: any): Date | null {
+function parseFecha(fecha: unknown): Date | null {
   if (!fecha) return null;
   if (fecha instanceof Date) return fecha;
-  if (typeof fecha === 'object' && fecha.toDate instanceof Function) return fecha.toDate();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (typeof fecha === 'object' && (fecha as any).toDate instanceof Function) return (fecha as any).toDate();
 
   if (typeof fecha !== 'string') {
     const parsed = Date.parse(String(fecha));
@@ -179,7 +180,10 @@ function parseFecha(fecha: any): Date | null {
     const year = Number(yearStr);
     if (mes === undefined || isNaN(dia) || isNaN(year)) return null;
 
-    let [hora, minuto, segundo] = horaStr.split(':').map(Number);
+    const hourParts = horaStr.split(':').map(Number);
+    let hora = hourParts[0];
+    const minuto = hourParts[1];
+    const segundo = hourParts[2];
     if ([hora, minuto, segundo].some(isNaN)) return null;
 
     const ampmNorm = ampm.toLowerCase().replace(/\./g, '').trim();

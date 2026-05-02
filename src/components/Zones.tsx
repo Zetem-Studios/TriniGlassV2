@@ -1,6 +1,12 @@
 import React from 'react';
 import Zone from './Zone';
 
+interface Block {
+  id: string;
+  zoneId?: string;
+  [key: string]: unknown;
+}
+
 interface ZoneConfig {
   id: string;
   name: string;
@@ -10,10 +16,10 @@ interface ZoneConfig {
 
 interface ZonesProps {
   zones: ZoneConfig[];
-  blocks: any[];
+  blocks: Block[];
   selectedZone: string;
-  selectedBlock: any;
-  onBlockClick: (block: any) => void;
+  selectedBlock: Block | null;
+  onBlockClick: (block: Block) => void;
   preview?: boolean;
   disableInteraction?: boolean;
 }

@@ -1,6 +1,10 @@
 import React from 'react';
 import Zones from './Zones';
 
+interface Block {
+  id: string;
+  [key: string]: unknown;
+}
 
 interface MapProps {
   zones: Array<{
@@ -8,10 +12,10 @@ interface MapProps {
     name: string;
     subzones: { [key: string]: string[] };
   }>;
-  blocks: any[];
+  blocks: Block[];
   selectedZone: string;
-  selectedBlock: any;
-  onBlockClick: (block: any) => void;
+  selectedBlock: Block | null;
+  onBlockClick: (block: Block) => void;
   preview?: boolean;
   disableInteraction?: boolean;
 }

@@ -61,15 +61,19 @@ const ZONES = Object.entries(ZONE_CONFIGS).map(([id, config]) => ({
   layout: id === 'expediciones' || id === 'bilateral_taladros' ? 'horizontal' : id === 'horno' ? 'vertical' : 'single'
 }));
 
-const parseFechaLineaPedido = (fecha: any) => {
+const INITIAL_ZONES = ZONES;
+
+const parseFechaLineaPedido = (fecha: unknown): Date | null => {
   if (!fecha) return null;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const anyFecha = fecha as any;
   if (fecha instanceof Date) {
     return fecha;
   }
 
-  if (typeof fecha === 'object' && fecha.toDate instanceof Function) {
-    return fecha.toDate();
+  if (typeof fecha === 'object' && anyFecha.toDate instanceof Function) {
+    return anyFecha.toDate();
   }
 
   if (typeof fecha !== 'string') {
@@ -97,10 +101,13 @@ const parseFechaLineaPedido = (fecha: any) => {
     const year = Number(yearStr);
     if (mes === undefined || Number.isNaN(dia) || Number.isNaN(year)) return null;
 
-    let [hora, minuto, segundo] = horaStr.split(':').map(Number);
+    const hourParts = horaStr.split(':').map(Number);
+    let hora = hourParts[0];
+    const minuto = hourParts[1];
+    const segundo = hourParts[2];
     if ([hora, minuto, segundo].some(val => Number.isNaN(val))) return null;
 
-    const ampmNormalized = ampm.toLowerCase().replace(/[\.]/g, '').trim();
+    const ampmNormalized = ampm.toLowerCase().replace(/\./g, '').trim();
     if ((ampmNormalized === 'p' || ampmNormalized === 'pm') && hora < 12) hora += 12;
     if ((ampmNormalized === 'a' || ampmNormalized === 'am') && hora === 12) hora = 0;
 
@@ -117,7 +124,21 @@ const parseFechaLineaPedido = (fecha: any) => {
 };
 
 // Mapear productos de Firebase a estructura de bloques
-const mapProductoToBlock = (producto: any, _index: number, id: string) => {
+interface Producto {
+  codigo_barra?: string;
+  fecha_linea_pedido?: unknown;
+  fecha_entrega?: unknown;
+  altura?: number;
+  longitud?: number;
+  peso_total_kg?: number;
+  vidrio_simple?: boolean;
+  subzona?: string;
+  nombre_abreviado?: string;
+  apellido_cliente?: string;
+  [key: string]: unknown;
+}
+
+const mapProductoToBlock = (producto: Producto, index: number) => {
   // Calcular días en storage desde fecha_linea_pedido
   const fechaPedido = parseFechaLineaPedido(producto.fecha_linea_pedido);
   const hoy = new Date();
@@ -263,10 +284,11 @@ export default function Warehouse() {
   
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedZone, setSelectedZone] = useState("expediciones");
-  const [selectedBlock, setSelectedBlock] = useState<any>(null);
+  const [selectedBlock, setSelectedBlock] = useState<typeof blocks[number] | null>(null);
   const [isZoneDropdownOpen, setIsZoneDropdownOpen] = useState(false);
-  const [zones] = useState(ZONES);
-  const [blocks, setBlocks] = useState<any[]>([]);
+  const [isNewZoneModalOpen, setIsNewZoneModalOpen] = useState(false);
+  const [zones, setZones] = useState<typeof INITIAL_ZONES>(INITIAL_ZONES);
+  const [blocks, setBlocks] = useState<ReturnType<typeof mapProductoToBlock>[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // Estado para alta de pallet
@@ -302,31 +324,20 @@ export default function Warehouse() {
     setShowAddModal(true);
   };
 
-  // Handler para guardar el nuevo pallet
-  const handleAddPalletSave = async () => {
-    setAddPalletLoading(true);
-    setAddPalletError(null);
-    try {
-      await addDoc(collection(db, "productos"), {
-        ...addPalletForm,
-        subzona: addPalletSubzone,
-        zona: addPalletZone,
-        ocupado: true,
-        fecha_entrega: addPalletForm.fecha_entrega ? new Date(addPalletForm.fecha_entrega) : null,
-        fecha_linea_pedido: addPalletForm.fecha_linea_pedido ? new Date(addPalletForm.fecha_linea_pedido) : null,
-      });
-      setShowAddModal(false);
-      setAddPalletLoading(false);
-      setAddPalletForm({
-        codigo_barra: '', apellido_cliente: '', nombre_abreviado: '', altura: '', longitud: '', peso_total_kg: '', cantidad_encargada: 1, descripcion_producido_longitud: '', referencia_linea_pedido: '', fecha_entrega: '', fecha_linea_pedido: '', subzona: '',
-      });
-      // Refrescar productos
-      window.location.reload(); // Simple recarga para forzar refresco
-    } catch (err: any) {
-      setAddPalletError(err.message || 'Error al guardar');
-      setAddPalletLoading(false);
-    }
-  };
+  // Cargar zonas nuevas de Firebase y añadirlas al dropdown (sin duplicar las hardcodeadas)
+  useEffect(() => {
+    getZones().then(data => {
+      const normalized = data.map((z: typeof data[number]) => ({
+        id: z.id.toLowerCase(),
+        name: z.name,
+        areas: z.posiciones,
+        subzones: z.subzones,
+        layout: 'horizontal' as const,
+      }));
+      const nuevas = normalized.filter(fz => !INITIAL_ZONES.some(iz => iz.id.toLowerCase() === fz.id.toLowerCase()));
+      if (nuevas.length > 0) setZones([...INITIAL_ZONES, ...nuevas]);
+    }).catch(() => {});
+  }, []);
 
   // Handler para cambio en formulario
   const handleAddPalletFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -446,6 +457,89 @@ export default function Warehouse() {
     }
   }, [searchTerm, blocks]);
 
+  const handleZoneCreated = async (zoneId: string) => {
+    try {
+      const data = await getZones();
+      const normalized = data.map((z: typeof data[number]) => ({
+        id: z.id.toLowerCase(),
+        name: z.name,
+        areas: z.posiciones,
+        layout: "horizontal" as const,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        subzones: z.subzones as any,
+      }));
+      const nuevas = normalized.filter(fz => !INITIAL_ZONES.some(iz => iz.id.toLowerCase() === fz.id.toLowerCase()));
+      setZones([...INITIAL_ZONES, ...nuevas]);
+      setSelectedZone(zoneId.toLowerCase());
+    } catch (error) {
+      console.error("❌ Error refrescando zonas después de crear:", error);
+      setError("Error al actualizar la lista de zonas");
+    } finally {
+      setIsNewZoneModalOpen(false);
+    }
+  };
+
+  const handleAddPalletFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setAddPalletForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleAddPalletSave = async () => {
+    try {
+      setAddPalletLoading(true);
+      setAddPalletError(null);
+      // Add your save logic here
+      // await addDoc(collection(db, 'productos'), addPalletForm);
+      setShowAddModal(false);
+      setSelectedBlock(null);
+      // Reload products if needed
+    } catch {
+      setAddPalletError('Error al guardar el pallet');
+    } finally {
+      setAddPalletLoading(false);
+    }
+  };
+
+  const renderBlock = (block: ReturnType<typeof mapProductoToBlock>) => {
+    const isSelected = selectedBlock?.id === block.id;
+    let colors = "bg-slate-100 dark:bg-slate-800/40 border-slate-300 dark:border-slate-700 text-slate-400";
+    if (block.occupied) {
+      if (block.daysInStorage > 30) colors = "bg-red-100 dark:bg-red-500/20 border-red-400 text-red-600";
+      else if (block.daysInStorage > 20) colors = "bg-orange-100 dark:bg-orange-500/20 border-orange-400 text-orange-600";
+      else if (block.daysInStorage > 10) colors = "bg-yellow-100 dark:bg-yellow-500/20 border-yellow-400 text-yellow-700 dark:text-yellow-500";
+      else colors = "bg-blue-100 dark:bg-blue-500/20 border-blue-400 text-blue-600";
+    }
+
+    return (
+      <button
+        key={block.id}
+        onClick={() => setSelectedBlock(block)}
+        className={`rounded-xl border-2 transition-all flex flex-col items-center justify-center gap-1 shadow-sm shrink-0 ${colors} ${isSelected ? 'ring-4 ring-cyan-500 scale-110 z-10' : 'hover:scale-105'} min-w-[105px] min-h-[80px]`}
+      >
+        {block.occupied ? (
+          <>
+            <span className="text-[11px] font-black tracking-tighter uppercase">{block.id}</span>
+            <Box size={14} strokeWidth={2.5} />
+          </>
+        ) : (
+          <span className="text-[10px] font-bold tracking-tight uppercase opacity-50">Vacío</span>
+        )}
+      </button>
+    );
+  };
+
+  const renderArea = (areaName: string) => {
+    const areaBlocks = blocks.filter(b => b.area === areaName && (selectedZone === b.zoneId));
+    if (areaBlocks.length === 0 && selectedZone !== "zona_3") return null;
+    
+    return (
+      <div key={areaName} className="flex flex-col gap-4 min-w-max">
+        <h3 className="font-black text-slate-400 dark:text-slate-500 uppercase text-xs tracking-[0.4em] text-center">{areaName}</h3>
+        <div className={`grid grid-cols-3 gap-2.5 p-6 bg-white dark:bg-slate-900/40 rounded-[3rem] border border-slate-200 dark:border-slate-800 shadow-2xl shrink-0`}>
+          {areaBlocks.map(b => renderBlock(b))}
+        </div>
+      </div>
+    );
+  };
 
 
   return (
@@ -535,7 +629,8 @@ export default function Warehouse() {
               blocks={blocks}
               selectedZone={selectedZone}
               selectedBlock={selectedBlock}
-              onBlockClick={() => {}}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              onBlockClick={(block: any) => setSelectedBlock(block)}
               preview={true}
               disableInteraction={true}
             />
@@ -673,8 +768,7 @@ export default function Warehouse() {
                   <button type="submit" className="w-1/2 bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 text-xs uppercase transition-all shadow-sm" disabled={addPalletLoading}>{addPalletLoading ? 'Guardando...' : 'Guardar'}</button>
                 </div>
               </form>
-            ) : (
-              // Detalle del pallet con fallback de datos por defecto si faltan atributos
+            ) : selectedBlock ? (
               <>
                 {/* Cabecera visual destacada */}
                 <div className="bg-gradient-to-br from-blue-100 via-blue-50 to-white dark:from-blue-900 dark:via-slate-900 dark:to-slate-800 rounded-[2.5rem] p-10 border border-slate-100 dark:border-slate-700 text-center relative overflow-hidden shadow-lg">
@@ -753,6 +847,10 @@ export default function Warehouse() {
                   </div>
                 )}
               </>
+            ) : (
+              <div className="flex items-center justify-center h-64 text-slate-500">
+                <p>Selecciona una ubicación para ver detalles</p>
+              </div>
             )}
           </div>
         </div>

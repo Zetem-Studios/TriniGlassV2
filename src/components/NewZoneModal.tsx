@@ -13,6 +13,7 @@ export default function NewZoneModal({ isOpen, onClose, onZoneCreated }: NewZone
   const [tipo, setTipo] = useState<"produccion" | "almacenamiento" | "expedicion">("almacenamiento");
   const [posiciones, setPosiciones] = useState<string[]>(["A"]);
   const [descripcion, setDescripcion] = useState("");
+  const [capacidadMaxima, setCapacidadMaxima] = useState("");
   const [modalError, setModalError] = useState("");
   const [isCreatingZone, setIsCreatingZone] = useState(false);
 
@@ -21,6 +22,10 @@ export default function NewZoneModal({ isOpen, onClose, onZoneCreated }: NewZone
 
     if (!nombre.trim()) {
       setModalError("El nombre de la zona es obligatorio");
+      return;
+    }
+    if (!capacidadMaxima || Number(capacidadMaxima) <= 0) {
+      setModalError("La capacidad máxima debe ser mayor a 0");
       return;
     }
     if (posiciones.length === 0) {
@@ -34,11 +39,12 @@ export default function NewZoneModal({ isOpen, onClose, onZoneCreated }: NewZone
 
     setIsCreatingZone(true);
     try {
-      const codigo = await createCompleteZone(nombre, tipo, posiciones, descripcion);
+      const codigo = await createCompleteZone(nombre, tipo, posiciones, descripcion, Number(capacidadMaxima));
       resetForm();
       onZoneCreated(codigo);
-    } catch (error: any) {
-      const msg = error?.message ?? String(error);
+    } catch (error: unknown) {
+      const errorObject = error instanceof Error ? error : new Error(String(error));
+      const msg = errorObject?.message ?? String(error);
       console.error("❌ Error creando zona:", error);
       if (msg.includes("permission") || msg.includes("PERMISSION_DENIED")) {
         setModalError("Sin permisos en Firebase. Revisa las reglas de Firestore.");
@@ -57,6 +63,7 @@ export default function NewZoneModal({ isOpen, onClose, onZoneCreated }: NewZone
     setTipo("almacenamiento");
     setPosiciones(["A"]);
     setDescripcion("");
+    setCapacidadMaxima("");
     setModalError("");
   };
 
@@ -116,6 +123,18 @@ export default function NewZoneModal({ isOpen, onClose, onZoneCreated }: NewZone
                 <option value="almacenamiento">Almacenamiento</option>
                 <option value="expedicion">Expedición</option>
               </select>
+            </div>
+
+            <div className="flex flex-col gap-3 col-span-1">
+              <label className="text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">Capacidad Máxima</label>
+              <input
+                type="number"
+                value={capacidadMaxima}
+                onChange={(e) => { setCapacidadMaxima(e.target.value); setModalError(""); }}
+                placeholder="Ej: 50"
+                min="1"
+                className="w-full px-5 py-4 border border-slate-200 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-semibold"
+              />
             </div>
           </div>
 
