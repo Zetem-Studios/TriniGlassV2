@@ -3,6 +3,7 @@ import { Outlet, NavLink } from 'react-router-dom';
 
 import { LayoutDashboard, Package, Building2, Bell, Settings, Sun, Moon, Menu, UserPlus, Truck, PackageOpen, Smartphone, X } from 'lucide-react';
 import { useAuth } from '../context/useAuth';
+import { useAlertasCount } from '../useAlertasCount';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 
@@ -11,6 +12,7 @@ export default function Layout() {
   const { user, rol } = useAuth();
   const isAdmin = rol === "admin";
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const alertasCount = useAlertasCount();
 
   useEffect(() => {
     if (isDarkMode) {
@@ -35,7 +37,7 @@ export default function Layout() {
     { to: "/scanner", icon: Smartphone, label: "Escáner", pill: null , adminOnly: false },
     { to: "/camiones", icon: Truck, label: "Flota", pill: null, adminOnly: false },
     { to: "/camiones/cargar", icon: PackageOpen, label: "Carga camión", pill: null, adminOnly: false },
-    { to: "/alertas", icon: Bell, label: "Alertas", pill: { text: "3", type: "red" }, adminOnly: false },
+    { to: "/alertas", icon: Bell, label: "Alertas", pill: alertasCount > 0 ? { text: String(alertasCount), type: "red" } : null, adminOnly: false },
     { to: "/configuracion", icon: Settings, label: "Configuración", pill: null, adminOnly: true },
   ];
 

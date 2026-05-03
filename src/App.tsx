@@ -5,6 +5,7 @@ import Warehouse from './components/Warehouse';
 import Resumen from './components/Resumen';
 import Login from './components/Login';
 import AddUser from "./components/AddUser";
+import Alertas from "./components/Alertas";
 import Camiones from './components/Camiones';
 import CargaCamion from './components/CargaCamion';
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -13,13 +14,6 @@ import Configuracion from "./components/Configuracion";
 import GestionUsuarios from "./components/GestionUsuarios";
 import MobileScanner from "./components/Scanner";
 import CanvasGridTest from "./components/CanvasGridTest";
-
-const Alertas = () => (
-  <div>
-    <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">Alertas del Sistema</h1>
-    <p className="text-slate-600 dark:text-slate-400">Panel de notificaciones.</p>
-  </div>
-);
 
 function App() {
   return (
