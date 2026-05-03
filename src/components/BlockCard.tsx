@@ -1,8 +1,10 @@
 import { Box } from "lucide-react";
 
+
 interface BlockCardProps {
   block: {
-    id: string;
+    id: string; // id interno de Firestore
+    codigo_barra?: string; // mostrar en la UI
     daysInStorage: number;
     occupied: boolean;
   };
@@ -37,7 +39,7 @@ export default function BlockCard({ block, isSelected, onClick }: BlockCardProps
     >
       {block.occupied ? (
         <>
-          <span className="text-[13px] font-black tracking-tighter uppercase leading-tight break-all text-center">{block.id}</span>
+          <span className="text-[13px] font-black tracking-tighter uppercase leading-tight break-all text-center">{block.codigo_barra ? block.codigo_barra : 'Sin código'}</span>
           <Box size={22} strokeWidth={2.5} />
           {block.daysInStorage > 0 && (
             <span className="text-[12px] font-bold">
