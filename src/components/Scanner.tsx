@@ -1,6 +1,6 @@
 import { useState } from "react";
 import QRScanner from "./QRScanner";
-
+import { verificarPalet } from "../../services/CargaCamionService";
 
 import {
   CheckCircle2, AlertCircle, Smartphone, User, Clock, Truck, Search, Loader2,
@@ -15,6 +15,7 @@ type ResultType = "success" | "waiting" | "error" | "notfound" | null;
 
 type PaletData = {
   id: string;
+  docId: string;
   prioridad: string;
   ubicacion: string;
   tipoVidrio: string;
@@ -178,6 +179,22 @@ export default function MobileScanner() {
   const [palets, setPalets] = useState<PaletData[]>([]);
   // Estado para controlar qué palet está desplegado
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+  const [verifyingDocId, setVerifyingDocId] = useState<string | null>(null);
+  const [verifiedDocIds, setVerifiedDocIds] = useState<string[]>([]);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+
+  const handleVerificar = async (docId: string) => {
+    setVerifyingDocId(docId);
+    setVerifyError(null);
+    try {
+      await verificarPalet(docId);
+      setVerifiedDocIds((prev) => [...prev, docId]);
+    } catch {
+      setVerifyError("Error al verificar. Inténtalo de nuevo.");
+    } finally {
+      setVerifyingDocId(null);
+    }
+  };
 
   // Acción de escaneo: solo animación visual (botones manuales)
   const handleScanAction = (type: "success" | "waiting" | "error") => {
@@ -216,6 +233,7 @@ export default function MobileScanner() {
       if (found.length > 0) {
         setPalets(found.map(f => ({
           id: f.codigo_barra || f.id || cleanedQuery,
+          docId: f.id,
           prioridad: f.priority || "Normal",
           ubicacion: f.area || f.zoneId || "---",
           tipoVidrio: f.type || "---",
@@ -306,6 +324,7 @@ export default function MobileScanner() {
       if (found.length > 0) {
         setPalets(found.map(f => ({
           id: f.codigo_barra || f.id || cleanedScan,
+          docId: f.id,
           prioridad: f.priority || "Normal",
           ubicacion: f.area || f.zoneId || "---",
           tipoVidrio: f.type || "---",
@@ -431,7 +450,7 @@ export default function MobileScanner() {
               <>
                 <div className="mb-4 max-w-3xl mx-auto flex flex-col gap-2">
                   <button
-                    onClick={() => { setShowDetails(false); setResult(null); setPalets([]); setLastScan(null); setActiveTab('scan'); }}
+                    onClick={() => { setShowDetails(false); setResult(null); setPalets([]); setLastScan(null); setActiveTab('scan'); setVerifiedDocIds([]); setVerifyError(null); setExpandedIdx(null); }}
                     className="w-full py-4 text-[10px] font-black uppercase tracking-widest rounded-xl bg-red-600 text-white shadow-lg hover:bg-red-700 transition-all mb-2"
                   >
                     Volver a escanear
@@ -519,6 +538,27 @@ export default function MobileScanner() {
                               <p className="text-xs font-black text-white leading-none">{palet.diasStock !== undefined ? `${palet.diasStock} Días` : "--- Días"}</p>
                             </div>
                           </div>
+                          {/* Botón Confirmar Verificación */}
+                          {verifiedDocIds.includes(palet.docId) ? (
+                            <div className="w-full py-4 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-center text-[10px] font-black uppercase tracking-widest">
+                              ✅ Verificado correctamente
+                            </div>
+                          ) : (
+                            <>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleVerificar(palet.docId); }}
+                                disabled={verifyingDocId === palet.docId}
+                                className="w-full py-4 rounded-2xl bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-emerald-500 active:scale-95 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+                              >
+                                {verifyingDocId === palet.docId
+                                  ? <><ArrowRightLeft size={14} className="animate-spin" /> Verificando...</>
+                                  : "✅ Confirmar Verificación"}
+                              </button>
+                              {verifyError && verifyingDocId === null && (
+                                <p className="text-xs text-red-400 text-center font-bold">{verifyError}</p>
+                              )}
+                            </>
+                          )}
                         </div>
                       )}
                     </div>
@@ -538,13 +578,13 @@ export default function MobileScanner() {
             ) : null}
             <div className="flex flex-col gap-2 w-full">
               <button
-                onClick={() => { setShowDetails(false); setResult(null); setPalets([]); setLastScan(null); }}
+                onClick={() => { setShowDetails(false); setResult(null); setPalets([]); setLastScan(null); setVerifiedDocIds([]); setVerifyError(null); setExpandedIdx(null); }}
                 className="w-full py-4 text-[9px] font-black uppercase text-slate-600 tracking-widest active:text-white border-b border-slate-700"
               >
                 Nuevo Escaneo
               </button>
               <button
-                onClick={() => { setShowDetails(false); setResult(null); setPalets([]); setLastScan(null); setActiveTab('scan'); }}
+                onClick={() => { setShowDetails(false); setResult(null); setPalets([]); setLastScan(null); setActiveTab('scan'); setVerifiedDocIds([]); setVerifyError(null); setExpandedIdx(null); }}
                 className="w-full py-4 text-[9px] font-black uppercase text-blue-500 tracking-widest active:text-white"
               >
                 Volver a escanear
