@@ -7,6 +7,7 @@ import {
   limit,
   runTransaction,
   serverTimestamp,
+  updateDoc,
 } from "firebase/firestore";
 import { db } from "../src/firebase";
 
@@ -227,4 +228,12 @@ export const validarCarga = (
     porcentajeVolumen:
       capacidad.volumen > 0 ? (volumenTotal / capacidad.volumen) * 100 : 0,
   };
+};
+
+export const verificarPalet = async (docId: string): Promise<void> => {
+  const ref = doc(db, PRODUCTOS, docId);
+  await updateDoc(ref, {
+    estado_pedido: "Verificado",
+    fechaUltimaRevision: serverTimestamp(),
+  });
 };
