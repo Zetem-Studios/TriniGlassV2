@@ -4,15 +4,9 @@ import Stock from './components/Stock';
 import Warehouse from './components/Warehouse';
 import Resumen from './components/Resumen';
 import Login from './components/Login';
-import  AddUser  from "./components/AddUser";
+import AddUser from "./components/AddUser";
+import Alertas from "./components/Alertas";
 import { ProtectedRoute } from "./components/ProtectedRoute";
-
-const Alertas = () => (
-  <div>
-    <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">Alertas del Sistema</h1>
-    <p className="text-slate-600 dark:text-slate-400">Panel de notificaciones.</p>
-  </div>
-);
 
 function App() {
   return (

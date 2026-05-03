@@ -3,12 +3,14 @@ import { Outlet, NavLink } from 'react-router-dom';
 import { LayoutDashboard, Package, Building2, Bell, Settings, Sun, Moon, Menu, UserPlus } from 'lucide-react';
 
 import { useAuth } from '../context/useAuth';
+import { useAlertasCount } from '../useAlertasCount';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 
 export default function Layout() {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const { user } = useAuth();
+  const alertasCount = useAlertasCount();
 
   useEffect(() => {
     if (isDarkMode) {
@@ -30,7 +32,7 @@ export default function Layout() {
     { to: "/", icon: LayoutDashboard, label: "Resumen", pill: null },
     { to: "/inventario", icon: Package, label: "Inventario", pill: { text: "98", type: "grey" } },
     { to: "/almacen", icon: Building2, label: "Almacén", pill: null },
-    { to: "/alertas", icon: Bell, label: "Alertas", pill: { text: "3", type: "red" } },
+    { to: "/alertas", icon: Bell, label: "Alertas", pill: alertasCount > 0 ? { text: String(alertasCount), type: "red" } : null },
     { to: "/configuracion", icon: Settings, label: "Configuración", pill: null },
   ];
 
