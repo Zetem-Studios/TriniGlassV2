@@ -19,6 +19,7 @@ export interface MapDesign {
   areas: AreaData[];
   gridBounds: GridBounds;
   gridSize: GridSize;
+  activo?: boolean;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

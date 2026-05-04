@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { MapDesignsManager } from './MapDesignsManager';
 import { type MapDesign } from '../services/mapDesignsService';
+import { Zap, Layers, Plus, X } from 'lucide-react';
 
 interface GridCell {
   col: string;
@@ -160,62 +161,88 @@ const CanvasGridTest: React.FC = () => {
     };
   };
 
-  // Función para scroll automático cuando el cursor se acerca a los bordes del contenedor
+  // Función para scroll automático y expansión cuando el cursor se acerca a los bordes
   const autoScrollIfNeeded = (mouseX: number, mouseY: number) => {
     const scrollContainer = scrollContainerRef.current;
-    if (!scrollContainer) return;
+    const canvas = canvasRef.current;
+    if (!scrollContainer || !canvas) return;
 
     const containerRect = scrollContainer.getBoundingClientRect();
+    const canvasRect = canvas.getBoundingClientRect();
     const viewportWidth = containerRect.width;
     const viewportHeight = containerRect.height;
     
-    // Margen para activar el scroll (en píxeles)
+    // Margen para activar el scroll/expansión (en píxeles)
     const scrollMargin = 50;
-    const scrollSpeed = 10; // píxeles por_FRAME
+    const scrollSpeed = 10; // píxeles por frame
     
     // Calcular posición del cursor relativa al contenedor
     const relativeX = mouseX - containerRect.left;
     const relativeY = mouseY - containerRect.top;
     
+    // Calcular posición del cursor relativa al canvas
+    const canvasRelativeX = mouseX - canvasRect.left;
+    const canvasRelativeY = mouseY - canvasRect.top;
+    
     let scrollLeft = scrollContainer.scrollLeft;
     let scrollTop = scrollContainer.scrollTop;
     let needsScroll = false;
+    let needsExpansion = false;
     
     // DEBUG: Mostrar valores para depuración
-    console.log('=== DEBUG SCROLL AUTOMÁTICO (CURSOR) ===');
+    console.log('=== DEBUG SCROLL/EXPANSIÓN AUTOMÁTICA ===');
     console.log('Cursor:', { mouseX, mouseY });
-    console.log('Contenedor:', { viewportWidth, viewportHeight });
-    console.log('Posición relativa:', { relativeX, relativeY });
+    console.log('Canvas:', { width: canvasRect.width, height: canvasRect.height });
+    console.log('Posición relativa canvas:', { canvasRelativeX, canvasRelativeY });
     console.log('Scroll actual:', { scrollLeft, scrollTop });
     
-    // Scroll horizontal si el cursor se acerca al borde derecho
+    // Verificar si el cursor se acerca al borde del canvas para activar expansión
+    const expansionMargin = 100; // Mayor margen para expansión
+    const columns = generateColumnLetters(gridBounds.startCol, gridBounds.endCol);
+    const canvasWidth = columns.length * gridSize.cellWidth;
+    const canvasHeight = (gridBounds.endRow - gridBounds.startRow + 1) * gridSize.cellHeight;
+    
+    // Expansión horizontal si el cursor se acerca al borde derecho del canvas
+    if (canvasRelativeX > canvasWidth - expansionMargin && gridBounds.endCol < MAX_BOUNDS.endCol) {
+      console.log('✅ ACTIVANDO EXPANSIÓN HORIZONTAL (cursor cerca borde derecho)');
+      needsExpansion = true;
+    }
+    // Expansión vertical si el cursor se acerca al borde inferior del canvas
+    if (canvasRelativeY > canvasHeight - expansionMargin && gridBounds.endRow < MAX_BOUNDS.endRow) {
+      console.log('✅ ACTIVANDO EXPANSIÓN VERTICAL (cursor cerca borde inferior)');
+      needsExpansion = true;
+    }
+    
+    // Scroll horizontal si el cursor se acerca al borde derecho del viewport
     if (relativeX > viewportWidth - scrollMargin) {
       console.log('✅ ACTIVANDO SCROLL DERECHA (cursor)');
       scrollLeft = Math.min(scrollLeft + scrollSpeed, scrollContainer.scrollWidth - viewportWidth);
       needsScroll = true;
     }
-    // Scroll horizontal si el cursor se acerca al borde izquierdo
+    // Scroll horizontal si el cursor se acerca al borde izquierdo del viewport
     else if (relativeX < scrollMargin) {
       console.log('✅ ACTIVANDO SCROLL IZQUIERDA (cursor)');
       scrollLeft = Math.max(0, scrollLeft - scrollSpeed);
       needsScroll = true;
     }
     
-    // Scroll vertical si el cursor se acerca al borde inferior
+    // Scroll vertical si el cursor se acerca al borde inferior del viewport
     if (relativeY > viewportHeight - scrollMargin) {
       console.log('✅ ACTIVANDO SCROLL ABAJO (cursor)');
       scrollTop = Math.min(scrollTop + scrollSpeed, scrollContainer.scrollHeight - viewportHeight);
       needsScroll = true;
     }
-    // Scroll vertical si el cursor se acerca al borde superior
+    // Scroll vertical si el cursor se acerca al borde superior del viewport
     else if (relativeY < scrollMargin) {
       console.log('✅ ACTIVANDO SCROLL ARRIBA (cursor)');
       scrollTop = Math.max(0, scrollTop - scrollSpeed);
       needsScroll = true;
     }
     
-    if (!needsScroll) {
-      console.log('❌ NO SE ACTIVA SCROLL - Cursor dentro de límites');
+    // Aplicar expansión si es necesario
+    if (needsExpansion) {
+      console.log('🚀 APLICANDO EXPANSIÓN POR PROXIMIDAD DE CURSOR');
+      expandCanvasNearCursor(canvasRelativeX, canvasRelativeY);
     }
     
     // Aplicar scroll si es necesario
@@ -226,7 +253,90 @@ const CanvasGridTest: React.FC = () => {
         top: scrollTop
       });
     }
+    
+    if (!needsScroll && !needsExpansion) {
+      console.log('❌ NO SE ACTIVA SCROLL/EXPANSIÓN - Cursor dentro de límites');
+    }
     console.log('========================');
+  };
+
+  // Función para expandir canvas basado en la posición del cursor
+  const expandCanvasNearCursor = (cursorX: number, cursorY: number) => {
+    const columns = generateColumnLetters(gridBounds.startCol, gridBounds.endCol);
+    const maxColumns = generateColumnLetters(MAX_BOUNDS.startCol, MAX_BOUNDS.endCol);
+    const currentEndIndex = columns.indexOf(gridBounds.endCol);
+    const maxEndIndex = maxColumns.indexOf(MAX_BOUNDS.endCol);
+    
+    let newEndCol = gridBounds.endCol;
+    let newEndRow = gridBounds.endRow;
+    let needsHorizontalExpansion = false;
+    let needsVerticalExpansion = false;
+    
+    // Calcular dimensiones actuales del canvas
+    const canvasWidth = columns.length * gridSize.cellWidth;
+    const canvasHeight = (gridBounds.endRow - gridBounds.startRow + 1) * gridSize.cellHeight;
+    
+    // Margen para activar expansión (en píxeles desde el borde)
+    const expansionMargin = 150;
+    
+    console.log('=== DEBUG EXPANSIÓN POR CURSOR ===');
+    console.log('Cursor position:', { cursorX, cursorY });
+    console.log('Canvas dimensions:', { canvasWidth, canvasHeight });
+    console.log('Grid bounds:', { startCol: gridBounds.startCol, endCol: gridBounds.endCol, startRow: gridBounds.startRow, endRow: gridBounds.endRow });
+    
+    // Expansión horizontal - si el cursor se acerca al borde derecho del canvas
+    const horizontalThreshold = canvasWidth - expansionMargin;
+    if (cursorX > horizontalThreshold && currentEndIndex < maxEndIndex) {
+      console.log('✅ CURSOR CERCA BORDE DERECHO - cursorX:', cursorX, 'threshold:', horizontalThreshold);
+      
+      const currentBlockIndex = Math.floor(currentEndIndex / 26);
+      const nextBlockIndex = currentBlockIndex + 1;
+      const maxBlockIndex = Math.floor((maxColumns.length - 1) / 26);
+      
+      console.log('Block indices - current:', currentBlockIndex, 'next:', nextBlockIndex, 'max:', maxBlockIndex);
+      
+      if (nextBlockIndex <= maxBlockIndex) {
+        const newEndIndex = Math.min((nextBlockIndex + 1) * 26 - 1, maxColumns.length - 1);
+        newEndCol = maxColumns[newEndIndex];
+        needsHorizontalExpansion = true;
+        console.log('📈 EXPANSIÓN HORIZONTAL A:', newEndCol, 'índice:', newEndIndex);
+      } else {
+        console.log('❌ NO SE PUEDE EXPANDIR HORIZONTALMENTE - límite de bloques alcanzado');
+      }
+    } else {
+      console.log('❌ NO SE ACTIVA EXPANSIÓN HORIZONTAL - cursorX:', cursorX, 'threshold:', horizontalThreshold, 'currentEndIndex:', currentEndIndex, 'maxEndIndex:', maxEndIndex);
+    }
+    
+    // Expansión vertical - si el cursor se acerca al borde inferior del canvas
+    const verticalThreshold = canvasHeight - expansionMargin;
+    if (cursorY > verticalThreshold && gridBounds.endRow < MAX_BOUNDS.endRow) {
+      console.log('✅ CURSOR CERCA BORDE INFERIOR - cursorY:', cursorY, 'threshold:', verticalThreshold);
+      
+      const currentEndRow = gridBounds.endRow;
+      const nextBlockStart = Math.floor((currentEndRow - 1) / 26) * 26 + 27;
+      const maxEndRow = MAX_BOUNDS.endRow;
+      
+      newEndRow = Math.min(nextBlockStart + 25, maxEndRow);
+      needsVerticalExpansion = true;
+      console.log('📈 EXPANSIÓN VERTICAL A:', newEndRow, 'desde:', currentEndRow);
+    } else {
+      console.log('❌ NO SE ACTIVA EXPANSIÓN VERTICAL - cursorY:', cursorY, 'threshold:', verticalThreshold, 'endRow:', gridBounds.endRow, 'maxEndRow:', MAX_BOUNDS.endRow);
+    }
+    
+    // Aplicar expansión
+    if (needsHorizontalExpansion || needsVerticalExpansion) {
+      console.log('🚀 APLICANDO EXPANSIÓN - Horizontal:', needsHorizontalExpansion, 'Vertical:', needsVerticalExpansion);
+      console.log('Nuevos bounds:', { endCol: newEndCol, endRow: newEndRow });
+      
+      setGridBounds(prev => ({
+        ...prev,
+        endCol: newEndCol,
+        endRow: newEndRow
+      }));
+    } else {
+      console.log('📦 SIN EXPANSIÓN APLICAR');
+    }
+    console.log('==========================');
   };
 
   // Obtener coordenadas de celda alfanumérica
@@ -679,10 +789,8 @@ const CanvasGridTest: React.FC = () => {
       // Scroll automático si el cursor se acerca a los bordes del contenedor
       autoScrollIfNeeded(e.clientX, e.clientY);
       
-      // Verificar si necesita expansión del canvas (solo si el área cambió significativamente)
-      if (Math.abs(moveDeltaX) > gridSize.cellWidth || Math.abs(moveDeltaY) > gridSize.cellHeight) {
-        checkAndExpandCanvas(updatedArea);
-      }
+      // Verificar expansión del canvas (siempre durante el movimiento)
+      checkAndExpandCanvas(updatedArea);
     }
     
     if (isResizing && draggedArea && resizeHandle) {
@@ -819,7 +927,7 @@ const CanvasGridTest: React.FC = () => {
         console.log('🔄 LLAMANDO AUTO-SCROLL DURING RESIZE - Cursor:', e.clientX, e.clientY);
         autoScrollIfNeeded(e.clientX, e.clientY);
         
-        // Verificar si necesita expansión del canvas (siempre durante redimensionamiento)
+        // Durante redimensionamiento, siempre verificar expansión
         console.log('=== ANTES DE checkAndExpandCanvas (RESIZE) ===');
         console.log('updatedArea que se pasa:', updatedArea);
         console.log('updatedArea.width:', updatedArea.width, 'updatedArea.height:', updatedArea.height);
@@ -828,8 +936,15 @@ const CanvasGridTest: React.FC = () => {
         console.log('¿Hay draggedArea?', draggedArea);
         console.log('¿Hay resizeHandle?', resizeHandle);
         
-        // Durante redimensionamiento, siempre verificar expansión
         checkAndExpandCanvas(updatedArea);
+      }
+    }
+    
+    // Verificar expansión también durante redimensionamiento (fuera de la condición de tamaño)
+    if (isResizing && draggedArea) {
+      const currentArea = areas.find(a => a.id === draggedArea);
+      if (currentArea) {
+        checkAndExpandCanvas(currentArea);
       }
     }
     
@@ -982,101 +1097,138 @@ const CanvasGridTest: React.FC = () => {
     }
   };
 
-  // Función para detectar y expandir canvas automáticamente (lógica predictiva)
-  const checkAndExpandCanvas = (area: Area) => {
+  // Función para verificar expansión horizontal (independiente)
+  const checkHorizontalExpansion = (area: Area) => {
+    console.log('=== DEBUG EXPANSIÓN HORIZONTAL INICIO ===');
+    console.log('Grid bounds actuales:', gridBounds);
+    console.log('MAX_BOUNDS:', MAX_BOUNDS);
+    
     const columns = generateColumnLetters(gridBounds.startCol, gridBounds.endCol);
+    console.log('Columnas generadas:', columns);
+    console.log('Total columnas:', columns.length);
+    
     const currentColIndex = columns.indexOf(area.col);
-    const currentRowIndex = area.row - gridBounds.startRow;
+    console.log('Índice columna actual:', currentColIndex, 'columna:', area.col);
     
-    // Calcular límites del área
+    // Calcular límite horizontal del área
     const areaEndColIndex = currentColIndex + Math.ceil(area.width / gridSize.cellWidth) - 1;
-    const areaEndRowIndex = currentRowIndex + Math.ceil(area.height / gridSize.cellHeight) - 1;
-    
-    // Obtener dimensiones actuales del canvas
-    const canvasWidth = columns.length;
-    const canvasHeight = gridBounds.endRow - gridBounds.startRow + 1;
+    const areaEndColLetter = columns[areaEndColIndex];
+    console.log('Índice final área:', areaEndColIndex, 'columna final:', areaEndColLetter);
+    console.log('Ancho área:', area.width, 'cellWidth:', gridSize.cellWidth);
     
     // Para comparación correcta de columnas
     const maxColumns = generateColumnLetters(MAX_BOUNDS.startCol, MAX_BOUNDS.endCol);
+    console.log('Max columns (A-AZ):', maxColumns.length, 'primeras:', maxColumns.slice(0, 5), 'últimas:', maxColumns.slice(-5));
+    
     const currentEndIndex = columns.indexOf(gridBounds.endCol);
     const maxEndIndex = maxColumns.indexOf(MAX_BOUNDS.endCol);
+    console.log('Índices - actual end:', currentEndIndex, 'max end:', maxEndIndex);
     
-    // DEBUG: Mostrar valores para depuración
-    console.log('=== DEBUG EXPANSIÓN ===');
-    console.log('Área:', area);
-    console.log('area.col:', area.col);
-    console.log('currentColIndex:', currentColIndex);
-    console.log('areaEndColIndex:', areaEndColIndex);
-    console.log('canvasWidth:', canvasWidth);
-    console.log('canvasWidth - 1:', canvasWidth - 1);
-    console.log('gridBounds.endCol:', gridBounds.endCol);
-    console.log('MAX_BOUNDS.endCol:', MAX_BOUNDS.endCol);
-    console.log('Condición horizontal:', areaEndColIndex >= canvasWidth - 1 && gridBounds.endCol < MAX_BOUNDS.endCol);
-    console.log('Primera parte (areaEndColIndex >= canvasWidth - 1):', areaEndColIndex >= canvasWidth - 1);
-    console.log('Segunda parte (currentEndIndex < maxEndIndex):', currentEndIndex < maxEndIndex);
-    console.log('Comparación de índices - currentEndIndex:', currentEndIndex, 'maxEndIndex:', maxEndIndex);
+    // Verificar si el área alcanza la última columna disponible
+    const lastCurrentColLetter = gridBounds.endCol;
+    const reachesLastColumn = areaEndColLetter === lastCurrentColLetter;
+    const canExpandHorizontally = currentEndIndex < maxEndIndex;
     
-    // LÓGICA PREDICTIVA: Expandir cuando el área alcance la última celda disponible
-    let needsHorizontalExpansion = false;
-    let needsVerticalExpansion = false;
-    let newEndCol = gridBounds.endCol;
-    let newEndRow = gridBounds.endRow;
+    console.log('Condición - alcanza última columna?', reachesLastColumn);
+    console.log('Condición - puede expandir?', canExpandHorizontally);
+    console.log('Columna final área:', areaEndColLetter, 'última disponible:', lastCurrentColLetter);
     
-    // Expansión horizontal predictiva: cuando área alcanza anchura-1
-    if (areaEndColIndex >= canvasWidth - 1 && currentEndIndex < maxEndIndex) {
-      console.log('✅ ACTIVANDO EXPANSIÓN HORIZONTAL');
-      needsHorizontalExpansion = true;
+    if (reachesLastColumn && canExpandHorizontally) {
+      console.log('✅ CONDICIONES CUMPLIDAS - Activando expansión horizontal');
       
       // Expandir al siguiente bloque completo (AA-AZ, BA-BZ, etc.)
       const currentBlockIndex = Math.floor(currentEndIndex / 26);
       const nextBlockIndex = currentBlockIndex + 1;
       const maxBlockIndex = Math.floor((maxColumns.length - 1) / 26);
       
-      console.log('currentBlockIndex:', currentBlockIndex);
-      console.log('nextBlockIndex:', nextBlockIndex);
-      console.log('maxBlockIndex:', maxBlockIndex);
+      console.log('Bloques - current:', currentBlockIndex, 'next:', nextBlockIndex, 'max:', maxBlockIndex);
       
       if (nextBlockIndex <= maxBlockIndex) {
         const newEndIndex = Math.min((nextBlockIndex + 1) * 26 - 1, maxColumns.length - 1);
-        newEndCol = maxColumns[newEndIndex];
-        console.log('newEndCol:', newEndCol);
+        const newEndCol = maxColumns[newEndIndex];
+        console.log('🚀 EXPANSIÓN HORIZONTAL APLICADA - Nueva columna:', newEndCol, 'índice:', newEndIndex);
+        
+        setGridBounds(prev => {
+          console.log('Actualizando gridBounds de:', prev.endCol, 'a:', newEndCol);
+          return {
+            ...prev,
+            endCol: newEndCol
+          };
+        });
+        
+        console.log('===============================');
+        return true;
+      } else {
+        console.log('❌ Límite de bloques alcanzado');
       }
     } else {
-      console.log('❌ NO SE ACTIVA EXPANSIÓN HORIZONTAL');
+      console.log('❌ CONDICIONES NO CUMPLIDAS');
+      console.log('  - Alcanza última columna:', reachesLastColumn);
+      console.log('  - Puede expandir:', canExpandHorizontally);
+      console.log('  - Columna final área:', areaEndColLetter, 'última disponible:', lastCurrentColLetter);
     }
     
-    // Expansión vertical predictiva: cuando área alcanza altura-1
-    console.log('DEBUG VERTICAL - areaEndRowIndex:', areaEndRowIndex, 'canvasHeight - 1:', canvasHeight - 1);
-    console.log('DEBUG VERTICAL - gridBounds.endRow:', gridBounds.endRow, 'MAX_BOUNDS.endRow:', MAX_BOUNDS.endRow);
-    console.log('DEBUG VERTICAL - Condición 1 (areaEndRowIndex >= canvasHeight - 1):', areaEndRowIndex >= canvasHeight - 1);
-    console.log('DEBUG VERTICAL - Condición 2 (gridBounds.endRow < MAX_BOUNDS.endRow):', gridBounds.endRow < MAX_BOUNDS.endRow);
+    console.log('===============================');
+    return false;
+  };
+
+  // Función para verificar expansión vertical (independiente)
+  const checkVerticalExpansion = (area: Area) => {
+    const columns = generateColumnLetters(gridBounds.startCol, gridBounds.endCol);
+    const currentRowIndex = area.row - gridBounds.startRow;
+    
+    // Calcular límite vertical del área
+    const areaEndRowIndex = currentRowIndex + Math.ceil(area.height / gridSize.cellHeight) - 1;
+    const canvasHeight = gridBounds.endRow - gridBounds.startRow + 1;
+    
+    console.log('=== DEBUG EXPANSIÓN VERTICAL ===');
+    console.log('Área:', area);
+    console.log('areaEndRowIndex:', areaEndRowIndex, 'canvasHeight - 1:', canvasHeight - 1);
+    console.log('gridBounds.endRow:', gridBounds.endRow, 'MAX_BOUNDS.endRow:', MAX_BOUNDS.endRow);
+    console.log('Condición 1 (areaEndRowIndex >= canvasHeight - 1):', areaEndRowIndex >= canvasHeight - 1);
+    console.log('Condición 2 (gridBounds.endRow < MAX_BOUNDS.endRow):', gridBounds.endRow < MAX_BOUNDS.endRow);
     
     if (areaEndRowIndex >= canvasHeight - 1 && gridBounds.endRow < MAX_BOUNDS.endRow) {
       console.log('✅ ACTIVANDO EXPANSIÓN VERTICAL');
-      needsVerticalExpansion = true;
+      
       // Expandir al siguiente bloque completo de 26 filas
       const currentEndRow = gridBounds.endRow;
       const nextBlockStart = Math.floor((currentEndRow - 1) / 26) * 26 + 27;
       const maxEndRow = MAX_BOUNDS.endRow;
       
-      newEndRow = Math.min(nextBlockStart + 25, maxEndRow);
-      console.log('currentEndRow:', currentEndRow, 'nextBlockStart:', nextBlockStart, 'newEndRow:', newEndRow);
+      const newEndRow = Math.min(nextBlockStart + 25, maxEndRow);
+      console.log('🚀 EXPANSIÓN VERTICAL A:', newEndRow, 'desde:', currentEndRow);
+      
+      setGridBounds(prev => ({
+        ...prev,
+        endRow: newEndRow
+      }));
+      
+      return true;
     } else {
       console.log('❌ NO SE ACTIVA EXPANSIÓN VERTICAL');
     }
     
-    // Aplicar expansión si es necesario
-    if (needsHorizontalExpansion || needsVerticalExpansion) {
-      console.log('🚀 APLICANDO EXPANSIÓN - Horizontal:', needsHorizontalExpansion, 'Vertical:', needsVerticalExpansion);
-      setGridBounds(prev => ({
-        ...prev,
-        endCol: newEndCol,
-        endRow: newEndRow
-      }));
+    console.log('=============================');
+    return false;
+  };
+
+  // Función principal que verifica ambas expansiones de forma independiente
+  const checkAndExpandCanvas = (area: Area) => {
+    console.log('=== VERIFICANDO EXPANSIÓN INDEPENDIENTE ===');
+    
+    // Verificar expansión horizontal (independiente)
+    const horizontalExpanded = checkHorizontalExpansion(area);
+    
+    // Verificar expansión vertical (independiente)
+    const verticalExpanded = checkVerticalExpansion(area);
+    
+    if (horizontalExpanded || verticalExpanded) {
+      console.log('🚀 RESUMEN - Horizontal:', horizontalExpanded, 'Vertical:', verticalExpanded);
     } else {
       console.log('📦 SIN EXPANSIÓN APLICAR');
     }
-    console.log('========================');
+    console.log('====================================');
   };
 
   // Finalizar drag/resize
@@ -1156,266 +1308,283 @@ const CanvasGridTest: React.FC = () => {
   }, [isDragging, isResizing, isDraggingSubArea, isResizingSubArea, handleMouseMove, handleMouseUp]);
 
   return (
-    <div className="p-8 bg-gray-100 min-h-screen">
-      <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold mb-4 text-gray-800">Canvas Expansible - Testing</h1>
+    <div className="min-h-screen relative flex flex-col bg-slate-50 dark:bg-[#0f172a] text-slate-900 dark:text-white transition-colors duration-300 font-sans">
+      
+      {/* CABECERA */}
+      <div className="flex justify-between items-center bg-white dark:bg-slate-900/50 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm shrink-0 m-6">
+        <h1 className="text-xl font-black flex items-center gap-2 italic uppercase tracking-tighter text-blue-600">
+          <Zap size={24} /> Triniglass <span className="text-slate-400 font-light not-italic text-sm">| Editor de Mapas</span>
+        </h1>
+        <button
+          onClick={() => setShowDesignsManager(true)}
+          className="bg-blue-600 hover:bg-blue-500 text-white px-7 py-3.5 rounded-2xl text-sm font-black flex items-center gap-2 shadow-lg active:scale-95 transition-all"
+        >
+          <Layers size={20} /> Gestión de Diseños
+        </button>
+      </div>
+
+      <div className="flex-1 flex flex-col gap-6 p-6">
         
-        <div className="bg-white rounded-lg shadow-md p-4 mb-6">
-          <div className="flex flex-wrap gap-4 mb-4">
-            <div className="text-sm">
-              <span className="font-semibold">Rango actual:</span> {gridBounds.startCol}{gridBounds.startRow} - {gridBounds.endCol}{gridBounds.endRow}
+        {/* PANEL DE INFORMACIÓN */}
+        <div className="bg-white dark:bg-slate-800/60 rounded-[3rem] border border-slate-200 dark:border-slate-800 p-8 shadow-inner">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-slate-100 dark:bg-slate-900/40 rounded-2xl p-4">
+              <div className="text-[11px] uppercase text-slate-400 dark:text-slate-500 font-black mb-2 tracking-[0.4em]">RANGO ACTUAL</div>
+              <div className="text-lg font-black text-blue-600 dark:text-blue-400">
+                {gridBounds.startCol}{gridBounds.startRow} - {gridBounds.endCol}{gridBounds.endRow}
+              </div>
             </div>
-            <div className="text-sm">
-              <span className="font-semibold">Dimensiones:</span> {canvasSize.width}x{canvasSize.height}px
+            <div className="bg-slate-100 dark:bg-slate-900/40 rounded-2xl p-4">
+              <div className="text-[11px] uppercase text-slate-400 dark:text-slate-500 font-black mb-2 tracking-[0.4em]">DIMENSIONES</div>
+              <div className="text-lg font-black text-blue-600 dark:text-blue-400">
+                {canvasSize.width}x{canvasSize.height}px
+              </div>
             </div>
-            <div className="text-sm">
-              <span className="font-semibold">Celda hover:</span> {hoveredCell || 'Ninguna'}
+            <div className="bg-slate-100 dark:bg-slate-900/40 rounded-2xl p-4">
+              <div className="text-[11px] uppercase text-slate-400 dark:text-slate-500 font-black mb-2 tracking-[0.4em]">CELDA HOVER</div>
+              <div className="text-lg font-black text-blue-600 dark:text-blue-400">
+                {hoveredCell || 'Ninguna'}
+              </div>
             </div>
           </div>
           
-          <div className="flex gap-2">
+          {/* BOTONES DE ACCIÓN */}
+          <div className="flex flex-wrap gap-3 mt-6">
             <button
               onClick={addArea}
-              className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors"
+              className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-2xl text-sm font-black flex items-center gap-2 shadow-lg active:scale-95 transition-all"
             >
-              Añadir Área
+              <Plus size={18} /> Añadir Área
             </button>
             <button
               onClick={addSubArea}
               disabled={!selectedArea}
-              className={`px-4 py-2 rounded transition-colors ${
+              className={`px-6 py-3 rounded-2xl text-sm font-black flex items-center gap-2 shadow-lg active:scale-95 transition-all ${
                 selectedArea 
-                  ? 'bg-orange-500 text-white hover:bg-orange-600' 
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  ? 'bg-orange-500 hover:bg-orange-600 text-white' 
+                  : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
               }`}
             >
-              Añadir Sub-área
+              <Plus size={18} /> Añadir Sub-área
             </button>
             <button
               onClick={deleteSelectedSubArea}
               disabled={!selectedSubArea}
-              className={`px-4 py-2 rounded transition-colors ${
+              className={`px-6 py-3 rounded-2xl text-sm font-black flex items-center gap-2 shadow-lg active:scale-95 transition-all ${
                 selectedSubArea 
-                  ? 'bg-red-500 text-white hover:bg-red-600' 
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  ? 'bg-red-500 hover:bg-red-600 text-white' 
+                  : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
               }`}
-              title="Eliminar sub-área seleccionada"
             >
-              Eliminar Sub-área
+              <X size={18} /> Eliminar Sub-área
             </button>
             <button
               onClick={deleteSelectedArea}
               disabled={!selectedArea}
-              className={`px-4 py-2 rounded transition-colors ${
+              className={`px-6 py-3 rounded-2xl text-sm font-black flex items-center gap-2 shadow-lg active:scale-95 transition-all ${
                 selectedArea 
-                  ? 'bg-red-600 text-white hover:bg-red-700' 
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  ? 'bg-red-600 hover:bg-red-500 text-white' 
+                  : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
               }`}
-              title="Eliminar área seleccionada y todas sus sub-áreas"
             >
-              Eliminar Área
-            </button>
-                        <div className="border-l border-gray-300 h-8 mx-2"></div>
-            <button
-              onClick={() => setShowDesignsManager(true)}
-              className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
-            >
-              Gestión de Diseños
+              <X size={18} /> Eliminar Área
             </button>
           </div>
         </div>
 
-        <div ref={scrollContainerRef} className="bg-white rounded-lg shadow-md p-4 overflow-auto" style={{ height: '80vh', minHeight: '600px' }}>
+        {/* CANVAS DEL EDITOR */}
+        <div className="bg-white dark:bg-slate-800/60 rounded-[3rem] border border-slate-200 dark:border-slate-800 p-8 overflow-x-auto shadow-inner relative">
           <div 
-            ref={canvasRef}
-            className="relative border border-gray-300"
-            style={{ 
-              width: `${canvasSize.width}px`, 
-              height: `${canvasSize.height}px`,
-              minWidth: '800px',
-              minHeight: '600px'
-            }}
-            onClick={handleCanvasClick}
+            ref={scrollContainerRef} 
+            className="relative bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-auto" 
+            style={{ height: '70vh', minHeight: '500px' }}
           >
-            {gridCells.map((cell) => (
-              <div
-                key={`${cell.col}${cell.row}`}
-                className="absolute border border-gray-200 flex items-center justify-center text-xs cursor-pointer hover:bg-blue-100 hover:border-blue-400 transition-colors"
-                style={{
-                  left: `${cell.x}px`,
-                  top: `${cell.y}px`,
-                  width: `${gridSize.cellWidth}px`,
-                  height: `${gridSize.cellHeight}px`
-                }}
-                onMouseEnter={() => handleCellHover(cell.col, cell.row)}
-                onMouseLeave={() => setHoveredCell(null)}
-              >
-                <span className="select-none text-gray-600">
-                  {cell.col}{cell.row}
-                </span>
-              </div>
-            ))}
+            <div 
+              ref={canvasRef}
+              className="relative"
+              style={{ 
+                width: `${canvasSize.width}px`, 
+                height: `${canvasSize.height}px`,
+                minWidth: `${gridSize.cellWidth * 26}px`, // Mínimo para 26 columnas (A-Z)
+                minHeight: `${gridSize.cellHeight * 25}px` // Mínimo para 25 filas
+              }}
+              onClick={handleCanvasClick}
+            >
+              {gridCells.map((cell) => (
+                <div
+                  key={`${cell.col}${cell.row}`}
+                  className="absolute border border-slate-200 dark:border-slate-700 flex items-center justify-center text-xs cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 hover:border-blue-400 dark:hover:border-blue-600 transition-colors"
+                  style={{
+                    left: `${cell.x}px`,
+                    top: `${cell.y}px`,
+                    width: `${gridSize.cellWidth}px`,
+                    height: `${gridSize.cellHeight}px`
+                  }}
+                  onMouseEnter={() => handleCellHover(cell.col, cell.row)}
+                  onMouseLeave={() => setHoveredCell(null)}
+                >
+                  <span className="select-none text-slate-500 dark:text-slate-400 text-[10px] font-mono">
+                    {cell.col}{cell.row}
+                  </span>
+                </div>
+              ))}
             
-            {/* Renderizar áreas */}
-            {areas.map((area) => (
-              <div
-                key={area.id}
-                className={`absolute border-2 cursor-move hover:bg-opacity-40 transition-colors ${
-                  selectedArea === area.id 
-                    ? 'bg-blue-500 bg-opacity-50 border-blue-700' 
-                    : 'bg-blue-500 bg-opacity-30 border-blue-600'
-                }`}
-                style={{
-                  left: `${area.x}px`,
-                  top: `${area.y}px`,
-                  width: `${area.width}px`,
-                  height: `${area.height}px`
-                }}
-                onMouseDown={(e) => handleAreaMouseDown(e, area.id)}
-                onDoubleClick={(e) => handleAreaDoubleClick(e, area.id)}
-              >
-                {/* Nombre del área o input de edición */}
-                {editingArea === area.id ? (
-                  <div className="absolute inset-0 flex items-center justify-center bg-blue-500 bg-opacity-90">
-                    <input
-                      type="text"
-                      value={tempName}
-                      onChange={handleNameChange}
-                      onKeyDown={handleKeyDown}
-                      onBlur={handleNameSave}
-                      className="px-2 py-1 text-sm bg-white border border-blue-700 rounded"
-                      placeholder="Nombre del área"
-                      autoFocus
-                    />
-                  </div>
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <span className="text-white font-medium text-sm drop-shadow-md">
-                      {area.name || `${area.col}${area.row}`}
-                    </span>
-                  </div>
-                )}
+              {/* Renderizar áreas */}
+              {areas.map((area) => (
+                <div
+                  key={area.id}
+                  className={`absolute border-2 cursor-move hover:bg-opacity-40 transition-colors ${
+                    selectedArea === area.id 
+                      ? 'bg-blue-500 bg-opacity-50 border-blue-700 dark:border-blue-500' 
+                      : 'bg-blue-500 bg-opacity-30 border-blue-600 dark:border-blue-400'
+                  }`}
+                  style={{
+                    left: `${area.x}px`,
+                    top: `${area.y}px`,
+                    width: `${area.width}px`,
+                    height: `${area.height}px`
+                  }}
+                  onMouseDown={(e) => handleAreaMouseDown(e, area.id)}
+                  onDoubleClick={(e) => handleAreaDoubleClick(e, area.id)}
+                >
+                  {/* Nombre del área o input de edición */}
+                  {editingArea === area.id ? (
+                    <div className="absolute inset-0 flex items-center justify-center bg-blue-500 bg-opacity-90 dark:bg-blue-600/90">
+                      <input
+                        type="text"
+                        value={tempName}
+                        onChange={handleNameChange}
+                        onKeyDown={handleKeyDown}
+                        onBlur={handleNameSave}
+                        className="px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-blue-700 dark:border-blue-500 rounded-xl text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/50"
+                        placeholder="Nombre del área"
+                        autoFocus
+                      />
+                    </div>
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <span className="text-white dark:text-white font-medium text-sm drop-shadow-md">
+                        {area.name || `${area.col}${area.row}`}
+                      </span>
+                    </div>
+                  )}
 
-                {/* Renderizar sub-áreas */}
-                {area.subAreas.map((subArea) => (
-                  <div
-                    key={subArea.id}
-                    className={`absolute border cursor-move hover:bg-opacity-60 transition-colors box-border ${
-                      selectedSubArea?.subAreaId === subArea.id 
-                        ? 'bg-red-600 bg-opacity-60 border-red-800' 
-                        : 'bg-red-500 bg-opacity-40 border-red-600'
-                    }`}
-                    style={{
-                      left: `${subArea.x - area.x - 1}px`,
-                      top: `${subArea.y - area.y - 1}px`,
-                      width: `${subArea.width - 2}px`,
-                      height: `${subArea.height - 2}px`,
-                      boxSizing: 'border-box'
-                    }}
-                    onMouseDown={(e) => handleSubAreaMouseDown(e, subArea.id, area.id)}
-                    onDoubleClick={(e) => handleSubAreaDoubleClick(e, subArea.id, area.id)}
-                  >
-                    {/* Nombre de sub-área o input de edición */}
-                    {editingSubArea?.subAreaId === subArea.id ? (
-                      <div className="absolute inset-0 flex items-center justify-center bg-red-500 bg-opacity-90">
-                        <input
-                          type="text"
-                          value={tempName}
-                          onChange={handleNameChange}
-                          onKeyDown={handleKeyDown}
-                          onBlur={handleNameSave}
-                          className="px-2 py-1 text-xs bg-white border border-red-700 rounded"
-                          placeholder="Nombre de sub-área"
-                          autoFocus
-                        />
-                      </div>
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <span className="text-white font-medium text-xs drop-shadow-md">
-                          {subArea.name || `${subArea.col}${subArea.row}`}
-                        </span>
-                      </div>
-                    )}
-                    
-                    {/* Handles de redimensionamiento para sub-área seleccionada */}
-                    {selectedSubArea?.subAreaId === subArea.id && (
-                      <>
-                        <div 
-                          className="absolute w-3 h-3 bg-red-800 border border-white -top-1.5 -left-1.5 cursor-nw-resize z-10 hover:bg-red-600"
-                          title="Redimensionar esquina superior izquierda"
-                          onMouseDown={(e) => handleSubAreaResizeMouseDown(e, subArea.id, area.id, 'nw')}
-                        />
-                        <div 
-                          className="absolute w-3 h-3 bg-red-800 border border-white -top-1.5 -right-1.5 cursor-ne-resize z-10 hover:bg-red-600"
-                          title="Redimensionar esquina superior derecha"
-                          onMouseDown={(e) => handleSubAreaResizeMouseDown(e, subArea.id, area.id, 'ne')}
-                        />
-                        <div 
-                          className="absolute w-3 h-3 bg-red-800 border border-white -bottom-1.5 -left-1.5 cursor-sw-resize z-10 hover:bg-red-600"
-                          title="Redimensionar esquina inferior izquierda"
-                          onMouseDown={(e) => handleSubAreaResizeMouseDown(e, subArea.id, area.id, 'sw')}
-                        />
-                        <div 
-                          className="absolute w-3 h-3 bg-red-800 border border-white -bottom-1.5 -right-1.5 cursor-se-resize z-10 hover:bg-red-600"
-                          title="Redimensionar esquina inferior derecha"
-                          onMouseDown={(e) => handleSubAreaResizeMouseDown(e, subArea.id, area.id, 'se')}
-                        />
-                      </>
-                    )}
-                  </div>
-                ))}
+                  {/* Renderizar sub-áreas */}
+                  {area.subAreas.map((subArea) => (
+                    <div
+                      key={subArea.id}
+                      className={`absolute border cursor-move hover:bg-opacity-60 transition-colors box-border ${
+                        selectedSubArea?.subAreaId === subArea.id 
+                          ? 'bg-red-600 bg-opacity-60 border-red-800 dark:border-red-600' 
+                          : 'bg-red-500 bg-opacity-40 border-red-600 dark:border-red-400'
+                      }`}
+                      style={{
+                        left: `${subArea.x - area.x - 1}px`,
+                        top: `${subArea.y - area.y - 1}px`,
+                        width: `${subArea.width - 2}px`,
+                        height: `${subArea.height - 2}px`,
+                        boxSizing: 'border-box'
+                      }}
+                      onMouseDown={(e) => handleSubAreaMouseDown(e, subArea.id, area.id)}
+                      onDoubleClick={(e) => handleSubAreaDoubleClick(e, subArea.id, area.id)}
+                    >
+                      {/* Nombre de sub-área o input de edición */}
+                      {editingSubArea?.subAreaId === subArea.id ? (
+                        <div className="absolute inset-0 flex items-center justify-center bg-red-500 bg-opacity-90 dark:bg-red-600/90">
+                          <input
+                            type="text"
+                            value={tempName}
+                            onChange={handleNameChange}
+                            onKeyDown={handleKeyDown}
+                            onBlur={handleNameSave}
+                            className="px-2 py-1 text-xs bg-white dark:bg-slate-800 border border-red-700 dark:border-red-500 rounded text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-red-500/50"
+                            placeholder="Nombre de sub-área"
+                            autoFocus
+                          />
+                        </div>
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <span className="text-white dark:text-white font-medium text-xs drop-shadow-md">
+                            {subArea.name || `${subArea.col}${subArea.row}`}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* Handles de redimensionamiento para sub-área seleccionada */}
+                      {selectedSubArea?.subAreaId === subArea.id && (
+                        <>
+                          <div 
+                            className="absolute w-3 h-3 bg-red-800 dark:bg-red-600 border border-white dark:border-slate-300 -top-1.5 -left-1.5 cursor-nw-resize z-10 hover:bg-red-600 dark:hover:bg-red-500"
+                            title="Redimensionar esquina superior izquierda"
+                            onMouseDown={(e) => handleSubAreaResizeMouseDown(e, subArea.id, area.id, 'nw')}
+                          />
+                          <div 
+                            className="absolute w-3 h-3 bg-red-800 dark:bg-red-600 border border-white dark:border-slate-300 -top-1.5 -right-1.5 cursor-ne-resize z-10 hover:bg-red-600 dark:hover:bg-red-500"
+                            title="Redimensionar esquina superior derecha"
+                            onMouseDown={(e) => handleSubAreaResizeMouseDown(e, subArea.id, area.id, 'ne')}
+                          />
+                          <div 
+                            className="absolute w-3 h-3 bg-red-800 dark:bg-red-600 border border-white dark:border-slate-300 -bottom-1.5 -left-1.5 cursor-sw-resize z-10 hover:bg-red-600 dark:hover:bg-red-500"
+                            title="Redimensionar esquina inferior izquierda"
+                            onMouseDown={(e) => handleSubAreaResizeMouseDown(e, subArea.id, area.id, 'sw')}
+                          />
+                          <div 
+                            className="absolute w-3 h-3 bg-red-800 dark:bg-red-600 border border-white dark:border-slate-300 -bottom-1.5 -right-1.5 cursor-se-resize z-10 hover:bg-red-600 dark:hover:bg-red-500"
+                            title="Redimensionar esquina inferior derecha"
+                            onMouseDown={(e) => handleSubAreaResizeMouseDown(e, subArea.id, area.id, 'se')}
+                          />
+                        </>
+                      )}
+                    </div>
+                  ))}
                 
-                {/* Handles de redimensionamiento en las esquinas */}
-                <div 
-                  className="absolute w-2 h-2 bg-blue-800 -top-1 -left-1 cursor-nw-resize"
-                  title="Redimensionar esquina superior izquierda"
-                  onMouseDown={(e) => handleResizeMouseDown(e, area.id, 'nw')}
-                />
-                <div 
-                  className="absolute w-2 h-2 bg-blue-800 -top-1 -right-1 cursor-ne-resize"
-                  title="Redimensionar esquina superior derecha"
-                  onMouseDown={(e) => handleResizeMouseDown(e, area.id, 'ne')}
-                />
-                <div 
-                  className="absolute w-2 h-2 bg-blue-800 -bottom-1 -left-1 cursor-sw-resize"
-                  title="Redimensionar esquina inferior izquierda"
-                  onMouseDown={(e) => handleResizeMouseDown(e, area.id, 'sw')}
-                />
-                <div 
-                  className="absolute w-2 h-2 bg-blue-800 -bottom-1 -right-1 cursor-se-resize"
-                  title="Redimensionar esquina inferior derecha"
-                  onMouseDown={(e) => handleResizeMouseDown(e, area.id, 'se')}
-                />
-              </div>
-            ))}
+                  {/* Handles de redimensionamiento en las esquinas */}
+                  <div 
+                    className="absolute w-2 h-2 bg-blue-800 dark:bg-blue-600 -top-1 -left-1 cursor-nw-resize"
+                    title="Redimensionar esquina superior izquierda"
+                    onMouseDown={(e) => handleResizeMouseDown(e, area.id, 'nw')}
+                  />
+                  <div 
+                    className="absolute w-2 h-2 bg-blue-800 dark:bg-blue-600 -top-1 -right-1 cursor-ne-resize"
+                    title="Redimensionar esquina superior derecha"
+                    onMouseDown={(e) => handleResizeMouseDown(e, area.id, 'ne')}
+                  />
+                  <div 
+                    className="absolute w-2 h-2 bg-blue-800 dark:bg-blue-600 -bottom-1 -left-1 cursor-sw-resize"
+                    title="Redimensionar esquina inferior izquierda"
+                    onMouseDown={(e) => handleResizeMouseDown(e, area.id, 'sw')}
+                  />
+                  <div 
+                    className="absolute w-2 h-2 bg-blue-800 dark:bg-blue-600 -bottom-1 -right-1 cursor-se-resize"
+                    title="Redimensionar esquina inferior derecha"
+                    onMouseDown={(e) => handleResizeMouseDown(e, area.id, 'se')}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-
-        <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <h3 className="font-semibold text-yellow-800 mb-2">Información del Testing:</h3>
-          <ul className="text-sm text-yellow-700 space-y-1">
-            <li>• Canvas inicial: A-Z x 1-25 (26x25 = 650 celdas)</li>
-            <li>• Tamaño de celda: 40x40px (fijo, sin escalado)</li>
-            <li>• Expansión horizontal: Z→AA-AZ→BA-BZ→CA-CZ...</li>
-            <li>• Expansión vertical: 25→51→77→103... (bloques de 26 filas)</li>
-            <li>• Hover sobre celdas para ver coordenadas</li>
-            <li>• Scroll disponible si el canvas excede el viewport</li>
-            <li>• Áreas: Click en "Añadir Área" para crear área en A1</li>
-            <li>• Seleccionar área: Click sobre un área para seleccionarla (se vuelve más opaca)</li>
-            <li>• Sub-áreas: Click en "Añadir Sub-área" después de seleccionar un área</li>
-            <li>• Sub-áreas aparecen en rojo dentro del área padre seleccionada</li>
-            <li>• Sub-áreas se añaden automáticamente en la primera celda disponible</li>
-            <li>• Se pueden añadir sub-áreas hasta llenar completamente el área</li>
-            <li>• Al mover un área, todas sus sub-áreas se mueven con ella</li>
-            <li>• **NUEVO**: Click directo en sub-áreas para seleccionarlas (se vuelven más opacas)</li>
-            <li>• **NUEVO**: Arrastrar sub-áreas seleccionadas dentro de su área padre</li>
-            <li>• **NUEVO**: Redimensionar sub-áreas desde sus esquinas (solo cuando están seleccionadas)</li>
-            <li>• **NUEVO**: Las sub-áreas NUNCA pueden salir de los límites de su área padre</li>
-            <li>• **NUEVO**: Botón "Eliminar Sub-área" para eliminar la sub-área seleccionada</li>
-            <li>• **NUEVO**: Botón "Eliminar Área" para eliminar área seleccionada con todas sus sub-áreas</li>
-            <li>• Cursor mano al hover sobre áreas y sub-áreas</li>
-            <li>• Cursor redimensionamiento en esquinas de áreas y sub-áreas seleccionadas</li>
-          </ul>
+        
+        {/* PANEL DE INFORMACIÓN */}
+        <div className="bg-blue-100 dark:bg-blue-900/30 border border-blue-400 dark:border-blue-700 px-6 py-4 rounded-2xl m-6">
+          <p className="font-bold text-blue-700 dark:text-blue-200 mb-2">
+            📋 Guía Rápida del Editor
+          </p>
+          <details className="text-sm text-blue-600 dark:text-blue-300 cursor-pointer">
+            <summary>Ver instrucciones de uso</summary>
+            <div className="mt-3 space-y-2 text-xs">
+              <p>• <strong>Canvas:</strong> A-Z x 1-25 (650 celdas iniciales)</p>
+              <p>• <strong>Tamaño celda:</strong> 40x40px</p>
+              <p>• <strong>Hover:</strong> Muestra coordenadas de celda</p>
+              <p>• <strong>Áreas:</strong> Click "Añadir Área" para crear en A1</p>
+              <p>• <strong>Seleccionar:</strong> Click sobre área/sub-área</p>
+              <p>• <strong>Sub-áreas:</strong> Se añaden dentro del área padre</p>
+              <p>• <strong>Edición:</strong> Doble click para editar nombres</p>
+              <p>• <strong>Redimensionar:</strong> Arrastrar desde esquinas</p>
+              <p>• <strong>Mover:</strong> Arrastrar áreas/sub-áreas</p>
+              <p>• <strong>Eliminación:</strong> Seleccionar y usar botones correspondientes</p>
+            </div>
+          </details>
         </div>
       </div>
       
