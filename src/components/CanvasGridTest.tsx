@@ -1,7 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { MapDesignsManager } from './MapDesignsManager';
 import { type MapDesign } from '../services/mapDesignsService';
 import { Zap, Layers, Plus, X } from 'lucide-react';
+import { getZonasWithSubzonas } from '../firebase';
 
 interface GridCell {
   col: string;
@@ -40,6 +41,46 @@ const CanvasGridTest: React.FC = () => {
   const canvasRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null); // Referencia al contenedor con overflow-auto
   const [gridSize] = useState({ cellWidth: 40, cellHeight: 40 });
+  
+  // Estado para zonas y subzonas desde Firebase
+  const [zonesHierarchy, setZonesHierarchy] = useState<{
+    id: string;
+    nombre: string;
+    tipo: "produccion" | "almacenamiento" | "expedicion";
+    descripcion?: string;
+    capacidadMaxima: number | null;
+    fechaCreacion: any;
+    activa: boolean;
+    subzonas: {
+      id: string;
+      nombre: string;
+      zonaId: string;
+      posiciones: string[];
+      capacidadMaxima: number | null;
+      color?: string;
+      activa: boolean;
+      fechaCreacion: any;
+    }[];
+  }[]>([]);
+
+  // Estado para zona y subzona seleccionadas
+  const [selectedZone, setSelectedZone] = useState<string>('');
+  const [selectedSubzone, setSelectedSubzone] = useState<string>('');
+
+  // Cargar zonas desde Firebase al iniciar el componente
+  useEffect(() => {
+    const loadZones = async () => {
+      try {
+        const hierarchy = await getZonasWithSubzonas();
+        console.log('📥 Zonas cargadas desde Firebase:', hierarchy);
+        setZonesHierarchy(hierarchy);
+      } catch (error) {
+        console.error('❌ Error cargando zonas:', error);
+      }
+    };
+    
+    loadZones();
+  }, []);
   
   // Límites máximos del canvas
   const MAX_BOUNDS = {
@@ -356,14 +397,15 @@ const CanvasGridTest: React.FC = () => {
   const addArea = () => {
     const newArea: Area = {
       id: `area-${Date.now()}`,
-      name: '',
+      name: selectedZone ? (zonesHierarchy.find(z => z.id === selectedZone)?.nombre || '') : '', // Nombre de la zona seleccionada
       col: 'A',
       row: 1,
       x: 0,
       y: 0,
       width: gridSize.cellWidth,
       height: gridSize.cellHeight,
-      subAreas: []
+      subAreas: [],
+      zoneCode: selectedZone // Asignar la zona seleccionada
     };
     setAreas(prev => [...prev, newArea]);
   };
@@ -404,7 +446,7 @@ const CanvasGridTest: React.FC = () => {
 
   // Añadir sub-área dentro del área seleccionada
   const addSubArea = () => {
-    if (!selectedArea) return;
+    if (!selectedArea || !selectedSubzone) return;
     
     const parentArea = areas.find(a => a.id === selectedArea);
     if (!parentArea) return;
@@ -428,7 +470,7 @@ const CanvasGridTest: React.FC = () => {
     const newSubArea: SubArea = {
       id: `subarea-${Date.now()}`,
       parentId: selectedArea,
-      name: '',
+      name: selectedSubzone ? (zonesHierarchy.find(z => z.id === selectedZone)?.subzonas.find((s: any) => s.id === selectedSubzone)?.nombre || '') : '', // Nombre de la subzona seleccionada
       col: columns[gridCol] || parentArea.col,
       row: gridRow,
       x: absoluteX,
@@ -647,6 +689,27 @@ const CanvasGridTest: React.FC = () => {
     // Seleccionar área para poder añadir sub-áreas
     setSelectedArea(areaId);
 
+    // Actualizar desplegables de zona y subzona según el área seleccionada
+    if (area.zoneCode) {
+      setSelectedZone(area.zoneCode);
+      
+      // Buscar la primera subzona asignada a esta área (si existe)
+      const areaSubzone = area.subAreas.length > 0 ? area.subAreas[0] : null;
+      if (areaSubzone) {
+        // Buscar el subzoneId correspondiente en la jerarquía de zonas
+        const zone = zonesHierarchy.find(z => z.id === area.zoneCode);
+        if (zone) {
+          const matchingSubzone = zone.subzonas.find((s: any) => s.nombre === areaSubzone.name);
+          if (matchingSubzone) {
+            setSelectedSubzone(matchingSubzone.id);
+          }
+        }
+      } else {
+        // Si no hay subzonas, limpiar la selección
+        setSelectedSubzone('');
+      }
+    }
+
     setIsDragging(true);
     setDraggedArea(areaId);
     setDragStart({ 
@@ -690,6 +753,20 @@ const CanvasGridTest: React.FC = () => {
     // Seleccionar sub-área
     setSelectedSubArea({ subAreaId, parentId });
     setSelectedArea(parentId); // También seleccionar el área padre
+
+    // Actualizar desplegables de zona y subzona según la sub-área seleccionada
+    if (parentArea.zoneCode) {
+      setSelectedZone(parentArea.zoneCode);
+      
+      // Buscar el subzoneId correspondiente en la jerarquía de zonas
+      const zone = zonesHierarchy.find(z => z.id === parentArea.zoneCode);
+      if (zone) {
+        const matchingSubzone = zone.subzonas.find((s: any) => s.nombre === subArea.name);
+        if (matchingSubzone) {
+          setSelectedSubzone(matchingSubzone.id);
+        }
+      }
+    }
 
     // Iniciar dragging de sub-área
     setIsDraggingSubArea(true);
@@ -1348,19 +1425,64 @@ const CanvasGridTest: React.FC = () => {
             </div>
           </div>
           
-          {/* BOTONES DE ACCIÓN */}
-          <div className="flex flex-wrap gap-3 mt-6">
+          {/* SELECTORES DE ZONA Y SUBZONA */}
+          <div className="flex flex-wrap gap-4 mt-6">
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Zona</label>
+              <select 
+                value={selectedZone}
+                onChange={(e) => {
+                  const zoneId = e.target.value;
+                  setSelectedZone(zoneId);
+                  setSelectedSubzone(''); // Resetear subzona al cambiar zona
+                }}
+                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500/50"
+              >
+                <option value="">Selecciona una zona...</option>
+                {zonesHierarchy.map(zone => (
+                  <option key={zone.id} value={zone.id}>
+                    {zone.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            {selectedZone && (
+              <div className="flex-1 min-w-[200px]">
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Subzona</label>
+                <select 
+                  value={selectedSubzone}
+                  onChange={(e) => setSelectedSubzone(e.target.value)}
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500/50"
+                >
+                  <option value="">Selecciona una subzona...</option>
+                  {zonesHierarchy
+                    .find(z => z.id === selectedZone)
+                    ?.subzonas.map((subzone: any) => (
+                      <option key={subzone.id} value={subzone.id}>
+                        {subzone.nombre}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
+            
             <button
               onClick={addArea}
-              className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-2xl text-sm font-black flex items-center gap-2 shadow-lg active:scale-95 transition-all"
+              disabled={!selectedZone}
+              className={`bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-2xl text-sm font-black flex items-center gap-2 shadow-lg active:scale-95 transition-all ${
+                selectedZone 
+                  ? 'bg-blue-600 hover:bg-blue-500' 
+                  : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
+              }`}
             >
               <Plus size={18} /> Añadir Área
             </button>
             <button
               onClick={addSubArea}
-              disabled={!selectedArea}
+              disabled={!selectedArea || !selectedSubzone}
               className={`px-6 py-3 rounded-2xl text-sm font-black flex items-center gap-2 shadow-lg active:scale-95 transition-all ${
-                selectedArea 
+                selectedArea && selectedSubzone
                   ? 'bg-orange-500 hover:bg-orange-600 text-white' 
                   : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
               }`}
@@ -1462,8 +1584,8 @@ const CanvasGridTest: React.FC = () => {
                       />
                     </div>
                   ) : (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <span className="text-white dark:text-white font-medium text-sm drop-shadow-md">
+                    <div className="absolute top-0 left-0 right-0 flex justify-center pointer-events-none z-10 pt-1">
+                      <span className="text-black dark:text-black font-medium text-sm drop-shadow-md bg-transparent px-0.5 py-0">
                         {area.name || `${area.col}${area.row}`}
                       </span>
                     </div>

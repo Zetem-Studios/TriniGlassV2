@@ -1,7 +1,7 @@
 // Warehouse.tsx - Implementación dinámica sin hardcode
 import { useState, useEffect } from "react";
 import { 
-  Search, ChevronDown, X, Package,
+  Search, ChevronDown, X, Package, 
   Layers, Zap, Box, Check, Maximize2
 } from "lucide-react";
 import { db } from "../firebase";

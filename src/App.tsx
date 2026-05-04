@@ -10,6 +10,8 @@ import CargaCamion from './components/CargaCamion';
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import MobileScanner from "./components/Scanner";
 import CanvasGridTest from "./components/CanvasGridTest";
+import { ZoneManager } from './components/ZoneManager';
+import React, { useState } from 'react';
 
 const Alertas = () => (
   <div>
@@ -19,6 +21,12 @@ const Alertas = () => (
 );
 
 function App() {
+  const [showZoneManager, setShowZoneManager] = useState(false);
+
+  if (showZoneManager) {
+    return <ZoneManager onClose={() => setShowZoneManager(false)} />;
+  }
+
   return (
     <BrowserRouter>
       <Routes>
@@ -49,6 +57,18 @@ function App() {
                 <div className="bg-white dark:bg-slate-800 rounded-lg p-6 shadow-lg">
                   <h2 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">Herramientas de Desarrollo</h2>
                   <div className="space-y-4">
+                    <div className="flex items-center justify-between p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                      <div>
+                        <h3 className="font-medium text-purple-900 dark:text-purple-100">Gestión de Zonas y Subzonas</h3>
+                        <p className="text-sm text-purple-700 dark:text-purple-300">Crea y administra las zonas y subzonas del almacén</p>
+                      </div>
+                      <button 
+                        onClick={() => setShowZoneManager(true)}
+                        className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2"
+                      >
+                        Abrir Gestor
+                      </button>
+                    </div>
                     <div className="flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                       <div>
                         <h3 className="font-medium text-blue-900 dark:text-blue-100">Editor de Mapas</h3>
