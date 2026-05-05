@@ -8,6 +8,8 @@ import {
   runTransaction,
   serverTimestamp,
   updateDoc,
+  writeBatch,
+  getDoc,
 } from "firebase/firestore";
 import { db } from "../src/firebase";
 
@@ -201,6 +203,27 @@ export const removePaletFromCamion = async (
   });
 };
 
+export const vaciarCamion = async (matricula: string): Promise<number> => {
+  const ref = doc(db, CARGAS, matricula);
+  let removed = 0;
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) return;
+    const current: PaletAsignado[] = (snap.data().palets as PaletAsignado[]) ?? [];
+    removed = current.length;
+    tx.set(
+      ref,
+      {
+        matricula,
+        palets: [],
+        actualizadoEn: serverTimestamp(),
+      },
+      { merge: true }
+    );
+  });
+  return removed;
+};
+
 export interface ValidacionResultado {
   excedePeso: boolean;
   excedeVolumen: boolean;
@@ -236,4 +259,49 @@ export const verificarPalet = async (docId: string): Promise<void> => {
     estado_pedido: "Verificado",
     fechaUltimaRevision: serverTimestamp(),
   });
+};
+
+const CAMIONES = "camiones";
+
+export interface FinalizarRutaResultado {
+  paletsEliminados: number;
+}
+
+export const finalizarRuta = async (
+  matricula: string
+): Promise<FinalizarRutaResultado> => {
+  const cargaRef = doc(db, CARGAS, matricula);
+  const cargaSnap = await getDoc(cargaRef);
+  const palets: PaletAsignado[] = cargaSnap.exists()
+    ? ((cargaSnap.data().palets as PaletAsignado[]) ?? [])
+    : [];
+
+  const batch = writeBatch(db);
+
+  palets.forEach((p) => {
+    batch.delete(doc(db, PRODUCTOS, p.docId));
+  });
+
+  batch.set(
+    cargaRef,
+    {
+      matricula,
+      palets: [],
+      actualizadoEn: serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  batch.set(
+    doc(db, CAMIONES, matricula),
+    {
+      estado: "disponible",
+      actualizadoEn: serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  await batch.commit();
+
+  return { paletsEliminados: palets.length };
 };

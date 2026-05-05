@@ -8,12 +8,17 @@ import {
   Box,
   User,
   AlertCircle,
-  PackageOpen,
   PackagePlus,
+  Flag,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Camion, EstadoCamion } from "../../services/CamionService";
 import { ESTADOS_CAMION, getCamiones } from "../../services/CamionService";
+import {
+  subscribeToCargas,
+  finalizarRuta,
+  type CargaCamion as CargaCamionType,
+} from "../../services/CargaCamionService";
 import CamionPanel from "./CamionPanel";
 
 const ESTADO_STYLES: Record<EstadoCamion, string> = {
@@ -23,8 +28,6 @@ const ESTADO_STYLES: Record<EstadoCamion, string> = {
     "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border-blue-200 dark:border-blue-900/50",
   mantenimiento:
     "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200 dark:border-amber-900/50",
-  fuera_de_servicio:
-    "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 border-red-200 dark:border-red-900/50",
 };
 
 const labelEstado = (estado: EstadoCamion) =>
@@ -42,6 +45,16 @@ export default function Camiones() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelMode, setPanelMode] = useState<"create" | "edit">("create");
   const [selected, setSelected] = useState<Camion | null>(null);
+  const [cargas, setCargas] = useState<Record<string, CargaCamionType>>({});
+  const [finalizandoMatricula, setFinalizandoMatricula] = useState<string | null>(
+    null
+  );
+  const [confirmFinalizar, setConfirmFinalizar] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsub = subscribeToCargas(setCargas);
+    return () => unsub();
+  }, []);
 
   const loadCamiones = async () => {
     try {
@@ -81,10 +94,11 @@ export default function Camiones() {
       disponible: 0,
       en_ruta: 0,
       mantenimiento: 0,
-      fuera_de_servicio: 0,
     };
     camiones.forEach((c) => {
-      base[c.estado] = (base[c.estado] ?? 0) + 1;
+      if (base[c.estado] !== undefined) {
+        base[c.estado] += 1;
+      }
     });
     return base;
   }, [camiones]);
@@ -119,6 +133,30 @@ export default function Camiones() {
     setPanelOpen(false);
   };
 
+  const handleFinalizarRuta = async (matricula: string) => {
+    if (confirmFinalizar !== matricula) {
+      setConfirmFinalizar(matricula);
+      return;
+    }
+    setFinalizandoMatricula(matricula);
+    setLoadError("");
+    try {
+      await finalizarRuta(matricula);
+      setCamiones((prev) =>
+        prev.map((c) =>
+          c.matricula === matricula ? { ...c, estado: "disponible" } : c
+        )
+      );
+      setConfirmFinalizar(null);
+    } catch (e: unknown) {
+      setLoadError(
+        e instanceof Error ? e.message : "No se pudo finalizar la ruta"
+      );
+    } finally {
+      setFinalizandoMatricula(null);
+    }
+  };
+
   return (
     <div className="min-h-full text-slate-900 dark:text-white font-sans">
       <div className="flex flex-col gap-6">
@@ -144,7 +182,7 @@ export default function Camiones() {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           {ESTADOS_CAMION.map((e) => (
             <button
               key={e.value}
@@ -276,18 +314,63 @@ export default function Camiones() {
                   </div>
                 </div>
 
-                {c.estado === "disponible" && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigate(`/camiones/cargar/${encodeURIComponent(c.matricula)}`);
-                    }}
-                    className="mt-4 w-full bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all"
-                  >
-                    <PackagePlus size={14} /> Cargar
-                  </button>
-                )}
+                {(() => {
+                  const paletsCargados = cargas[c.matricula]?.palets.length ?? 0;
+                  const finalizando = finalizandoMatricula === c.matricula;
+                  const enConfirmacion = confirmFinalizar === c.matricula;
+
+                  if (c.estado === "en_ruta") {
+                    return (
+                      <button
+                        type="button"
+                        disabled={finalizando}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleFinalizarRuta(c.matricula);
+                        }}
+                        onBlur={() => {
+                          if (enConfirmacion && !finalizando)
+                            setConfirmFinalizar(null);
+                        }}
+                        className={`mt-4 w-full px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all disabled:opacity-60 ${
+                          enConfirmacion
+                            ? "bg-red-600 hover:bg-red-500 text-white"
+                            : "bg-amber-500 hover:bg-amber-400 text-white"
+                        }`}
+                      >
+                        {finalizando ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <Flag size={14} />
+                        )}
+                        {finalizando
+                          ? "Finalizando..."
+                          : enConfirmacion
+                            ? `Confirmar (${paletsCargados} palet${paletsCargados === 1 ? "" : "s"})`
+                            : "Finalizar ruta"}
+                      </button>
+                    );
+                  }
+
+                  if (c.estado === "disponible") {
+                    return (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(
+                            `/camiones/cargar/${encodeURIComponent(c.matricula)}`
+                          );
+                        }}
+                        className="mt-4 w-full bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all"
+                      >
+                        <PackagePlus size={14} /> Cargar
+                      </button>
+                    );
+                  }
+
+                  return null;
+                })()}
               </div>
             ))}
           </div>

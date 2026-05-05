@@ -12,6 +12,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   GripVertical,
+  Trash2,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -19,6 +20,7 @@ import {
   subscribeToCargas,
   assignPaletToCamion,
   removePaletFromCamion,
+  vaciarCamion,
   validarCarga,
   type PaletPendiente,
   type CargaCamion as CargaCamionType,
@@ -188,6 +190,8 @@ export default function CargaCamion() {
   const [loadingPalets, setLoadingPalets] = useState(true);
   const [loadingCargas, setLoadingCargas] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [vaciando, setVaciando] = useState(false);
+  const [confirmVaciar, setConfirmVaciar] = useState(false);
 
   const infoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -240,6 +244,10 @@ export default function CargaCamion() {
   );
 
   const cargaActual = cargas[selectedMatricula];
+
+  useEffect(() => {
+    setConfirmVaciar(false);
+  }, [selectedMatricula]);
 
   const assignedDocIds = useMemo(() => {
     const set = new Set<string>();
@@ -347,6 +355,29 @@ export default function CargaCamion() {
       showInfo(`Palet ${codigo} retirado del camión`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "No se pudo retirar el palet");
+    }
+  };
+
+  const handleVaciar = async () => {
+    if (!selectedCamion) return;
+    if (!confirmVaciar) {
+      setConfirmVaciar(true);
+      return;
+    }
+    setError("");
+    setVaciando(true);
+    try {
+      const removed = await vaciarCamion(selectedCamion.matricula);
+      showInfo(
+        removed === 0
+          ? "El camión ya estaba vacío"
+          : `Camión vaciado (${removed} palet${removed === 1 ? "" : "s"} retirado${removed === 1 ? "" : "s"})`
+      );
+      setConfirmVaciar(false);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "No se pudo vaciar el camión");
+    } finally {
+      setVaciando(false);
     }
   };
 
@@ -597,15 +628,44 @@ export default function CargaCamion() {
 
               {/* Cargo bed */}
               <div className="ml-24 mr-2 h-full">
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-3 gap-3">
                   <p className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-500">
                     Plano del remolque
                   </p>
-                  {selectedCamion && (
-                    <p className="text-[11px] font-black text-slate-500">
-                      {cargaPalets.length} palet{cargaPalets.length === 1 ? "" : "s"}
-                    </p>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {selectedCamion && (
+                      <p className="text-[11px] font-black text-slate-500">
+                        {cargaPalets.length} palet{cargaPalets.length === 1 ? "" : "s"}
+                      </p>
+                    )}
+                    {selectedCamion && cargaPalets.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleVaciar}
+                        onBlur={() => {
+                          if (confirmVaciar && !vaciando) setConfirmVaciar(false);
+                        }}
+                        disabled={vaciando}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95 disabled:opacity-60 ${
+                          confirmVaciar
+                            ? "bg-red-600 hover:bg-red-500 text-white border-red-700"
+                            : "bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/50 hover:bg-red-100 dark:hover:bg-red-950/50"
+                        }`}
+                        title="Vaciar camión"
+                      >
+                        {vaciando ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          <Trash2 size={12} />
+                        )}
+                        {vaciando
+                          ? "Vaciando..."
+                          : confirmVaciar
+                            ? `Confirmar (${cargaPalets.length})`
+                            : "Vaciar camión"}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {loadingCargas ? (
