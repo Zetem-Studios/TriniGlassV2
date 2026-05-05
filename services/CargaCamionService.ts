@@ -10,6 +10,7 @@ import {
   updateDoc,
   writeBatch,
   getDoc,
+  where,
 } from "firebase/firestore";
 import { db } from "../src/firebase";
 
@@ -46,16 +47,20 @@ export interface CargaCamion {
 const CARGAS = "cargas";
 const PRODUCTOS = "productos";
 
-const PALETS_QUERY_LIMIT = 300;
+const PALETS_QUERY_LIMIT = 150;
 
-const ESTADOS_VISIBLES = new Set([
+const ESTADOS_VISIBLES_LIST = [
   "Pendiente",
   "Para verificar",
   "Codificada",
   "Producción",
   "Producida",
   "Listo para carga",
-]);
+] as const;
+
+const ESTADOS_VISIBLES = new Set<string>(ESTADOS_VISIBLES_LIST);
+
+export const ESTADO_ENTREGADO = "Entregado";
 
 export const computeVolumeM3 = (altura?: number, longitud?: number): number => {
   const h = Number(altura) || 0;
@@ -65,45 +70,76 @@ export const computeVolumeM3 = (altura?: number, longitud?: number): number => {
   return Math.max(0.05, Number(m3.toFixed(3)));
 };
 
+const mapDocToPalet = (
+  id: string,
+  data: Record<string, unknown>
+): PaletPendiente => {
+  const altura = Number((data.altura as number) ?? 0);
+  const longitud = Number((data.longitud as number) ?? 0);
+  const pesoKg =
+    Number((data.peso_total_kg as number) ?? 0) ||
+    Number((data.peso_pieza_kg as number) ?? 0);
+  return {
+    docId: id,
+    codigoBarra: String(data.codigo_barra ?? id),
+    cliente: String(
+      data.apellido_cliente ?? data.nombre_abreviado ?? "Sin cliente"
+    ),
+    descripcion: String(
+      data.descripcion_producido_longitud ?? data.estado_linea_pdd ?? ""
+    ),
+    altura,
+    longitud,
+    pesoKg: Number.isFinite(pesoKg) ? pesoKg : 0,
+    volumenM3: computeVolumeM3(altura, longitud),
+    estado: String(data.estado_pedido ?? "Pendiente"),
+    numeroLineaPedido: data.numero_linea_pedido
+      ? String(data.numero_linea_pedido)
+      : undefined,
+    subzona: data.subzona ? String(data.subzona) : undefined,
+  };
+};
+
 export const subscribeToPalets = (
   cb: (palets: PaletPendiente[]) => void
 ): (() => void) => {
-  const q = query(
+  const filteredQuery = query(
     collection(db, PRODUCTOS),
-    orderBy("fecha_linea_pedido", "desc"),
+    where("estado_pedido", "in", [...ESTADOS_VISIBLES_LIST]),
     limit(PALETS_QUERY_LIMIT)
   );
-  return onSnapshot(q, (snap) => {
-    const list: PaletPendiente[] = snap.docs.map((d) => {
-      const data = d.data() as Record<string, unknown>;
-      const altura = Number((data.altura as number) ?? 0);
-      const longitud = Number((data.longitud as number) ?? 0);
-      const pesoKg =
-        Number((data.peso_total_kg as number) ?? 0) ||
-        Number((data.peso_pieza_kg as number) ?? 0);
-      return {
-        docId: d.id,
-        codigoBarra: String(data.codigo_barra ?? d.id),
-        cliente: String(
-          data.apellido_cliente ?? data.nombre_abreviado ?? "Sin cliente"
-        ),
-        descripcion: String(
-          data.descripcion_producido_longitud ?? data.estado_linea_pdd ?? ""
-        ),
-        altura,
-        longitud,
-        pesoKg: Number.isFinite(pesoKg) ? pesoKg : 0,
-        volumenM3: computeVolumeM3(altura, longitud),
-        estado: String(data.estado_pedido ?? "Pendiente"),
-        numeroLineaPedido: data.numero_linea_pedido
-          ? String(data.numero_linea_pedido)
-          : undefined,
-        subzona: data.subzona ? String(data.subzona) : undefined,
-      };
-    });
-    const visibles = list.filter((p) => ESTADOS_VISIBLES.has(p.estado));
-    cb(visibles.length ? visibles : list);
-  });
+
+  return onSnapshot(
+    filteredQuery,
+    (snap) => {
+      const list = snap.docs.map((d) =>
+        mapDocToPalet(d.id, d.data() as Record<string, unknown>)
+      );
+      cb(list);
+    },
+    (err) => {
+      console.warn(
+        "[subscribeToPalets] consulta filtrada falló, usando fallback:",
+        err
+      );
+      const fallbackQuery = query(
+        collection(db, PRODUCTOS),
+        orderBy("fecha_linea_pedido", "desc"),
+        limit(PALETS_QUERY_LIMIT)
+      );
+      onSnapshot(fallbackQuery, (snap) => {
+        const list = snap.docs.map((d) =>
+          mapDocToPalet(d.id, d.data() as Record<string, unknown>)
+        );
+        const visibles = list.filter((p) => ESTADOS_VISIBLES.has(p.estado));
+        cb(
+          visibles.length
+            ? visibles
+            : list.filter((p) => p.estado !== ESTADO_ENTREGADO)
+        );
+      });
+    }
+  );
 };
 
 export const subscribeToCargas = (
@@ -279,7 +315,11 @@ export const finalizarRuta = async (
   const batch = writeBatch(db);
 
   palets.forEach((p) => {
-    batch.delete(doc(db, PRODUCTOS, p.docId));
+    batch.update(doc(db, PRODUCTOS, p.docId), {
+      estado_pedido: ESTADO_ENTREGADO,
+      entregadoEn: serverTimestamp(),
+      entregadoPorMatricula: matricula,
+    });
   });
 
   batch.set(
