@@ -131,22 +131,22 @@ const getZones = async (): Promise<ZoneConfig[]> => {
   }
 };
 
-// Función para obtener reglas de asignación de Firebase
-const getAssignmentRules = async (): Promise<any[]> => {
-  try {
-    const rulesCollection = collection(db, "assignment_rules");
-    const snapshot = await getDocs(rulesCollection);
-    return snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-  } catch (error) {
-    console.error("Error cargando reglas de asignación:", error);
-    return [];
-  }
-};
+// Función para obtener reglas de asignación de Firebase (ya no se usa)
+// const getAssignmentRules = async (): Promise<any[]> => {
+//   try {
+//     const rulesCollection = collection(db, "assignment_rules");
+//     const snapshot = await getDocs(rulesCollection);
+//     return snapshot.docs.map(doc => ({
+//       id: doc.id,
+//       ...doc.data()
+//     }));
+//   } catch (error) {
+//     console.error("Error cargando reglas de asignación:", error);
+//     return [];
+//   }
+// };
 
-// Función para mapear productos a bloques usando reglas dinámicas
+// Función para mapear productos a bloques (posicionamiento ahora viene de BD)
 const mapProductoToBlock = async (producto: Producto, rules: any[], index: number): Promise<Block> => {
   const fechaPedido = parseFechaLineaPedido(producto.fecha_linea_pedido);
   const hoy = new Date();
@@ -165,45 +165,9 @@ const mapProductoToBlock = async (producto: Producto, rules: any[], index: numbe
   if (daysInStorage > 30) priority = "Alta";
   else if (daysInStorage > 20) priority = "Media";
 
-  // Aplicar reglas de asignación dinámicas
-  let area = "";
-  let zoneId = "";
-
-  // Primero intentar usar subzona si existe
-  if (typeof producto.subzona === "string" && producto.subzona.trim() !== "") {
-    area = producto.subzona.trim();
-    // Buscar zona correspondiente
-    const zones = await getZones();
-    const zonaEncontrada = zones.find(zone => 
-      Object.keys(zone.subzones).includes(area)
-    );
-    if (zonaEncontrada) {
-      zoneId = zonaEncontrada.id;
-    }
-  }
-
-  // Si no hay subzona válida, aplicar reglas de asignación
-  if (!area && rules.length > 0) {
-    const nombre = producto.nombre_abreviado?.toUpperCase().trim() || "";
-    
-    // Buscar regla que coincida
-    for (const rule of rules) {
-      if (rule.type === 'client' && nombre.includes(rule.pattern)) {
-        area = rule.subzone;
-        zoneId = rule.zoneId;
-        break;
-      } else if (rule.type === 'default') {
-        area = rule.subzone;
-        zoneId = rule.zoneId;
-      }
-    }
-  }
-
-  // Fallback a valores por defecto si no hay reglas
-  if (!area) {
-    area = "H";
-    zoneId = "expediciones";
-  }
+  // El posicionamiento ahora viene directamente de la BD
+  const zoneId = (producto as any).zoneId || "expediciones";
+  const area = (producto as any).area || "H";
 
   console.log(`✅ ${producto.nombre_abreviado} (${producto.codigo_barra}) → Zona ${zoneId} / Subzona ${area}`);
 
@@ -273,7 +237,7 @@ export default function Warehouse2() {
   const [showRuleEditor, setShowRuleEditor] = useState(false);
   const [selectedMapDesign, setSelectedMapDesign] = useState("default");
   const [isMapDesignDropdownOpen, setIsMapDesignDropdownOpen] = useState(false);
-  const [assignmentRules, setAssignmentRules] = useState<any[]>([]);
+  // const [assignmentRules, setAssignmentRules] = useState<any[]>([]);
 
   const { designs, loading: designsLoading, error: designsError } = useMapDesigns();
 
@@ -434,13 +398,9 @@ export default function Warehouse2() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [zonesData, rulesData] = await Promise.all([
-          getZones(),
-          getAssignmentRules()
-        ]);
+        const zonesData = await getZones();
         
         setZones(zonesData);
-        setAssignmentRules(rulesData);
         
         // Seleccionar primera zona por defecto
         if (zonesData.length > 0) {
@@ -489,7 +449,7 @@ export default function Warehouse2() {
         // Procesar productos de forma secuencial para evitar problemas con Promise
         const processedBlocks: Block[] = [];
         for (let i = 0; i < productos.length; i++) {
-          const block = await mapProductoToBlock(productos[i], assignmentRules, i);
+          const block = await mapProductoToBlock(productos[i], [], i);
           processedBlocks.push(block);
         }
         setBlocks(processedBlocks);
@@ -505,10 +465,10 @@ export default function Warehouse2() {
       }
     };
 
-    if (zones.length > 0 && assignmentRules.length >= 0) {
+    if (zones.length > 0) {
       fetchProductos();
     }
-  }, [zones, assignmentRules]);
+  }, [zones]);
 
   useEffect(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -552,47 +512,9 @@ export default function Warehouse2() {
     }
   };
 
-  const renderBlock = (block: Block) => {
-    const isSelected = selectedBlock?.id === block.id;
-    let colors = "bg-slate-100 dark:bg-slate-800/40 border-slate-300 dark:border-slate-700 text-slate-400";
-    if (block.occupied) {
-      if (block.daysInStorage > 30) colors = "bg-red-100 dark:bg-red-500/20 border-red-400 text-red-600";
-      else if (block.daysInStorage > 20) colors = "bg-orange-100 dark:bg-orange-500/20 border-orange-400 text-orange-600";
-      else if (block.daysInStorage > 10) colors = "bg-yellow-100 dark:bg-yellow-500/20 border-yellow-400 text-yellow-700 dark:text-yellow-500";
-      else colors = "bg-blue-100 dark:bg-blue-500/20 border-blue-400 text-blue-600";
-    }
-
-    return (
-      <button
-        key={block.id}
-        onClick={() => setSelectedBlock(block)}
-        className={`rounded-xl border-2 transition-all flex flex-col items-center justify-center gap-1 shadow-sm shrink-0 ${colors} ${isSelected ? 'ring-4 ring-cyan-500 scale-110 z-10' : 'hover:scale-105'} min-w-[105px] min-h-[80px]`}
-      >
-        {block.occupied ? (
-          <>
-            <span className="text-[11px] font-black tracking-tighter uppercase">{block.id}</span>
-            <Box size={14} strokeWidth={2.5} />
-          </>
-        ) : (
-          <span className="text-[10px] font-bold tracking-tight uppercase opacity-50">Vacío</span>
-        )}
-      </button>
-    );
-  };
-
-  const renderArea = (areaName: string, zone: ZoneConfig) => {
-    const areaBlocks = blocks.filter(b => b.area === areaName && (selectedZone === zone.id));
-    if (areaBlocks.length === 0) return null;
-    
-    return (
-      <div key={areaName} className="flex flex-col gap-4 min-w-max">
-        <h3 className="font-black text-slate-400 dark:text-slate-500 uppercase text-xs tracking-[0.4em] text-center">{areaName}</h3>
-        <div className={`grid grid-cols-3 gap-2.5 p-6 bg-white dark:bg-slate-900/40 rounded-[3rem] border border-slate-200 dark:border-slate-800 shadow-2xl shrink-0`}>
-          {areaBlocks.map(b => renderBlock(b))}
-        </div>
-      </div>
-    );
-  };
+  // Funciones de renderizado de tarjetas eliminadas - se reescribirán más adelante
+// const renderBlock = (block: Block) => { ... };
+// const renderArea = (areaName: string, zone: ZoneConfig) => { ... };
 
   return (
     <div className="min-h-screen relative flex flex-col bg-slate-50 dark:bg-[#0f172a] text-slate-900 dark:text-white transition-colors duration-300 font-sans">
@@ -967,150 +889,12 @@ export default function Warehouse2() {
           </div>
 
           <div className="bg-white/40 dark:bg-slate-950/40 rounded-[3rem] border border-slate-200 dark:border-slate-800 p-12 overflow-x-auto shadow-inner relative">
-            {zones.find(z => z.id === selectedZone) && (
-              <Zone
-                zoneId={selectedZone}
-                zoneName={zones.find(z => z.id === selectedZone)?.name || ''}
-                subzones={zones.find(z => z.id === selectedZone)?.subzones || {}}
-                blocks={blocks.filter(b => b.zoneId === selectedZone)}
-                selectedBlock={selectedBlock}
-                onBlockClick={setSelectedBlock}
-                onEmptySlotClick={handleEmptySlotClick}
-                preview={false}
-              />
-            )}
+            {/* Contenido de productos eliminado */}
           </div>
         </div>
       </div>
 
-      {/* SIDEBAR DE DETALLES */}
-      {(selectedBlock || showAddModal) && (
-        <div className="fixed top-0 right-0 h-full w-[460px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 z-50 shadow-[-20px_0_60px_rgba(0,0,0,0.2)] animate-in slide-in-from-right duration-500 flex flex-col overflow-hidden">
-          <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900 shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-blue-500 rounded-2xl text-white shadow-lg"><Package size={24} /></div>
-              <h2 className="text-xl font-black uppercase italic tracking-tighter text-slate-800 dark:text-white leading-none">
-                {showAddModal ? 'Nuevo Pallet' : 'Detalle del Palet'}
-              </h2>
-            </div>
-            <button onClick={() => { setSelectedBlock(null); setShowAddModal(false); }} className="p-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 hover:text-red-500"><X size={32} strokeWidth={3}/></button>
-          </div>
-          <div className="flex-1 overflow-y-auto p-8 space-y-6">
-            {showAddModal ? (
-              <form className="space-y-5" onSubmit={e => { e.preventDefault(); handleAddPalletSave(); }}>
-                <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Código de barra</label>
-                  <input name="codigo_barra" value={addPalletForm.codigo_barra} onChange={handleAddPalletFormChange} placeholder="Código de barra" className="input w-full" required />
-                </div>
-                <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Cliente</label>
-                  <input name="apellido_cliente" value={addPalletForm.apellido_cliente} onChange={handleAddPalletFormChange} placeholder="Cliente" className="input w-full" required />
-                </div>
-                <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Nombre abreviado</label>
-                  <input name="nombre_abreviado" value={addPalletForm.nombre_abreviado} onChange={handleAddPalletFormChange} placeholder="Nombre abreviado" className="input w-full" required />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Altura (mm)</label>
-                    <input name="altura" value={addPalletForm.altura} onChange={handleAddPalletFormChange} placeholder="Altura (mm)" className="input w-full" type="number" required />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Longitud (mm)</label>
-                    <input name="longitud" value={addPalletForm.longitud} onChange={handleAddPalletFormChange} placeholder="Longitud (mm)" className="input w-full" type="number" required />
-                  </div>
-                </div>
-                {addPalletError && <div className="text-red-500 text-xs mt-2">{addPalletError}</div>}
-                <div className="flex gap-3 pt-4">
-                  <button type="button" className="w-1/2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 font-black py-4 rounded-2xl flex items-center justify-center gap-2 text-xs uppercase transition-all shadow-sm" onClick={() => { setShowAddModal(false); setSelectedBlock(null); }}>Cancelar</button>
-                  <button type="submit" className="w-1/2 bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 text-xs uppercase transition-all shadow-sm" disabled={addPalletLoading}>{addPalletLoading ? 'Guardando...' : 'Guardar'}</button>
-                </div>
-              </form>
-            ) : selectedBlock ? (
-              <>
-                <div className="bg-gradient-to-br from-blue-100 via-blue-50 to-white dark:from-blue-900 dark:via-slate-900 dark:to-slate-800 rounded-[2.5rem] p-10 border border-slate-100 dark:border-slate-700 text-center relative overflow-hidden shadow-lg">
-                  <div className="text-[11px] uppercase text-slate-400 dark:text-slate-500 font-black mb-2 tracking-[0.4em]">GLASS ID</div>
-                  <div className="text-5xl font-black tracking-tighter text-blue-600 dark:text-blue-400 leading-none break-all uppercase drop-shadow-lg">{selectedBlock.codigo_barra || 'Sin código'}</div>
-                  <div className="flex justify-center gap-2 mt-6">
-                    {selectedBlock.occupied && (
-                      <div className="inline-flex px-4 py-1.5 rounded-full bg-blue-500/10 text-blue-500 text-[11px] font-black uppercase tracking-widest border border-blue-500/20">Prioridad {selectedBlock.priority || 'N/A'}</div>
-                    )}
-                    {!selectedBlock.occupied && (
-                      <div className="inline-flex px-4 py-1.5 rounded-full bg-slate-500/10 text-slate-500 text-[11px] font-black uppercase tracking-widest border border-slate-500/20">Disponible</div>
-                    )}
-                  </div>
-                </div>
-                <div className="bg-white dark:bg-slate-800/60 rounded-2xl p-6 border border-slate-100 dark:border-slate-700 mt-2 grid grid-cols-1 gap-3 shadow-inner">
-                  <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Código de barras</span><span className="text-sm font-mono">{selectedBlock.codigo_barra || 'Sin código'}</span></div>
-                  <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Cliente</span><span className="text-sm font-mono">{selectedBlock.client || 'Desconocido'}</span></div>
-                  <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Dimensiones</span><span className="text-sm font-mono">{selectedBlock.dimensions || 'N/A'}</span></div>
-                  <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Peso total</span><span className="text-sm font-mono">{selectedBlock.weight || 'N/A'}</span></div>
-                  <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Estado pedido</span><span className="text-sm font-mono">{selectedBlock.estadoPedido || 'N/A'}</span></div>
-                  <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Referencia pedido</span><span className="text-sm font-mono">{selectedBlock.referencias || 'N/A'}</span></div>
-                  <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Fecha entrega</span><span className="text-sm font-mono">{selectedBlock.lastUpdate || 'N/A'}</span></div>
-                  <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Zona</span><span className="text-sm font-mono">{selectedBlock.zoneId || 'N/A'}</span></div>
-                  <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Subzona</span><span className="text-sm font-mono">{selectedBlock.area || 'N/A'}</span></div>
-                </div>
-                <div className="flex flex-row gap-3 mt-6 mb-2 justify-center">
-                  <button
-                    className={`bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow active:scale-95 transition-all ${moveMode ? 'ring-2 ring-green-400' : ''}`}
-                    onClick={() => setMoveMode(m => !m)}
-                    disabled={moveLoading}
-                  >
-                    <Maximize2 size={16}/> {moveMode ? 'Cancelar' : 'Mover'}
-                  </button>
-                  <button className="bg-yellow-400 hover:bg-yellow-500 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow active:scale-95 transition-all"><Package size={16}/> Despachar</button>
-                  <button className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow active:scale-95 transition-all"><X size={16}/> Eliminar</button>
-                </div>
-                {moveMode && (
-                  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
-                    <div className="bg-white dark:bg-slate-900 rounded-3xl border border-blue-200 dark:border-blue-700 shadow-2xl p-8 flex flex-col items-center min-w-[320px] max-w-[400px] w-full mx-4 relative">
-                      <div className="text-lg font-black mb-6 text-blue-700 dark:text-blue-300 text-center">Selecciona la nueva subzona</div>
-                      <div className="w-full grid grid-cols-2 gap-4 mb-4">
-                        {zones.flatMap(zone => Object.keys(zone.subzones).map(subzone => ({ zoneId: zone.id, zoneName: zone.name, subzone }))).map(({ zoneId, zoneName, subzone }) => (
-                          <button
-                            key={zoneId + '-' + subzone}
-                            className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 font-bold py-4 rounded-xl text-base hover:bg-blue-200 dark:hover:bg-blue-800 transition-all border border-blue-200 dark:border-blue-700 shadow"
-                            onClick={async () => {
-                              if (!selectedBlock) return;
-                              setMoveLoading(true);
-                              setMoveError(null);
-                              try {
-                                const docRef = firestoreDoc(db, 'productos', selectedBlock.id);
-                                await updateDoc(docRef, { subzona: subzone, zona: zoneId });
-                                setMoveMode(false);
-                                setSelectedBlock(null);
-                                window.location.reload();
-                              } catch (err) {
-                                setMoveError('Error al mover el pallet');
-                              } finally {
-                                setMoveLoading(false);
-                              }
-                            }}
-                            disabled={moveLoading}
-                          >
-                            {zoneName} - {subzone}
-                          </button>
-                        ))}
-                      </div>
-                      {moveError && <div className="text-red-500 text-xs mb-2 text-center">{moveError}</div>}
-                      <button
-                        className="mt-2 px-6 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-white font-bold text-xs hover:bg-slate-300 dark:hover:bg-slate-600 transition-all"
-                        onClick={() => setMoveMode(false)}
-                        disabled={moveLoading}
-                      >Cancelar</button>
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="flex items-center justify-center h-64 text-slate-500">
-                <p>Selecciona una ubicación para ver detalles</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {/* SIDEBAR DE DETALLES ELIMINADO - se reescribirá más adelante */}
       
       {/* MODAL DE EDITOR DE REGLAS */}
       {showRuleEditor && (
