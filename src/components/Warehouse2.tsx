@@ -208,7 +208,7 @@ const mapProductoToBlock = async (producto: Producto, rules: any[], index: numbe
   console.log(`✅ ${producto.nombre_abreviado} (${producto.codigo_barra}) → Zona ${zoneId} / Subzona ${area}`);
 
   return {
-    id: producto.id || `block-${index}`,
+    id: String(producto.id) || `block-${index}`,
     codigo_barra: producto.codigo_barra || '',
     zoneId: zoneId,
     area: area,
