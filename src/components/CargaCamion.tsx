@@ -36,15 +36,21 @@ const PaletCard = ({
   onDragStart,
   onDragEnd,
   isDragging,
+  isDraggable,
 }: {
   palet: PaletPendiente;
   onDragStart: (palet: PaletPendiente) => void;
   onDragEnd: () => void;
   isDragging: boolean;
+  isDraggable: boolean;
 }) => (
   <div
-    draggable
+    draggable={isDraggable}
     onDragStart={(e) => {
+      if (!isDraggable) {
+        e.preventDefault();
+        return;
+      }
       e.dataTransfer.effectAllowed = "move";
       e.dataTransfer.setData("text/plain", palet.docId);
       onDragStart(palet);
@@ -54,7 +60,7 @@ const PaletCard = ({
       isDragging
         ? "opacity-40 border-blue-500"
         : "border-slate-200 dark:border-slate-700 hover:border-blue-400 hover:shadow-md"
-    }`}
+    } ${!isDraggable ? "opacity-60 cursor-not-allowed hover:border-slate-200 hover:shadow-none" : ""}`}
   >
     <div className="p-2 bg-amber-100 dark:bg-amber-950/40 rounded-xl text-amber-600 dark:text-amber-400 shrink-0">
       <Package size={18} />
@@ -243,6 +249,9 @@ export default function CargaCamion() {
     [camiones, selectedMatricula]
   );
 
+  const isCamionEnRuta = selectedCamion?.estado === "en_ruta";
+  const canEditarCarga = !!selectedCamion && !isCamionEnRuta;
+
   const cargaActual = cargas[selectedMatricula];
 
   useEffect(() => {
@@ -272,7 +281,7 @@ export default function CargaCamion() {
   }, [palets, assignedDocIds, search]);
 
   const validacion = useMemo(() => {
-    if (!selectedCamion)
+    if (!selectedCamion || !canEditarCarga)
       return null;
     return validarCarga(
       cargaActual?.palets ?? [],
@@ -284,14 +293,16 @@ export default function CargaCamion() {
         volumen: selectedCamion.capacidadVolumen,
       }
     );
-  }, [cargaActual, draggingPalet, selectedCamion]);
+  }, [cargaActual, draggingPalet, selectedCamion, canEditarCarga]);
 
   const dropBlocked =
+    !canEditarCarga ||
     !!draggingPalet &&
     !!validacion &&
     (validacion.excedePeso || validacion.excedeVolumen);
 
   const handleDragStart = (palet: PaletPendiente) => {
+    if (!canEditarCarga) return;
     setError("");
     setDraggingPalet(palet);
   };
@@ -302,6 +313,7 @@ export default function CargaCamion() {
   };
 
   const handleDragOver = (e: React.DragEvent) => {
+    if (!canEditarCarga) return;
     e.preventDefault();
     if (!draggingPalet) return;
     e.dataTransfer.dropEffect = dropBlocked ? "none" : "move";
@@ -316,7 +328,12 @@ export default function CargaCamion() {
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDropHovering(false);
-    if (!draggingPalet || !selectedCamion) return;
+    if (!canEditarCarga || !draggingPalet || !selectedCamion) {
+      if (isCamionEnRuta) {
+        setError("El camión está en ruta y no se puede modificar su carga.");
+      }
+      return;
+    }
     setError("");
     setSaving(true);
     try {
@@ -348,7 +365,12 @@ export default function CargaCamion() {
   };
 
   const handleRemove = async (docId: string, codigo: string) => {
-    if (!selectedCamion) return;
+    if (!canEditarCarga || !selectedCamion) {
+      if (isCamionEnRuta) {
+        setError("El camión está en ruta y no se puede retirar ningún palet.");
+      }
+      return;
+    }
     setError("");
     try {
       await removePaletFromCamion(selectedCamion.matricula, docId);
@@ -359,7 +381,12 @@ export default function CargaCamion() {
   };
 
   const handleVaciar = async () => {
-    if (!selectedCamion) return;
+    if (!canEditarCarga || !selectedCamion) {
+      if (isCamionEnRuta) {
+        setError("El camión está en ruta y no se puede vaciar.");
+      }
+      return;
+    }
     if (!confirmVaciar) {
       setConfirmVaciar(true);
       return;
@@ -432,6 +459,20 @@ export default function CargaCamion() {
             </select>
           </div>
         </div>
+
+        {isCamionEnRuta && (
+          <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-2xl">
+            <AlertTriangle size={20} className="text-amber-600 dark:text-amber-400 mt-0.5" />
+            <div>
+              <p className="text-sm font-black text-amber-800 dark:text-amber-300">
+                Camión en ruta
+              </p>
+              <p className="text-xs font-semibold text-amber-700 dark:text-amber-200 mt-0.5">
+                La carga queda bloqueada mientras esté en ruta: no se pueden añadir ni retirar palets.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Notifications */}
         {error && (
@@ -516,6 +557,7 @@ export default function CargaCamion() {
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
                     isDragging={draggingPalet?.docId === p.docId}
+                    isDraggable={canEditarCarga}
                   />
                 ))
               )}
@@ -615,8 +657,10 @@ export default function CargaCamion() {
                   ? dropBlocked
                     ? "bg-red-50 dark:bg-red-950/20 border-red-400"
                     : "bg-blue-50 dark:bg-blue-950/20 border-blue-400"
-                  : "bg-slate-50 dark:bg-slate-900/40 border-slate-300 dark:border-slate-700"
-              }`}
+                  : isCamionEnRuta
+                    ? "bg-slate-100 dark:bg-slate-900/60 border-slate-300 dark:border-slate-700"
+                    : "bg-slate-50 dark:bg-slate-900/40 border-slate-300 dark:border-slate-700"
+              } ${!canEditarCarga ? "opacity-90" : ""}`}
             >
               {/* Cabina */}
               <div className="absolute top-5 left-5 w-16 h-20 bg-slate-300 dark:bg-slate-700 rounded-l-2xl rounded-r-md flex flex-col items-center justify-center text-slate-600 dark:text-slate-300">
@@ -645,7 +689,7 @@ export default function CargaCamion() {
                         onBlur={() => {
                           if (confirmVaciar && !vaciando) setConfirmVaciar(false);
                         }}
-                        disabled={vaciando}
+                        disabled={vaciando || !canEditarCarga}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95 disabled:opacity-60 ${
                           confirmVaciar
                             ? "bg-red-600 hover:bg-red-500 text-white border-red-700"
@@ -703,6 +747,7 @@ export default function CargaCamion() {
                           </p>
                           <button
                             onClick={() => handleRemove(p.docId, p.codigoBarra)}
+                            disabled={!canEditarCarga}
                             className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-red-500"
                             title="Retirar palet"
                           >
@@ -736,7 +781,9 @@ export default function CargaCamion() {
                         : "bg-blue-600 text-white border-blue-700"
                     }`}
                   >
-                    {dropBlocked
+                    {isCamionEnRuta
+                      ? "Carga bloqueada en ruta"
+                      : dropBlocked
                       ? "No cabe en este camión"
                       : saving
                         ? "Guardando…"

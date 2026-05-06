@@ -4,7 +4,6 @@ import {
   onSnapshot,
   query,
   orderBy,
-  limit,
   runTransaction,
   serverTimestamp,
   updateDoc,
@@ -46,8 +45,6 @@ export interface CargaCamion {
 
 const CARGAS = "cargas";
 const PRODUCTOS = "productos";
-
-const PALETS_QUERY_LIMIT = 150;
 
 const ESTADOS_VISIBLES_LIST = [
   "Pendiente",
@@ -105,8 +102,7 @@ export const subscribeToPalets = (
 ): (() => void) => {
   const filteredQuery = query(
     collection(db, PRODUCTOS),
-    where("estado_pedido", "in", [...ESTADOS_VISIBLES_LIST]),
-    limit(PALETS_QUERY_LIMIT)
+    where("estado_pedido", "in", [...ESTADOS_VISIBLES_LIST])
   );
 
   return onSnapshot(
@@ -124,8 +120,7 @@ export const subscribeToPalets = (
       );
       const fallbackQuery = query(
         collection(db, PRODUCTOS),
-        orderBy("fecha_linea_pedido", "desc"),
-        limit(PALETS_QUERY_LIMIT)
+        orderBy("fecha_linea_pedido", "desc")
       );
       onSnapshot(fallbackQuery, (snap) => {
         const list = snap.docs.map((d) =>
