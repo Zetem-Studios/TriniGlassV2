@@ -1,8 +1,8 @@
 // Warehouse2.tsx - Implementación dinámica sin hardcode
 import { useState, useEffect } from "react";
 import { 
-  Search, Plus, ChevronDown, Check, X, Package, 
-  Layers, Maximize2, View, Zap, DoorOpen, Box
+  Search, ChevronDown, Plus, X, Package, 
+  Layers, Maximize2, View, Zap, DoorOpen, Box, Check
 } from "lucide-react";
 import { db } from "../firebase";
 import { collection, getDocs, writeBatch, doc, updateDoc, doc as firestoreDoc } from "firebase/firestore";
@@ -10,6 +10,81 @@ import Map from "./Map";
 import Zone from "./Zone";
 import RuleEditor from "./RuleEditor";
 import { useMapDesigns } from '../hooks/useMapDesigns';
+
+// Estilos CSS personalizados para barras de scroll
+const customScrollbarStyles = `
+  /* Estilos para scroll vertical */
+  .scrollbar-vertical-custom::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  .scrollbar-vertical-custom::-webkit-scrollbar-track {
+    background: linear-gradient(to bottom, #dbeafe, #e0e7ff);
+    border-radius: 4px;
+  }
+  
+  .scrollbar-vertical-custom::-webkit-scrollbar-thumb {
+    background: linear-gradient(to bottom, #3b82f6, #6366f1);
+    border-radius: 4px;
+    border: 1px solid #1e40af;
+  }
+  
+  .scrollbar-vertical-custom::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(to bottom, #2563eb, #4f46e5);
+    border-color: #1d4ed8;
+  }
+  
+  /* Estilos para modo oscuro */
+  .dark .scrollbar-vertical-custom::-webkit-scrollbar-track {
+    background: linear-gradient(to bottom, #1e293b, #334155);
+  }
+  
+  .dark .scrollbar-vertical-custom::-webkit-scrollbar-thumb {
+    background: linear-gradient(to bottom, #475569, #64748b);
+    border: 1px solid #334155;
+  }
+  
+  .dark .scrollbar-vertical-custom::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(to bottom, #64748b, #94a3b8);
+    border-color: #475569;
+  }
+  
+  /* Estilos para scroll horizontal */
+  .scrollbar-horizontal-custom::-webkit-scrollbar {
+    height: 8px;
+  }
+  
+  .scrollbar-horizontal-custom::-webkit-scrollbar-track {
+    background: linear-gradient(to right, #dbeafe, #e0e7ff);
+    border-radius: 4px;
+  }
+  
+  .scrollbar-horizontal-custom::-webkit-scrollbar-thumb {
+    background: linear-gradient(to right, #3b82f6, #6366f1);
+    border-radius: 4px;
+    border: 1px solid #1e40af;
+  }
+  
+  .scrollbar-horizontal-custom::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(to right, #2563eb, #4f46e5);
+    border-color: #1d4ed8;
+  }
+  
+  /* Estilos para modo oscuro - scroll horizontal */
+  .dark .scrollbar-horizontal-custom::-webkit-scrollbar-track {
+    background: linear-gradient(to right, #1e293b, #334155);
+  }
+  
+  .dark .scrollbar-horizontal-custom::-webkit-scrollbar-thumb {
+    background: linear-gradient(to right, #475569, #64748b);
+    border: 1px solid #334155;
+  }
+  
+  .dark .scrollbar-horizontal-custom::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(to right, #64748b, #94a3b8);
+    border-color: #475569;
+  }
+`;
 
 // Interfaces para tipado dinámico
 interface ZoneConfig {
@@ -203,6 +278,17 @@ const mapProductoToBlock = async (producto: Producto, rules: any[], index: numbe
 export default function Warehouse2() {
   const TEST_MODE = true;
   
+  // Inyectar estilos CSS personalizados
+  useEffect(() => {
+    const styleId = 'custom-scrollbar-styles';
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.textContent = customScrollbarStyles;
+      document.head.appendChild(style);
+    }
+  }, []);
+  
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedZone, setSelectedZone] = useState("");
   const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
@@ -213,6 +299,7 @@ export default function Warehouse2() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [subzonas, setSubzonas] = useState<any[]>([]);
+  const [expandedSubzones, setExpandedSubzones] = useState<Set<string>>(new Set());
   const [showAddModal, setShowAddModal] = useState(false);
   const [addPalletZone, setAddPalletZone] = useState<string | null>(null);
   const [addPalletSubzone, setAddPalletSubzone] = useState<string | null>(null);
@@ -393,6 +480,19 @@ export default function Warehouse2() {
   const handleAddPalletFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setAddPalletForm((prev: any) => ({ ...prev, [name]: value }));
+  };
+
+  // Función para toggle de subzonas expandidas
+  const toggleSubzone = (subzoneId: string) => {
+    setExpandedSubzones(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(subzoneId)) {
+        newSet.delete(subzoneId);
+      } else {
+        newSet.add(subzoneId);
+      }
+      return newSet;
+    });
   };
 
   // Cargar zonas y reglas de Firebase
@@ -1075,17 +1175,116 @@ const renderSubzonesFromMap = () => {
               if (zoneSubzonas.length === 0) return null;
               
               return (
-                <div className="space-y-3">
-                  {zoneSubzonas.map((subZone) => (
-                    <div
-                      key={subZone.id}
-                      className="bg-white dark:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 flex items-center justify-center shadow-md p-4"
-                    >
-                      <span className="text-sm text-slate-900 dark:text-white font-semibold text-center">
-                        {subZone.nombre}
-                      </span>
-                    </div>
-                  ))}
+                <div className="space-y-4">
+                  {zoneSubzonas.map((subZone) => {
+                    // Obtener capacidadMaxima de la subzona (10 si es null)
+                    const capacidad = subZone.capacidadMaxima || 10;
+                    
+                    // Calcular tarjetas por fila (mitad de la capacidad, redondeado hacia arriba)
+                    const tarjetasPorFila = Math.ceil(capacidad / 2);
+                    const totalTarjetas = tarjetasPorFila * 2; // Siempre 2 filas
+                    
+                    // Generar array de tarjetas vacías
+                    const tarjetasVacias = Array.from({ length: totalTarjetas }, (_, index) => ({
+                      id: `${subZone.id}-tarjeta-${index}`,
+                      occupied: false,
+                      daysInStorage: 0
+                    }));
+                    
+                    // Dividir en dos filas
+                    const filaSuperior = tarjetasVacias.slice(0, tarjetasPorFila);
+                    const filaInferior = tarjetasVacias.slice(tarjetasPorFila, totalTarjetas);
+                    
+                    const isExpanded = expandedSubzones.has(subZone.id);
+                    
+                    return (
+                      <div key={subZone.id} className="space-y-3">
+                        {/* Nombre de la subzona (clicable) */}
+                        <button
+                          onClick={() => toggleSubzone(subZone.id)}
+                          className="w-full bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-700 rounded-2xl border-2 border-blue-200 dark:border-slate-600 flex items-center justify-between shadow-lg hover:shadow-xl hover:shadow-blue-500/20 dark:hover:shadow-slate-500/20 p-5 transition-all duration-300 group relative overflow-hidden"
+                        >
+                          {/* Efecto de brillo */}
+                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
+                          
+                          <div className="relative flex items-center justify-between w-full">
+                            <div className="flex items-center gap-3">
+                              <div className="w-3 h-3 bg-gradient-to-r from-blue-400 to-indigo-500 rounded-full animate-pulse"></div>
+                              <span className="text-base font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
+                                {subZone.nombre}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                                {capacidad} espacios
+                              </span>
+                              <ChevronDown 
+                                className={`text-blue-500 dark:text-blue-400 transition-all duration-300 ${isExpanded ? 'rotate-180' : ''}`}
+                                size={20}
+                              />
+                            </div>
+                          </div>
+                        </button>
+                        
+                        {/* Tarjetas vacías - solo se muestran si está expandido */}
+                        {isExpanded && (
+                          <div className="overflow-x-auto scrollbar-horizontal-custom">
+                            <div className="space-y-4 pl-6 min-w-max py-4">
+                              {/* Fila superior */}
+                              <div className="flex justify-center gap-3">
+                                {filaSuperior.map((tarjeta, index) => (
+                                  <div
+                                    key={tarjeta.id}
+                                    className="group relative"
+                                  >
+                                    <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-2xl opacity-0 group-hover:opacity-20 transition-opacity duration-300 blur-xl"></div>
+                                    <button
+                                      className="relative rounded-2xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-2 shadow-md hover:shadow-lg hover:shadow-blue-500/30 bg-gradient-to-br from-white to-blue-50 dark:from-slate-800 dark:to-slate-700 border-blue-200 dark:border-slate-600 hover:border-blue-300 dark:hover:border-slate-500 hover:scale-105 min-w-[110px] min-h-[90px]"
+                                    >
+                                      <div className="w-8 h-8 bg-gradient-to-r from-blue-100 to-indigo-100 dark:from-slate-700 dark:to-slate-600 rounded-full flex items-center justify-center">
+                                        <Box size={16} className="text-blue-500 dark:text-blue-400" />
+                                      </div>
+                                      <span className="text-[11px] font-bold text-blue-600 dark:text-blue-300 uppercase tracking-wide">
+                                        Vacío
+                                      </span>
+                                      <span className="text-[9px] text-slate-400 dark:text-slate-500">
+                                        #{index + 1}
+                                      </span>
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                              
+                              {/* Fila inferior */}
+                              <div className="flex justify-center gap-3">
+                                {filaInferior.map((tarjeta, index) => (
+                                  <div
+                                    key={tarjeta.id}
+                                    className="group relative"
+                                  >
+                                    <div className="absolute inset-0 bg-gradient-to-r from-indigo-400 to-purple-400 rounded-2xl opacity-0 group-hover:opacity-20 transition-opacity duration-300 blur-xl"></div>
+                                    <button
+                                      className="relative rounded-2xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-2 shadow-md hover:shadow-lg hover:shadow-indigo-500/30 bg-gradient-to-br from-white to-indigo-50 dark:from-slate-800 dark:to-slate-700 border-indigo-200 dark:border-slate-600 hover:border-indigo-300 dark:hover:border-slate-500 hover:scale-105 min-w-[110px] min-h-[90px]"
+                                    >
+                                      <div className="w-8 h-8 bg-gradient-to-r from-indigo-100 to-purple-100 dark:from-slate-700 dark:to-slate-600 rounded-full flex items-center justify-center">
+                                        <Box size={16} className="text-indigo-500 dark:text-indigo-400" />
+                                      </div>
+                                      <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-300 uppercase tracking-wide">
+                                        Vacío
+                                      </span>
+                                      <span className="text-[9px] text-slate-400 dark:text-slate-500">
+                                        #{index + tarjetasPorFila + 1}
+                                      </span>
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })()}
@@ -1093,12 +1292,10 @@ const renderSubzonesFromMap = () => {
         </div>
       </div>
 
-      {/* SIDEBAR DE DETALLES ELIMINADO - se reescribirá más adelante */}
-      
       {/* MODAL DE EDITOR DE REGLAS */}
       {showRuleEditor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl p-8 max-w-6xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl p-8 max-w-6xl max-h-[90vh] overflow-y-auto scrollbar-vertical-custom">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Configurar Reglas de Asignación Dinámica</h2>
               <button 
