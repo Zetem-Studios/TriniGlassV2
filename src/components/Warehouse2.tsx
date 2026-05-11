@@ -212,6 +212,7 @@ export default function Warehouse2() {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [subzonas, setSubzonas] = useState<any[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addPalletZone, setAddPalletZone] = useState<string | null>(null);
   const [addPalletSubzone, setAddPalletSubzone] = useState<string | null>(null);
@@ -402,9 +403,34 @@ export default function Warehouse2() {
         
         setZones(zonesData);
         
-        // Seleccionar primera zona por defecto
+        // Seleccionar primera zona por defecto (usando el mismo ordenamiento que el desplegable)
         if (zonesData.length > 0) {
-          setSelectedZone(zonesData[0].id);
+          // Ordenar zonas según la posición en el mapa (misma lógica que getZonesOrderedByPosition)
+          const orderedZones = zonesData.map(zone => {
+            const map = designs.find((d) => d.id === selectedMapDesign);
+            if (!map || !map.areas) {
+              return { ...zone, x: Infinity, y: Infinity };
+            }
+            
+            const mainArea = map.areas.find(area => {
+              const normalizedAreaName = area.name.toLowerCase().replace(/_/g, '/');
+              const normalizedZoneName = zone.name.toLowerCase().replace(/_/g, '/');
+              return normalizedAreaName === normalizedZoneName;
+            });
+
+            if (mainArea) {
+              return { ...zone, x: mainArea.x, y: mainArea.y };
+            } else {
+              return { ...zone, x: Infinity, y: Infinity };
+            }
+          }).sort((a, b) => {
+            if (a.y !== b.y) {
+              return a.y - b.y;
+            }
+            return a.x - b.x;
+          });
+          
+          setSelectedZone(orderedZones[0].id);
         }
       } catch (error) {
         console.error("Error cargando datos iniciales:", error);
@@ -413,6 +439,22 @@ export default function Warehouse2() {
     };
 
     loadData();
+  }, [selectedMapDesign]);
+
+  // Cargar subzonas de Firebase
+  useEffect(() => {
+    const loadSubzonas = async () => {
+      try {
+        const { collection, getDocs } = await import('firebase/firestore');
+        const subzonasSnapshot = await getDocs(collection(db, 'subzonas'));
+        const subzonasData = subzonasSnapshot.docs.map(doc => doc.data());
+        setSubzonas(subzonasData);
+      } catch (error) {
+        console.error("Error cargando subzonas:", error);
+      }
+    };
+
+    loadSubzonas();
   }, []);
 
   // Cargar productos desde Firebase
@@ -512,9 +554,134 @@ export default function Warehouse2() {
     }
   };
 
-  // Funciones de renderizado de tarjetas eliminadas - se reescribirán más adelante
-// const renderBlock = (block: Block) => { ... };
-// const renderArea = (areaName: string, zone: ZoneConfig) => { ... };
+  // Función para ordenar zonas según su posición en el mapa
+const getZonesOrderedByPosition = () => {
+  if (!selectedMapDesign || selectedMapDesign === "default") {
+    return zones;
+  }
+
+  const map = designs.find((d) => d.id === selectedMapDesign);
+  if (!map || !map.areas) {
+    return zones;
+  }
+
+  // Para cada zona, encontrar su área principal en el mapa y obtener sus coordenadas
+  const zonesWithPosition = zones.map(zone => {
+    // Buscar el área principal que corresponde a esta zona por nombre
+    const mainArea = map.areas.find(area => {
+      // Normalizar ambos nombres: reemplazar guiones bajos con diagonales y viceversa
+      const normalizedAreaName = area.name.toLowerCase().replace(/_/g, '/');
+      const normalizedZoneName = zone.name.toLowerCase().replace(/_/g, '/');
+      
+      // Comparar nombres normalizados (ignorando mayúsculas/minúsculas y guiones vs diagonales)
+      return normalizedAreaName === normalizedZoneName;
+    });
+
+    if (mainArea) {
+      return {
+        ...zone,
+        x: mainArea.x,
+        y: mainArea.y,
+        areaName: mainArea.name
+      };
+    } else {
+      return {
+        ...zone,
+        x: Infinity,
+        y: Infinity,
+        areaName: null
+      };
+    }
+  });
+
+  // Ordenar por Y ascendente (arriba a abajo), y dentro de cada Y, por X ascendente (izquierda a derecha)
+  const orderedZones = zonesWithPosition.sort((a, b) => {
+    if (a.y !== b.y) {
+      return a.y - b.y; // Primero ordenar por Y (arriba a abajo)
+    }
+    return a.x - b.x; // Si mismo Y, ordenar por X (izquierda a derecha)
+  });
+
+  return orderedZones;
+};
+
+// Función para renderizar subzonas según el mapa activo
+const renderSubzonesFromMap = () => {
+  if (!selectedMapDesign || selectedMapDesign === "default") {
+    return null;
+  }
+  
+  const map = designs.find((d) => d.id === selectedMapDesign);
+  if (!map || !map.areas || map.areas.length === 0) {
+    return null;
+  }
+  
+  const selectedZoneConfig = zones.find(z => z.id === selectedZone);
+  if (!selectedZoneConfig) {
+    return null;
+  }
+  
+  // Filtrar todas las subáreas del mapa que pertenecen a la zona seleccionada
+  const allSubAreas = map.areas.flatMap(area => 
+    (area.subAreas || []).map(subArea => ({
+      ...subArea,
+      areaName: area.name,
+      areaX: area.x,
+      areaY: area.y,
+      areaWidth: area.width,
+      areaHeight: area.height
+    }))
+  );
+  
+  const mapAreas = allSubAreas.filter(subArea => {
+    return subArea.areaId === selectedZone;
+  });
+  
+  if (mapAreas.length === 0) {
+    return <div className="text-center text-slate-500">No hay áreas para esta zona en el mapa</div>;
+  }
+
+  // Calcular el contenedor relativo basado en las dimensiones del mapa
+  const maxX = Math.max(...mapAreas.map(area => area.x + area.width));
+  const maxY = Math.max(...mapAreas.map(area => area.y + area.height));
+
+  return (
+    <div 
+      className="relative bg-white/40 dark:bg-slate-950/40 rounded-[3rem] border border-slate-200 dark:border-slate-800 p-12 overflow-hidden shadow-inner"
+      style={{ 
+        width: `${maxX + 50}px`, 
+        height: `${maxY + 50}px`,
+        position: 'relative'
+      }}
+    >
+      {mapAreas.map((area, index) => {
+        // Calcular posición y tamaño en píxeles
+        const left = area.x;
+        const top = area.y;
+        const width = area.width;
+        const height = area.height;
+
+        return (
+          <div
+            key={`${area.id}-${index}`}
+            className="absolute bg-blue-100 dark:bg-blue-900/30 border-2 border-blue-500 rounded-xl flex items-center justify-center"
+            style={{
+              left: `${left}px`,
+              top: `${top}px`,
+              width: `${width}px`,
+              height: `${height}px`,
+              position: 'absolute'
+            }}
+          >
+            <span className="text-blue-800 dark:text-blue-200 font-bold text-sm">
+              {area.name}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
 
   return (
     <div className="min-h-screen relative flex flex-col bg-slate-50 dark:bg-[#0f172a] text-slate-900 dark:text-white transition-colors duration-300 font-sans">
@@ -874,7 +1041,7 @@ export default function Warehouse2() {
               </button>
               {isZoneDropdownOpen && (
                 <div className="absolute left-0 mt-3 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl z-50 overflow-hidden">
-                  {zones.map(zone => (
+                  {getZonesOrderedByPosition().map(zone => (
                     <button key={zone.id} className="w-full text-left px-6 py-4 text-sm font-bold hover:bg-blue-50 dark:hover:bg-slate-700 flex items-center justify-between" onClick={() => { setSelectedZone(zone.id); setIsZoneDropdownOpen(false); setSelectedBlock(null); }}>
                       {zone.name} {selectedZone === zone.id && <Check size={16} className="text-blue-500" />}
                     </button>
@@ -888,8 +1055,40 @@ export default function Warehouse2() {
             </div>
           </div>
 
-          <div className="bg-white/40 dark:bg-slate-950/40 rounded-[3rem] border border-slate-200 dark:border-slate-800 p-12 overflow-x-auto shadow-inner relative">
-            {/* Contenido de productos eliminado */}
+          {renderSubzonesFromMap()}
+
+          {/* Contenedor para tarjetas de palets */}
+          <div className="w-full h-auto bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+              {zones.find(z => z.id === selectedZone)?.name}
+            </h3>
+            
+            {/* Divs para cada subzona posicionados según el mapa */}
+            {(() => {
+              const map = designs.find((d) => d.id === selectedMapDesign);
+              if (!map || !map.areas) return null;
+              
+              // Filtrar subzonas de Firebase por zonaId
+              const zoneSubzonas = subzonas.filter(sub => sub.zonaId === selectedZone);
+              console.log("Subzonas encontradas para zona", selectedZone, ":", zoneSubzonas);
+              
+              if (zoneSubzonas.length === 0) return null;
+              
+              return (
+                <div className="space-y-3">
+                  {zoneSubzonas.map((subZone) => (
+                    <div
+                      key={subZone.id}
+                      className="bg-white dark:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 flex items-center justify-center shadow-md p-4"
+                    >
+                      <span className="text-sm text-slate-900 dark:text-white font-semibold text-center">
+                        {subZone.nombre}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>

@@ -348,8 +348,7 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({ onClose }) => {
         const { db, doc } = await import('../firebase');
         const { updateDoc } = await import('firebase/firestore');
         await updateDoc(doc(db, 'zonas', editingItem.id), {
-          ...data,
-          fechaModificacion: new Date()
+          ...data
         });
         
         setZonas(prev => prev.map(zona => 
@@ -523,7 +522,7 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({ onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-6xl h-[95vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -553,7 +552,7 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({ onClose }) => {
         )}
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 200px)' }}>
+        <div className="p-6 overflow-y-auto flex-1">
 
           {error ? (
             <div className="text-center py-8 text-red-500">
