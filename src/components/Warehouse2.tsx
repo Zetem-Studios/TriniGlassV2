@@ -125,6 +125,8 @@ interface Block {
   numeroLineaPedido?: string;
   estadoPedido?: string;
   empresa?: string;
+  fila?: number;
+  columna?: number;
   referencias?: string;
 }
 
@@ -245,7 +247,6 @@ const mapProductoToBlock = async (producto: Producto, rules: any[], index: numbe
   const zoneId = (producto as any).zona;
   const area = (producto as any).subzona;
 
-  console.log(`✅ ${producto.nombre_abreviado} (${producto.codigo_barra}) → Zona ${zoneId} / Subzona ${area}`);
 
   return {
     id: String(producto.id) || `block-${index}`,
@@ -277,6 +278,24 @@ const mapProductoToBlock = async (producto: Producto, rules: any[], index: numbe
 };
 
 
+// Función para generar clave de agrupación para productos
+const generarClaveAgrupacion = (producto: any): string => {
+  // Solo agrupar si tiene código de barras
+  if (producto.codigo_barra && producto.codigo_barra.trim() !== '') {
+    return producto.codigo_barra.trim();
+  }
+  
+  // Si no tiene código de barras, generar clave única para que no se agrupe
+  return `UNICO_${producto.id}`;
+};
+
+// Función para generar código de ubicación
+const generarCodigoUbicacion = (zoneName: string, subZoneName: string, fila: number, columna: number): string => {
+  const zonaCode = zoneName.substring(0, 3).toUpperCase();
+  const subzonaCode = subZoneName.substring(0, 3).toUpperCase();
+  return `${zonaCode}${subzonaCode}F${fila}C${columna}`;
+};
+
 // Versión síncrona simplificada para usar en el bucle
 const mapProductoToBlockSimple = (producto: Producto, index: number): Block => {
   const fechaPedido = parseFechaLineaPedido(producto.fecha_linea_pedido);
@@ -298,16 +317,6 @@ const mapProductoToBlockSimple = (producto: Producto, index: number): Block => {
   let area = (producto as any).subzona || '';
   let zoneId = (producto as any).zona || '';
   
-  // Depurar asignación de zona y subzona
-  if (index < 5) {
-    console.log(`📍 Mapeo Producto ${index}:`, {
-      codigo_barra: producto.codigo_barra,
-      zona_bd: (producto as any).zona,
-      subzona_bd: (producto as any).subzona,
-      zona_asignada: zoneId,
-      subzona_asignada: area
-    });
-  }
   
   // Sistema completamente dinámico - sin hardcoded
   // Los productos deben tener sus campos zona y subzona correctamente asignados
@@ -410,17 +419,12 @@ export default function Warehouse2() {
     const fetchProductos = async () => {
       try {
         setLoading(true);
-        console.log("🔥 Iniciando conexión a Firebase...");
-        console.log("Proyecto:", db.app.options.projectId);
-        console.log("📦 Buscando colección: 'productos'");
         
         const productosCollection = collection(db, "productos");
         const snapshot = await getDocs(productosCollection);
         
-        console.log(`✅ Conexión exitosa. Documentos encontrados: ${snapshot.size}`);
         
         if (snapshot.size === 0) {
-          console.warn("⚠️ La colección 'productos' está vacía o no existe.");
           setError("La colección 'productos' está vacía");
           setBlocks([]);
           setLoading(false);
@@ -430,7 +434,6 @@ export default function Warehouse2() {
         // MODO TEST: Limitar a 200 documentos para ahorrar lecturas de Firebase
         const docsToProcess = TEST_MODE ? snapshot.docs.slice(0, 200) : snapshot.docs;
         if (TEST_MODE) {
-          console.log(`🧪 MODO TEST: Procesando solo los primeros ${docsToProcess.length} documentos de ${snapshot.size} totales`);
         }
         
         // Convertir productos a bloques (cada producto es un bloque individual)
@@ -442,17 +445,7 @@ export default function Warehouse2() {
           
           // Depurar campos zona y subzona
           if (index < 10) { // Mostrar más productos para ver la variación
-            console.log(`🔍 Producto ${index}:`, {
-              id: producto.id,
-              codigo_barra: producto.codigo_barra,
-              cliente: producto.apellido_cliente || producto.nombre_abreviado,
-              zona_campo: producto.zona,
-              subzona_campo: producto.subzona,
-              zona_cast: (producto as any).zona,
-              subzona_cast: (producto as any).subzona,
-              zona_bd: producto.zona,
-              subzona_bd: producto.subzona
-            });
+            // Código de depuración eliminado
           }
           
           const block = mapProductoToBlockSimple(producto, index);
@@ -461,27 +454,25 @@ export default function Warehouse2() {
         
         // Contar agrupaciones para estadísticas (sin Map)
         let agrupacionesContadas = 0;
-        const codigosVistos: string[] = [];
+        const clavesProcesadas: string[] = [];
         
         docsToProcess.forEach(doc => {
           const data = doc.data() as any;
-          const codigo = data.codigo_barra || '';
+          const claveAgrupacion = generarClaveAgrupacion(data);
           
-          if (!codigosVistos.includes(codigo)) {
-            const mismoCodigo = docsToProcess.filter(d => 
-              (d.data() as any).codigo_barra === codigo
+          if (!clavesProcesadas.includes(claveAgrupacion)) {
+            const mismaClave = docsToProcess.filter(d => 
+              generarClaveAgrupacion(d.data()) === claveAgrupacion
             );
             
-            if (mismoCodigo.length > 1) {
+            if (mismaClave.length > 1) {
               agrupacionesContadas++;
             }
             
-            codigosVistos.push(codigo);
+            clavesProcesadas.push(claveAgrupacion);
           }
         });
         
-        console.log(`✅ ${nuevosBlocks.length} productos MAFER mapeados correctamente`);
-        console.log(`📊 Duplicados detectados: ${agrupacionesContadas}`);
         
         setBlocks(nuevosBlocks);
         setError(null);
@@ -501,19 +492,12 @@ export default function Warehouse2() {
 
   // Función para cargar el mapa activo desde Firebase
   const loadActiveMapFromFirebase = () => {
-    console.log('=== ESTADO DEL ATRIBUTO "activo" EN TODOS LOS DISEÑOS ===');
-    designs.forEach(design => {
-      console.log(`Mapa: ${design.name} | ID: ${design.id} | activo: ${design.activo}`);
-    });
-    console.log('================================================');
     
     // Buscar el mapa que tenga activo: true
     const activeMap = designs.find(design => design.activo === true);
     if (activeMap && activeMap.id) {
-      console.log(`✅ Mapa activo encontrado: ${activeMap.name}`);
       setSelectedMapDesign(activeMap.id);
     } else {
-      console.log('❌ No hay ningún mapa con activo: true');
     }
   };
 
@@ -724,15 +708,12 @@ export default function Warehouse2() {
     const fetchProductos = async () => {
       try {
         setLoading(true);
-        console.log("🔥 Iniciando conexión a Firebase...");
         
         const productosCollection = collection(db, "productos");
         const snapshot = await getDocs(productosCollection);
         
-        console.log(`✅ Conexión exitosa. Documentos encontrados: ${snapshot.size}`);
         
         if (snapshot.size === 0) {
-          console.warn("⚠️ La colección 'productos' está vacía");
           setError("La colección 'productos' está vacía");
           setBlocks([]);
           setLoading(false);
@@ -741,7 +722,6 @@ export default function Warehouse2() {
 
         const docsToProcess = TEST_MODE ? snapshot.docs.slice(0, 200) : snapshot.docs;
         if (TEST_MODE) {
-          console.log(`🧪 MODO TEST: Procesando solo los primeros ${docsToProcess.length} documentos`);
         }
 
         const productos = docsToProcess
@@ -758,7 +738,6 @@ export default function Warehouse2() {
         }
         setBlocks(processedBlocks);
         
-        console.log(`✅ ${productos.length} productos mapeados correctamente`);
         setError(null);
       } catch (err) {
         console.error("❌ Error cargando productos:", err);
@@ -900,7 +879,7 @@ const renderSubzonesFromMap = () => {
   });
   
   if (mapAreas.length === 0) {
-    return <div className="text-center text-slate-500">No hay áreas para esta zona en el mapa</div>;
+    return null;
   }
 
   // Calcular el contenedor relativo basado en las dimensiones del mapa
@@ -1332,19 +1311,29 @@ const renderSubzonesFromMap = () => {
               
               // Filtrar subzonas de Firebase por zonaId
               const zoneSubzonas = subzonas.filter(sub => sub.zonaId === selectedZone);
-              console.log("Subzonas encontradas para zona", selectedZone, ":", zoneSubzonas);
               
               if (zoneSubzonas.length === 0) return null;
               
               return (
                 <div className="space-y-4">
                   {zoneSubzonas.map((subZone) => {
-                    // Obtener capacidadMaxima de la subzona (10 si es null)
-                    const capacidad = subZone.capacidadMaxima || 10;
+                    // Determinar si hay límite de capacidad
+                    const tieneLimite = subZone.capacidadMaxima !== null && subZone.capacidadMaxima !== undefined;
+                    const capacidad = tieneLimite ? subZone.capacidadMaxima! : null;
                     
-                    // Calcular tarjetas por fila (mitad de la capacidad, redondeado hacia arriba)
-                    const tarjetasPorFila = Math.ceil(capacidad / 2);
-                    const totalTarjetas = tarjetasPorFila * 2; // Siempre 2 filas
+                    // Calcular tarjetas por fila y total
+                    let tarjetasPorFila: number;
+                    let totalTarjetas: number;
+                    
+                    if (tieneLimite && capacidad) {
+                      // Con límite: dividir en 2 filas
+                      tarjetasPorFila = Math.ceil(capacidad / 2);
+                      totalTarjetas = tarjetasPorFila * 2;
+                    } else {
+                      // Sin límite: se calculará después según el número de tarjetas reales
+                      tarjetasPorFila = 0;
+                      totalTarjetas = 0;
+                    }
                     
                     // Filtrar palets que pertenecen a esta subzona (usando campos actualizados por reglas)
                     const paletsEnSubzona = blocks.filter(block => {
@@ -1381,50 +1370,62 @@ const renderSubzonesFromMap = () => {
                       allPalets?: Block[];
                     }> = [];
                     
-                    // Primero, identificar códigos duplicados
-                    const codigosProcesados: string[] = [];
+                    // Primero, identificar productos duplicados usando clave de agrupación
+                    const clavesProcesadas: string[] = [];
                     
                     paletsEnSubzona.forEach(pallet => {
-                      if (!codigosProcesados.includes(pallet.codigo_barra)) {
-                        // Primer palet con este código - buscar si hay más
-                        const paletsMismoCodigo = paletsEnSubzona.filter(p => 
-                          p.codigo_barra === pallet.codigo_barra
+                      const claveAgrupacion = generarClaveAgrupacion(pallet);
+                      
+                      if (!clavesProcesadas.includes(claveAgrupacion)) {
+                        // Primer palet con esta clave - buscar si hay más
+                        const paletsMismaClave = paletsEnSubzona.filter(p => 
+                          generarClaveAgrupacion(p) === claveAgrupacion
                         );
                         
-                        if (paletsMismoCodigo.length > 1) {
-                          // Múltiples pedidos con mismo código - tarjeta especial agrupada
+                        if (paletsMismaClave.length > 1) {
+                          // Múltiples productos con misma clave - tarjeta especial agrupada
                           tarjetas.push({
-                            id: pallet.codigo_barra,
+                            id: claveAgrupacion,
                             occupied: true,
-                            daysInStorage: Math.min(...paletsMismoCodigo.map(p => p.daysInStorage)),
-                            pallet: paletsMismoCodigo[0],
+                            daysInStorage: Math.min(...paletsMismaClave.map(p => p.daysInStorage)),
+                            pallet: paletsMismaClave[0],
                             isGrouped: true,
-                            groupCount: paletsMismoCodigo.length,
-                            allPalets: paletsMismoCodigo
+                            groupCount: paletsMismaClave.length,
+                            allPalets: paletsMismaClave
                           });
                         } else {
-                          // Pedido individual
+                          // Producto individual
                           tarjetas.push({
                             id: pallet.id,
                             occupied: true,
                             daysInStorage: pallet.daysInStorage,
                             pallet: pallet,
-                            isGrouped: false
+                            isGrouped: false,
+                            groupCount: 1,
+                            allPalets: [pallet]
                           });
                         }
                         
-                        codigosProcesados.push(pallet.codigo_barra);
+                        clavesProcesadas.push(claveAgrupacion);
                       }
                     });
                     
-                    // Rellenar espacios vacíos hasta alcanzar la capacidad máxima
-                    const espaciosVacios = totalTarjetas - tarjetas.length;
-                    for (let i = 0; i < espaciosVacios; i++) {
-                      tarjetas.push({
-                        id: `${subZone.id}-vacio-${i}`,
-                        occupied: false,
-                        daysInStorage: 0
-                      });
+                    // Rellenar espacios vacíos hasta alcanzar la capacidad máxima (solo si hay límite)
+                    if (tieneLimite && capacidad) {
+                      const espaciosVacios = totalTarjetas - tarjetas.length;
+                      for (let i = 0; i < espaciosVacios; i++) {
+                        tarjetas.push({
+                          id: `${subZone.id}-vacio-${i}`,
+                          occupied: false,
+                          daysInStorage: 0
+                        });
+                      }
+                    }
+                    
+                    // Calcular filas dinámicamente si no hay límite
+                    if (!tieneLimite) {
+                      tarjetasPorFila = Math.ceil(tarjetas.length / 2);
+                      totalTarjetas = tarjetas.length;
                     }
                     
                     // Dividir en dos filas
@@ -1452,7 +1453,10 @@ const renderSubzonesFromMap = () => {
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                                {paletsEnSubzona.length}/{capacidad} ocupados
+                                {tieneLimite && capacidad 
+                                  ? `${tarjetas.filter(t => t.occupied).length}/${capacidad} ocupados`
+                                  : `${tarjetas.filter(t => t.occupied).length} ocupados`
+                                }
                               </span>
                               <ChevronDown 
                                 className={`text-blue-500 dark:text-blue-400 transition-all duration-300 ${isExpanded ? 'rotate-180' : ''}`}
@@ -1475,7 +1479,7 @@ const renderSubzonesFromMap = () => {
                                   >
                                     <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-2xl opacity-0 group-hover:opacity-20 transition-opacity duration-300 blur-xl"></div>
                                     <button
-                                      className={`relative rounded-2xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-2 shadow-md hover:shadow-lg hover:shadow-blue-500/30 min-w-[110px] min-h-[90px] ${
+                                      className={`relative rounded-2xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-1 shadow-md hover:shadow-lg hover:shadow-blue-500/30 min-w-[110px] h-[110px] ${
                                         tarjeta.occupied 
                                           ? `bg-gradient-to-br from-white to-blue-50 dark:from-slate-800 dark:to-slate-700 border-blue-200 dark:border-slate-600 hover:border-blue-300 dark:hover:border-slate-500 hover:scale-105`
                                           : `bg-gradient-to-br from-white to-gray-50 dark:from-slate-800 dark:to-slate-700 border-gray-200 dark:border-slate-600 hover:border-gray-300 dark:hover:border-slate-500 hover:scale-105`
@@ -1484,48 +1488,73 @@ const renderSubzonesFromMap = () => {
                                       {tarjeta.occupied && tarjeta.pallet ? (
                                         <>
                                           {tarjeta.isGrouped && tarjeta.groupCount && tarjeta.groupCount > 1 ? (
-                                            // Diseño especial para palets agrupados
                                             <>
-                                              <div className="w-8 h-8 bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-700 dark:to-pink-700 rounded-full flex items-center justify-center ring-2 ring-purple-300 dark:ring-purple-500">
+                                              <div className="absolute top-2 left-1/2 -translate-x-1/2 w-8 h-8 bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-700 dark:to-pink-700 rounded-full flex items-center justify-center">
                                                 <Layers size={16} className="text-purple-600 dark:text-purple-300" />
                                               </div>
-                                              <span className="text-[9px] font-bold text-purple-600 dark:text-purple-300 uppercase tracking-wide truncate max-w-[90px]">
-                                                {tarjeta.pallet.codigo_barra}
+                                              <span className="absolute top-10 left-1/2 -translate-x-1/2 text-[11px] font-bold text-purple-600 dark:text-purple-300 uppercase tracking-wide truncate max-w-[90px] text-center" title={tarjeta.pallet.codigo_barra || ''}>
+                                                {tarjeta.pallet.codigo_barra || '\u00A0'}
                                               </span>
-                                              <div className="flex items-center gap-1">
-                                                <span className="text-[7px] bg-purple-500 text-white px-1.5 py-0.5 rounded-full font-bold">
+                                              <div className="absolute top-16 left-1/2 -translate-x-1/2 flex items-center gap-1">
+                                                <span className="text-[9px] bg-purple-500 text-white px-1.5 py-0.5 rounded-full font-bold">
                                                   ×{tarjeta.groupCount}
                                                 </span>
-                                                <span className="text-[7px] text-slate-500 dark:text-slate-400">
+                                                <span className="text-[9px] text-slate-500 dark:text-slate-400">
                                                   {tarjeta.pallet.daysInStorage}d
                                                 </span>
                                               </div>
+                                              <span className="absolute top-22 left-1/2 -translate-x-1/2 text-[8px] font-bold text-purple-700 dark:text-purple-400 uppercase tracking-wide text-center">
+                                                {generarCodigoUbicacion(
+                                                  zones.find(z => z.id === selectedZone)?.name || '',
+                                                  subZone.nombre,
+                                                  1,
+                                                  index + 1
+                                                )}
+                                              </span>
                                             </>
                                           ) : (
-                                            // Diseño normal para palets individuales
                                             <>
-                                              <div className="w-8 h-8 bg-gradient-to-r from-blue-100 to-indigo-100 dark:from-slate-700 dark:to-slate-600 rounded-full flex items-center justify-center">
+                                              <div className="absolute top-2 left-1/2 -translate-x-1/2 w-8 h-8 bg-gradient-to-r from-blue-100 to-indigo-100 dark:from-slate-700 dark:to-slate-600 rounded-full flex items-center justify-center">
                                                 <Package size={16} className="text-blue-500 dark:text-blue-400" />
                                               </div>
-                                              <span className="text-[10px] font-bold text-blue-600 dark:text-blue-300 uppercase tracking-wide truncate max-w-[90px]">
-                                                {tarjeta.pallet.codigo_barra}
+                                              <span className="absolute top-10 left-1/2 -translate-x-1/2 text-[11px] font-bold text-blue-600 dark:text-blue-300 uppercase tracking-wide truncate max-w-[90px] text-center" title={tarjeta.pallet.codigo_barra || ''}>
+                                                {tarjeta.pallet.codigo_barra || '\u00A0'}
                                               </span>
-                                              <span className="text-[8px] text-slate-500 dark:text-slate-400">
+                                              <span className="absolute top-16 left-1/2 -translate-x-1/2 text-[9px] text-slate-500 dark:text-slate-400">
                                                 {tarjeta.pallet.daysInStorage}d
+                                              </span>
+                                              <span className="absolute top-22 left-1/2 -translate-x-1/2 text-[8px] font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wide text-center">
+                                                {generarCodigoUbicacion(
+                                                  zones.find(z => z.id === selectedZone)?.name || '',
+                                                  subZone.nombre,
+                                                  1,
+                                                  index + 1
+                                                )}
                                               </span>
                                             </>
                                           )}
                                         </>
                                       ) : (
                                         <>
-                                          <div className="w-8 h-8 bg-gradient-to-r from-gray-100 to-gray-200 dark:from-slate-700 dark:to-slate-600 rounded-full flex items-center justify-center">
+                                          <div className="absolute top-2 left-1/2 -translate-x-1/2 w-8 h-8 bg-gradient-to-r from-gray-100 to-gray-200 dark:from-slate-700 dark:to-slate-600 rounded-full flex items-center justify-center">
                                             <Box size={16} className="text-gray-400 dark:text-gray-500" />
                                           </div>
+                                          <span className="absolute top-10 left-1/2 -translate-x-1/2 text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide truncate max-w-[90px] text-center">
+                                            {'\u00A0'}
+                                          </span>
+                                          <div className="absolute top-16 left-1/2 -translate-x-1/2 flex items-center gap-1">
+                                            <span className="text-transparent px-1.5 py-0.5 rounded-full font-bold">
+                                              {'\u00A0'}
+                                            </span>
+                                            <span className="text-[9px] text-slate-400 dark:text-slate-500">
+                                              {'\u00A0'}
+                                            </span>
+                                          </div>
+                                          <span className="absolute top-22 left-1/2 -translate-x-1/2 text-[8px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-center">
+                                            {'\u00A0'}
+                                          </span>
                                           <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                                             Vacío
-                                          </span>
-                                          <span className="text-[9px] text-slate-400 dark:text-slate-500">
-                                            #{index + 1}
                                           </span>
                                         </>
                                       )}
@@ -1533,7 +1562,6 @@ const renderSubzonesFromMap = () => {
                                   </div>
                                 ))}
                               </div>
-                              
                               {/* Fila inferior */}
                               <div className="flex justify-center gap-3">
                                 {filaInferior.map((tarjeta, index) => (
@@ -1541,59 +1569,84 @@ const renderSubzonesFromMap = () => {
                                     key={tarjeta.id}
                                     className="group relative"
                                   >
-                                    <div className="absolute inset-0 bg-gradient-to-r from-indigo-400 to-purple-400 rounded-2xl opacity-0 group-hover:opacity-20 transition-opacity duration-300 blur-xl"></div>
+                                    <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-2xl opacity-0 group-hover:opacity-20 transition-opacity duration-300 blur-xl"></div>
                                     <button
-                                      className={`relative rounded-2xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-2 shadow-md hover:shadow-lg hover:shadow-indigo-500/30 min-w-[110px] min-h-[90px] ${
+                                      className={`relative rounded-2xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-1 shadow-md hover:shadow-lg hover:shadow-blue-500/30 min-w-[110px] h-[110px] ${
                                         tarjeta.occupied 
-                                          ? `bg-gradient-to-br from-white to-indigo-50 dark:from-slate-800 dark:to-slate-700 border-indigo-200 dark:border-slate-600 hover:border-indigo-300 dark:hover:border-slate-500 hover:scale-105`
+                                          ? `bg-gradient-to-br from-white to-blue-50 dark:from-slate-800 dark:to-slate-700 border-blue-200 dark:border-slate-600 hover:border-blue-300 dark:hover:border-slate-500 hover:scale-105`
                                           : `bg-gradient-to-br from-white to-gray-50 dark:from-slate-800 dark:to-slate-700 border-gray-200 dark:border-slate-600 hover:border-gray-300 dark:hover:border-slate-500 hover:scale-105`
                                       }`}
                                     >
                                       {tarjeta.occupied && tarjeta.pallet ? (
                                         <>
                                           {tarjeta.isGrouped && tarjeta.groupCount && tarjeta.groupCount > 1 ? (
-                                            // Diseño especial para palets agrupados
                                             <>
-                                              <div className="w-8 h-8 bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-700 dark:to-pink-700 rounded-full flex items-center justify-center ring-2 ring-purple-300 dark:ring-purple-500">
+                                              <div className="absolute top-2 left-1/2 -translate-x-1/2 w-8 h-8 bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-700 dark:to-pink-700 rounded-full flex items-center justify-center">
                                                 <Layers size={16} className="text-purple-600 dark:text-purple-300" />
                                               </div>
-                                              <span className="text-[9px] font-bold text-purple-600 dark:text-purple-300 uppercase tracking-wide truncate max-w-[90px]">
-                                                {tarjeta.pallet.codigo_barra}
+                                              <span className="absolute top-10 left-1/2 -translate-x-1/2 text-[11px] font-bold text-purple-600 dark:text-purple-300 uppercase tracking-wide truncate max-w-[90px] text-center" title={tarjeta.pallet.codigo_barra || ''}>
+                                                {tarjeta.pallet.codigo_barra || '\u00A0'}
                                               </span>
-                                              <div className="flex items-center gap-1">
-                                                <span className="text-[7px] bg-purple-500 text-white px-1.5 py-0.5 rounded-full font-bold">
+                                              <div className="absolute top-16 left-1/2 -translate-x-1/2 flex items-center gap-1">
+                                                <span className="text-[9px] bg-purple-500 text-white px-1.5 py-0.5 rounded-full font-bold">
                                                   ×{tarjeta.groupCount}
                                                 </span>
-                                                <span className="text-[7px] text-slate-500 dark:text-slate-400">
+                                                <span className="text-[9px] text-slate-500 dark:text-slate-400">
                                                   {tarjeta.pallet.daysInStorage}d
                                                 </span>
                                               </div>
+                                              <span className="absolute top-22 left-1/2 -translate-x-1/2 text-[8px] font-bold text-purple-700 dark:text-purple-400 uppercase tracking-wide text-center">
+                                                {generarCodigoUbicacion(
+                                                  zones.find(z => z.id === selectedZone)?.name || '',
+                                                  subZone.nombre,
+                                                  2,
+                                                  index + 1
+                                                )}
+                                              </span>
                                             </>
                                           ) : (
-                                            // Diseño normal para palets individuales
                                             <>
-                                              <div className="w-8 h-8 bg-gradient-to-r from-indigo-100 to-purple-100 dark:from-slate-700 dark:to-slate-600 rounded-full flex items-center justify-center">
-                                                <Package size={16} className="text-indigo-500 dark:text-indigo-400" />
+                                              <div className="absolute top-2 left-1/2 -translate-x-1/2 w-8 h-8 bg-gradient-to-r from-blue-100 to-indigo-100 dark:from-slate-700 dark:to-slate-600 rounded-full flex items-center justify-center">
+                                                <Package size={16} className="text-blue-500 dark:text-blue-400" />
                                               </div>
-                                              <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-300 uppercase tracking-wide truncate max-w-[90px]">
-                                                {tarjeta.pallet.codigo_barra}
+                                              <span className="absolute top-10 left-1/2 -translate-x-1/2 text-[11px] font-bold text-blue-600 dark:text-blue-300 uppercase tracking-wide truncate max-w-[90px] text-center" title={tarjeta.pallet.codigo_barra || ''}>
+                                                {tarjeta.pallet.codigo_barra || '\u00A0'}
                                               </span>
-                                              <span className="text-[8px] text-slate-500 dark:text-slate-400">
+                                              <span className="absolute top-16 left-1/2 -translate-x-1/2 text-[9px] text-slate-500 dark:text-slate-400">
                                                 {tarjeta.pallet.daysInStorage}d
+                                              </span>
+                                              <span className="absolute top-22 left-1/2 -translate-x-1/2 text-[8px] font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wide text-center">
+                                                {generarCodigoUbicacion(
+                                                  zones.find(z => z.id === selectedZone)?.name || '',
+                                                  subZone.nombre,
+                                                  2,
+                                                  index + 1
+                                                )}
                                               </span>
                                             </>
                                           )}
                                         </>
                                       ) : (
                                         <>
-                                          <div className="w-8 h-8 bg-gradient-to-r from-gray-100 to-gray-200 dark:from-slate-700 dark:to-slate-600 rounded-full flex items-center justify-center">
+                                          <div className="absolute top-2 left-1/2 -translate-x-1/2 w-8 h-8 bg-gradient-to-r from-gray-100 to-gray-200 dark:from-slate-700 dark:to-slate-600 rounded-full flex items-center justify-center">
                                             <Box size={16} className="text-gray-400 dark:text-gray-500" />
                                           </div>
+                                          <span className="absolute top-10 left-1/2 -translate-x-1/2 text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide truncate max-w-[90px] text-center">
+                                            {'\u00A0'}
+                                          </span>
+                                          <div className="absolute top-16 left-1/2 -translate-x-1/2 flex items-center gap-1">
+                                            <span className="text-transparent px-1.5 py-0.5 rounded-full font-bold">
+                                              {'\u00A0'}
+                                            </span>
+                                            <span className="text-[9px] text-slate-400 dark:text-slate-500">
+                                              {'\u00A0'}
+                                            </span>
+                                          </div>
+                                          <span className="absolute top-22 left-1/2 -translate-x-1/2 text-[8px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-center">
+                                            {'\u00A0'}
+                                          </span>
                                           <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                                             Vacío
-                                          </span>
-                                          <span className="text-[9px] text-slate-400 dark:text-slate-500">
-                                            #{index + tarjetasPorFila + 1}
                                           </span>
                                         </>
                                       )}
