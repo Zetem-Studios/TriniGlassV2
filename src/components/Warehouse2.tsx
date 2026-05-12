@@ -240,9 +240,10 @@ const mapProductoToBlock = async (producto: Producto, rules: any[], index: numbe
   if (daysInStorage > 30) priority = "Alta";
   else if (daysInStorage > 20) priority = "Media";
 
-  // El posicionamiento ahora viene directamente de la BD
-  const zoneId = (producto as any).zoneId || "expediciones";
-  const area = (producto as any).area || "H";
+  // El posicionamiento viene directamente de los campos actualizados por reglas
+  // Sin hardcoded - todo dinámico desde la BD
+  const zoneId = (producto as any).zona;
+  const area = (producto as any).subzona;
 
   console.log(`✅ ${producto.nombre_abreviado} (${producto.codigo_barra}) → Zona ${zoneId} / Subzona ${area}`);
 
@@ -275,21 +276,6 @@ const mapProductoToBlock = async (producto: Producto, rules: any[], index: numbe
   };
 };
 
-// Función auxiliar para obtener zoneId basado en subzona (lógica hardcodeada temporal)
-const getZoneIdForSubzone = (subzone: string): string => {
-  const subzoneToZone: { [key: string]: string } = {
-    "H": "expediciones",
-    "Mamparista": "expediciones",
-    "E": "corte",
-    "D": "cms",
-    "F": "pulidoras",
-    "C": "bilateral_taladros",
-    "B": "bilateral_taladros",
-    "A": "horno",
-    "??": "horno"
-  };
-  return subzoneToZone[subzone] || "expediciones";
-};
 
 // Versión síncrona simplificada para usar en el bucle
 const mapProductoToBlockSimple = (producto: Producto, index: number): Block => {
@@ -307,17 +293,25 @@ const mapProductoToBlockSimple = (producto: Producto, index: number): Block => {
   if (daysInStorage > 30) priority = "Alta";
   else if (daysInStorage > 20) priority = "Media";
 
-  // Determinar zona y subzona
-  let area = "";
-  let zoneId = "";
-  if (typeof producto.subzona === "string" && producto.subzona.trim() !== "") {
-    area = producto.subzona.trim();
-    if (area === "H" || area === "Mamparista") {
-      zoneId = "expediciones";
-    } else if (["E", "D", "F", "C", "B", "A", "??"].includes(area)) {
-      zoneId = getZoneIdForSubzone(area);
-    }
+  // Usar los campos zona y subzona que se guardan en la BD (actualizados por reglas)
+  // Si no existen, usar la lógica de determinación original
+  let area = (producto as any).subzona || '';
+  let zoneId = (producto as any).zona || '';
+  
+  // Depurar asignación de zona y subzona
+  if (index < 5) {
+    console.log(`📍 Mapeo Producto ${index}:`, {
+      codigo_barra: producto.codigo_barra,
+      zona_bd: (producto as any).zona,
+      subzona_bd: (producto as any).subzona,
+      zona_asignada: zoneId,
+      subzona_asignada: area
+    });
   }
+  
+  // Sistema completamente dinámico - sin hardcoded
+  // Los productos deben tener sus campos zona y subzona correctamente asignados
+  // Si no tienen valores, se mostrarán como undefined/null y se filtrarán correctamente
 
   return {
     id: String(producto.id) || `block-${index}`,
@@ -445,6 +439,22 @@ export default function Warehouse2() {
         docsToProcess.forEach((doc, index) => {
           const data = doc.data() as any;
           const producto = { ...data, id: doc.id };
+          
+          // Depurar campos zona y subzona
+          if (index < 10) { // Mostrar más productos para ver la variación
+            console.log(`🔍 Producto ${index}:`, {
+              id: producto.id,
+              codigo_barra: producto.codigo_barra,
+              cliente: producto.apellido_cliente || producto.nombre_abreviado,
+              zona_campo: producto.zona,
+              subzona_campo: producto.subzona,
+              zona_cast: (producto as any).zona,
+              subzona_cast: (producto as any).subzona,
+              zona_bd: producto.zona,
+              subzona_bd: producto.subzona
+            });
+          }
+          
           const block = mapProductoToBlockSimple(producto, index);
           nuevosBlocks.push(block);
         });
@@ -1336,10 +1346,29 @@ const renderSubzonesFromMap = () => {
                     const tarjetasPorFila = Math.ceil(capacidad / 2);
                     const totalTarjetas = tarjetasPorFila * 2; // Siempre 2 filas
                     
-                    // Filtrar palets que pertenecen a esta subzona
-                    const paletsEnSubzona = blocks.filter(block => 
-                      block.area === subZone.nombre && block.zoneId === selectedZone
-                    );
+                    // Filtrar palets que pertenecen a esta subzona (usando campos actualizados por reglas)
+                    const paletsEnSubzona = blocks.filter(block => {
+                      // Priorizar campos zona/subzona actualizados por reglas
+                      const blockArea = (block as any).subzona || block.area;
+                      
+                      // Solo filtrar por nombre de subzona, no por zona
+                      return blockArea === subZone.nombre;
+                    });
+                    
+                    // Depurar filtrado para primeras subzonas
+                    if (zoneSubzonas.indexOf(subZone) < 3) {
+                      console.log(`🎯 Subzona "${subZone.nombre}" (${selectedZone}):`, {
+                        total_blocks: blocks.length,
+                        palets_filtrados: paletsEnSubzona.length,
+                        subzona_nombre: subZone.nombre,
+                        zona_seleccionada: selectedZone,
+                        palets_encontrados: paletsEnSubzona.slice(0, 3).map(p => ({
+                          codigo: p.codigo_barra,
+                          zona: (p as any).zona || p.zoneId,
+                          subzona: (p as any).subzona || p.area
+                        }))
+                      });
+                    }
                     
                     // Agrupar palets por código de barras para detectar agrupaciones (sin Map)
                     let tarjetas: Array<{
