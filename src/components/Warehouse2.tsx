@@ -275,9 +275,80 @@ const mapProductoToBlock = async (producto: Producto, rules: any[], index: numbe
   };
 };
 
-export default function Warehouse2() {
-  const TEST_MODE = true;
+// Función auxiliar para obtener zoneId basado en subzona (lógica hardcodeada temporal)
+const getZoneIdForSubzone = (subzone: string): string => {
+  const subzoneToZone: { [key: string]: string } = {
+    "H": "expediciones",
+    "Mamparista": "expediciones",
+    "E": "corte",
+    "D": "cms",
+    "F": "pulidoras",
+    "C": "bilateral_taladros",
+    "B": "bilateral_taladros",
+    "A": "horno",
+    "??": "horno"
+  };
+  return subzoneToZone[subzone] || "expediciones";
+};
+
+// Versión síncrona simplificada para usar en el bucle
+const mapProductoToBlockSimple = (producto: Producto, index: number): Block => {
+  const fechaPedido = parseFechaLineaPedido(producto.fecha_linea_pedido);
+  const hoy = new Date();
+  let daysInStorage = 0;
+
+  if (fechaPedido) {
+    daysInStorage = Math.max(0, Math.floor((hoy.getTime() - fechaPedido.getTime()) / (1000 * 60 * 60 * 24)));
+  }
+
+  const tipoVidrio = producto.vidrio_simple ? "Vidrio Simple" : "Doble Acristalamiento";
   
+  let priority = "Normal";
+  if (daysInStorage > 30) priority = "Alta";
+  else if (daysInStorage > 20) priority = "Media";
+
+  // Determinar zona y subzona
+  let area = "";
+  let zoneId = "";
+  if (typeof producto.subzona === "string" && producto.subzona.trim() !== "") {
+    area = producto.subzona.trim();
+    if (area === "H" || area === "Mamparista") {
+      zoneId = "expediciones";
+    } else if (["E", "D", "F", "C", "B", "A", "??"].includes(area)) {
+      zoneId = getZoneIdForSubzone(area);
+    }
+  }
+
+  return {
+    id: String(producto.id) || `block-${index}`,
+    codigo_barra: producto.codigo_barra || '',
+    zoneId: zoneId,
+    area: area,
+    type: tipoVidrio,
+    daysInStorage: daysInStorage,
+    client: (producto.apellido_cliente as string) || (producto.nombre_abreviado as string) || "Cliente Desconocido",
+    occupied: true,
+    dimensions: `${producto.altura || 0} x ${producto.longitud || 0} mm`,
+    weight: `${producto.peso_total_kg || 0} kg`,
+    priority: priority,
+    lastUpdate: (() => {
+      const fechaEntregaDate = parseFechaLineaPedido(producto.fecha_entrega);
+      if (fechaEntregaDate) return fechaEntregaDate.toLocaleDateString('es-ES');
+      if (producto.fecha_entrega) {
+        const fechaPlain = Date.parse(String(producto.fecha_entrega));
+        if (!isNaN(fechaPlain)) return new Date(fechaPlain).toLocaleDateString('es-ES');
+      }
+      return "N/A";
+    })(),
+    numeroCliente: producto.numero_cliente as string,
+    numeroLineaPedido: producto.numero_linea_pedido as string,
+    estadoPedido: producto.estado_pedido as string,
+    empresa: producto.empresa as string,
+    referencias: producto.referencia_linea_pedido as string
+  };
+};
+
+export default function Warehouse2() {
   // Inyectar estilos CSS personalizados
   useEffect(() => {
     const styleId = 'custom-scrollbar-styles';
@@ -336,6 +407,87 @@ export default function Warehouse2() {
       loadActiveMapFromFirebase();
     }
   }, [designs, designsLoading]);
+
+  // MODO TEST/ENTREGA: Cambiar a false para modo entrega (cargar todos los datos)
+  const TEST_MODE = false; // true = modo test (solo 200 lecturas), false = modo entrega (todos los datos)
+
+  // Cargar productos desde Firebase
+  useEffect(() => {
+    const fetchProductos = async () => {
+      try {
+        setLoading(true);
+        console.log("🔥 Iniciando conexión a Firebase...");
+        console.log("Proyecto:", db.app.options.projectId);
+        console.log("📦 Buscando colección: 'productos'");
+        
+        const productosCollection = collection(db, "productos");
+        const snapshot = await getDocs(productosCollection);
+        
+        console.log(`✅ Conexión exitosa. Documentos encontrados: ${snapshot.size}`);
+        
+        if (snapshot.size === 0) {
+          console.warn("⚠️ La colección 'productos' está vacía o no existe.");
+          setError("La colección 'productos' está vacía");
+          setBlocks([]);
+          setLoading(false);
+          return;
+        }
+
+        // MODO TEST: Limitar a 200 documentos para ahorrar lecturas de Firebase
+        const docsToProcess = TEST_MODE ? snapshot.docs.slice(0, 200) : snapshot.docs;
+        if (TEST_MODE) {
+          console.log(`🧪 MODO TEST: Procesando solo los primeros ${docsToProcess.length} documentos de ${snapshot.size} totales`);
+        }
+        
+        // Convertir productos a bloques (cada producto es un bloque individual)
+        const nuevosBlocks: Block[] = [];
+        
+        docsToProcess.forEach((doc, index) => {
+          const data = doc.data() as any;
+          const producto = { ...data, id: doc.id };
+          const block = mapProductoToBlockSimple(producto, index);
+          nuevosBlocks.push(block);
+        });
+        
+        // Contar agrupaciones para estadísticas (sin Map)
+        let agrupacionesContadas = 0;
+        const codigosVistos: string[] = [];
+        
+        docsToProcess.forEach(doc => {
+          const data = doc.data() as any;
+          const codigo = data.codigo_barra || '';
+          
+          if (!codigosVistos.includes(codigo)) {
+            const mismoCodigo = docsToProcess.filter(d => 
+              (d.data() as any).codigo_barra === codigo
+            );
+            
+            if (mismoCodigo.length > 1) {
+              agrupacionesContadas++;
+            }
+            
+            codigosVistos.push(codigo);
+          }
+        });
+        
+        console.log(`✅ ${nuevosBlocks.length} productos MAFER mapeados correctamente`);
+        console.log(`📊 Duplicados detectados: ${agrupacionesContadas}`);
+        
+        setBlocks(nuevosBlocks);
+        setError(null);
+      } catch (err) {
+        console.error("❌ Error cargando productos:", err);
+        console.error("   Tipo de error:", (err as Error).name);
+        console.error("   Mensaje:", (err as Error).message);
+        setError(`Error: ${(err as Error).message}`);
+        setBlocks([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProductos();
+  }, []);
 
   // Función para cargar el mapa activo desde Firebase
   const loadActiveMapFromFirebase = () => {
@@ -1184,16 +1336,71 @@ const renderSubzonesFromMap = () => {
                     const tarjetasPorFila = Math.ceil(capacidad / 2);
                     const totalTarjetas = tarjetasPorFila * 2; // Siempre 2 filas
                     
-                    // Generar array de tarjetas vacías
-                    const tarjetasVacias = Array.from({ length: totalTarjetas }, (_, index) => ({
-                      id: `${subZone.id}-tarjeta-${index}`,
-                      occupied: false,
-                      daysInStorage: 0
-                    }));
+                    // Filtrar palets que pertenecen a esta subzona
+                    const paletsEnSubzona = blocks.filter(block => 
+                      block.area === subZone.nombre && block.zoneId === selectedZone
+                    );
+                    
+                    // Agrupar palets por código de barras para detectar agrupaciones (sin Map)
+                    let tarjetas: Array<{
+                      id: string;
+                      occupied: boolean;
+                      daysInStorage: number;
+                      pallet?: Block;
+                      isGrouped?: boolean;
+                      groupCount?: number;
+                      allPalets?: Block[];
+                    }> = [];
+                    
+                    // Primero, identificar códigos duplicados
+                    const codigosProcesados: string[] = [];
+                    
+                    paletsEnSubzona.forEach(pallet => {
+                      if (!codigosProcesados.includes(pallet.codigo_barra)) {
+                        // Primer palet con este código - buscar si hay más
+                        const paletsMismoCodigo = paletsEnSubzona.filter(p => 
+                          p.codigo_barra === pallet.codigo_barra
+                        );
+                        
+                        if (paletsMismoCodigo.length > 1) {
+                          // Múltiples pedidos con mismo código - tarjeta especial agrupada
+                          tarjetas.push({
+                            id: pallet.codigo_barra,
+                            occupied: true,
+                            daysInStorage: Math.min(...paletsMismoCodigo.map(p => p.daysInStorage)),
+                            pallet: paletsMismoCodigo[0],
+                            isGrouped: true,
+                            groupCount: paletsMismoCodigo.length,
+                            allPalets: paletsMismoCodigo
+                          });
+                        } else {
+                          // Pedido individual
+                          tarjetas.push({
+                            id: pallet.id,
+                            occupied: true,
+                            daysInStorage: pallet.daysInStorage,
+                            pallet: pallet,
+                            isGrouped: false
+                          });
+                        }
+                        
+                        codigosProcesados.push(pallet.codigo_barra);
+                      }
+                    });
+                    
+                    // Rellenar espacios vacíos hasta alcanzar la capacidad máxima
+                    const espaciosVacios = totalTarjetas - tarjetas.length;
+                    for (let i = 0; i < espaciosVacios; i++) {
+                      tarjetas.push({
+                        id: `${subZone.id}-vacio-${i}`,
+                        occupied: false,
+                        daysInStorage: 0
+                      });
+                    }
                     
                     // Dividir en dos filas
-                    const filaSuperior = tarjetasVacias.slice(0, tarjetasPorFila);
-                    const filaInferior = tarjetasVacias.slice(tarjetasPorFila, totalTarjetas);
+                    const filaSuperior = tarjetas.slice(0, tarjetasPorFila);
+                    const filaInferior = tarjetas.slice(tarjetasPorFila, totalTarjetas);
                     
                     const isExpanded = expandedSubzones.has(subZone.id);
                     
@@ -1216,7 +1423,7 @@ const renderSubzonesFromMap = () => {
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                                {capacidad} espacios
+                                {paletsEnSubzona.length}/{capacidad} ocupados
                               </span>
                               <ChevronDown 
                                 className={`text-blue-500 dark:text-blue-400 transition-all duration-300 ${isExpanded ? 'rotate-180' : ''}`}
@@ -1226,7 +1433,7 @@ const renderSubzonesFromMap = () => {
                           </div>
                         </button>
                         
-                        {/* Tarjetas vacías - solo se muestran si está expandido */}
+                        {/* Tarjetas - solo se muestran si está expandido */}
                         {isExpanded && (
                           <div className="overflow-x-auto scrollbar-horizontal-custom">
                             <div className="space-y-4 pl-6 min-w-max py-4">
@@ -1239,17 +1446,60 @@ const renderSubzonesFromMap = () => {
                                   >
                                     <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-2xl opacity-0 group-hover:opacity-20 transition-opacity duration-300 blur-xl"></div>
                                     <button
-                                      className="relative rounded-2xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-2 shadow-md hover:shadow-lg hover:shadow-blue-500/30 bg-gradient-to-br from-white to-blue-50 dark:from-slate-800 dark:to-slate-700 border-blue-200 dark:border-slate-600 hover:border-blue-300 dark:hover:border-slate-500 hover:scale-105 min-w-[110px] min-h-[90px]"
+                                      className={`relative rounded-2xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-2 shadow-md hover:shadow-lg hover:shadow-blue-500/30 min-w-[110px] min-h-[90px] ${
+                                        tarjeta.occupied 
+                                          ? `bg-gradient-to-br from-white to-blue-50 dark:from-slate-800 dark:to-slate-700 border-blue-200 dark:border-slate-600 hover:border-blue-300 dark:hover:border-slate-500 hover:scale-105`
+                                          : `bg-gradient-to-br from-white to-gray-50 dark:from-slate-800 dark:to-slate-700 border-gray-200 dark:border-slate-600 hover:border-gray-300 dark:hover:border-slate-500 hover:scale-105`
+                                      }`}
                                     >
-                                      <div className="w-8 h-8 bg-gradient-to-r from-blue-100 to-indigo-100 dark:from-slate-700 dark:to-slate-600 rounded-full flex items-center justify-center">
-                                        <Box size={16} className="text-blue-500 dark:text-blue-400" />
-                                      </div>
-                                      <span className="text-[11px] font-bold text-blue-600 dark:text-blue-300 uppercase tracking-wide">
-                                        Vacío
-                                      </span>
-                                      <span className="text-[9px] text-slate-400 dark:text-slate-500">
-                                        #{index + 1}
-                                      </span>
+                                      {tarjeta.occupied && tarjeta.pallet ? (
+                                        <>
+                                          {tarjeta.isGrouped && tarjeta.groupCount && tarjeta.groupCount > 1 ? (
+                                            // Diseño especial para palets agrupados
+                                            <>
+                                              <div className="w-8 h-8 bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-700 dark:to-pink-700 rounded-full flex items-center justify-center ring-2 ring-purple-300 dark:ring-purple-500">
+                                                <Layers size={16} className="text-purple-600 dark:text-purple-300" />
+                                              </div>
+                                              <span className="text-[9px] font-bold text-purple-600 dark:text-purple-300 uppercase tracking-wide truncate max-w-[90px]">
+                                                {tarjeta.pallet.codigo_barra}
+                                              </span>
+                                              <div className="flex items-center gap-1">
+                                                <span className="text-[7px] bg-purple-500 text-white px-1.5 py-0.5 rounded-full font-bold">
+                                                  ×{tarjeta.groupCount}
+                                                </span>
+                                                <span className="text-[7px] text-slate-500 dark:text-slate-400">
+                                                  {tarjeta.pallet.daysInStorage}d
+                                                </span>
+                                              </div>
+                                            </>
+                                          ) : (
+                                            // Diseño normal para palets individuales
+                                            <>
+                                              <div className="w-8 h-8 bg-gradient-to-r from-blue-100 to-indigo-100 dark:from-slate-700 dark:to-slate-600 rounded-full flex items-center justify-center">
+                                                <Package size={16} className="text-blue-500 dark:text-blue-400" />
+                                              </div>
+                                              <span className="text-[10px] font-bold text-blue-600 dark:text-blue-300 uppercase tracking-wide truncate max-w-[90px]">
+                                                {tarjeta.pallet.codigo_barra}
+                                              </span>
+                                              <span className="text-[8px] text-slate-500 dark:text-slate-400">
+                                                {tarjeta.pallet.daysInStorage}d
+                                              </span>
+                                            </>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <>
+                                          <div className="w-8 h-8 bg-gradient-to-r from-gray-100 to-gray-200 dark:from-slate-700 dark:to-slate-600 rounded-full flex items-center justify-center">
+                                            <Box size={16} className="text-gray-400 dark:text-gray-500" />
+                                          </div>
+                                          <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                            Vacío
+                                          </span>
+                                          <span className="text-[9px] text-slate-400 dark:text-slate-500">
+                                            #{index + 1}
+                                          </span>
+                                        </>
+                                      )}
                                     </button>
                                   </div>
                                 ))}
@@ -1264,17 +1514,60 @@ const renderSubzonesFromMap = () => {
                                   >
                                     <div className="absolute inset-0 bg-gradient-to-r from-indigo-400 to-purple-400 rounded-2xl opacity-0 group-hover:opacity-20 transition-opacity duration-300 blur-xl"></div>
                                     <button
-                                      className="relative rounded-2xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-2 shadow-md hover:shadow-lg hover:shadow-indigo-500/30 bg-gradient-to-br from-white to-indigo-50 dark:from-slate-800 dark:to-slate-700 border-indigo-200 dark:border-slate-600 hover:border-indigo-300 dark:hover:border-slate-500 hover:scale-105 min-w-[110px] min-h-[90px]"
+                                      className={`relative rounded-2xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-2 shadow-md hover:shadow-lg hover:shadow-indigo-500/30 min-w-[110px] min-h-[90px] ${
+                                        tarjeta.occupied 
+                                          ? `bg-gradient-to-br from-white to-indigo-50 dark:from-slate-800 dark:to-slate-700 border-indigo-200 dark:border-slate-600 hover:border-indigo-300 dark:hover:border-slate-500 hover:scale-105`
+                                          : `bg-gradient-to-br from-white to-gray-50 dark:from-slate-800 dark:to-slate-700 border-gray-200 dark:border-slate-600 hover:border-gray-300 dark:hover:border-slate-500 hover:scale-105`
+                                      }`}
                                     >
-                                      <div className="w-8 h-8 bg-gradient-to-r from-indigo-100 to-purple-100 dark:from-slate-700 dark:to-slate-600 rounded-full flex items-center justify-center">
-                                        <Box size={16} className="text-indigo-500 dark:text-indigo-400" />
-                                      </div>
-                                      <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-300 uppercase tracking-wide">
-                                        Vacío
-                                      </span>
-                                      <span className="text-[9px] text-slate-400 dark:text-slate-500">
-                                        #{index + tarjetasPorFila + 1}
-                                      </span>
+                                      {tarjeta.occupied && tarjeta.pallet ? (
+                                        <>
+                                          {tarjeta.isGrouped && tarjeta.groupCount && tarjeta.groupCount > 1 ? (
+                                            // Diseño especial para palets agrupados
+                                            <>
+                                              <div className="w-8 h-8 bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-700 dark:to-pink-700 rounded-full flex items-center justify-center ring-2 ring-purple-300 dark:ring-purple-500">
+                                                <Layers size={16} className="text-purple-600 dark:text-purple-300" />
+                                              </div>
+                                              <span className="text-[9px] font-bold text-purple-600 dark:text-purple-300 uppercase tracking-wide truncate max-w-[90px]">
+                                                {tarjeta.pallet.codigo_barra}
+                                              </span>
+                                              <div className="flex items-center gap-1">
+                                                <span className="text-[7px] bg-purple-500 text-white px-1.5 py-0.5 rounded-full font-bold">
+                                                  ×{tarjeta.groupCount}
+                                                </span>
+                                                <span className="text-[7px] text-slate-500 dark:text-slate-400">
+                                                  {tarjeta.pallet.daysInStorage}d
+                                                </span>
+                                              </div>
+                                            </>
+                                          ) : (
+                                            // Diseño normal para palets individuales
+                                            <>
+                                              <div className="w-8 h-8 bg-gradient-to-r from-indigo-100 to-purple-100 dark:from-slate-700 dark:to-slate-600 rounded-full flex items-center justify-center">
+                                                <Package size={16} className="text-indigo-500 dark:text-indigo-400" />
+                                              </div>
+                                              <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-300 uppercase tracking-wide truncate max-w-[90px]">
+                                                {tarjeta.pallet.codigo_barra}
+                                              </span>
+                                              <span className="text-[8px] text-slate-500 dark:text-slate-400">
+                                                {tarjeta.pallet.daysInStorage}d
+                                              </span>
+                                            </>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <>
+                                          <div className="w-8 h-8 bg-gradient-to-r from-gray-100 to-gray-200 dark:from-slate-700 dark:to-slate-600 rounded-full flex items-center justify-center">
+                                            <Box size={16} className="text-gray-400 dark:text-gray-500" />
+                                          </div>
+                                          <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                            Vacío
+                                          </span>
+                                          <span className="text-[9px] text-slate-400 dark:text-slate-500">
+                                            #{index + tarjetasPorFila + 1}
+                                          </span>
+                                        </>
+                                      )}
                                     </button>
                                   </div>
                                 ))}
