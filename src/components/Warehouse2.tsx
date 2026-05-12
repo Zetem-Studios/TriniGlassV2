@@ -1295,8 +1295,9 @@ const renderSubzonesFromMap = () => {
       {/* MODAL DE EDITOR DE REGLAS */}
       {showRuleEditor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl p-8 max-w-6xl max-h-[90vh] overflow-y-auto scrollbar-vertical-custom">
-            <div className="flex justify-between items-center mb-6">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-6xl max-h-[90vh] flex flex-col">
+            {/* ENCABEZADO DEL MODAL - ESTÁTICO */}
+            <div className="flex justify-between items-center p-8 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
               <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Configurar Reglas de Asignación Dinámica</h2>
               <button 
                 onClick={() => setShowRuleEditor(false)}
@@ -1305,7 +1306,11 @@ const renderSubzonesFromMap = () => {
                 <X size={24} />
               </button>
             </div>
-            <RuleEditor />
+            
+            {/* CONTENEDOR CON SCROLL PARA EL COMPONENTE RULEEDITOR */}
+            <div className="flex-1 overflow-y-auto scrollbar-vertical-custom">
+              <RuleEditor />
+            </div>
           </div>
         </div>
       )}
