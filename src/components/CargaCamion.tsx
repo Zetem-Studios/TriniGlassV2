@@ -23,14 +23,11 @@ import {
   removePaletFromCamion,
   vaciarCamion,
   validarCarga,
+  iniciarRuta,
   type PaletPendiente,
   type CargaCamion as CargaCamionType,
 } from "../../services/CargaCamionService";
-import {
-  getCamiones,
-  updateEstadoCamion,
-  type Camion,
-} from "../../services/CamionService";
+import { getCamiones, type Camion } from "../../services/CamionService";
 import { useAuth } from "../context/useAuth";
 
 const formatNumber = (n: number, decimals = 0) =>
@@ -435,7 +432,12 @@ export default function CargaCamion() {
     setError("");
     setIniciandoRuta(true);
     try {
-      await updateEstadoCamion(selectedCamion.matricula, "en_ruta");
+      await iniciarRuta({
+        matricula: selectedCamion.matricula,
+        conductor: selectedCamion.conductor,
+        tipo: String(selectedCamion.tipo),
+        email: user?.email ?? "anónimo",
+      });
       setCamiones((prev) =>
         prev.map((c) =>
           c.matricula === selectedCamion.matricula
@@ -444,7 +446,9 @@ export default function CargaCamion() {
         )
       );
       setConfirmIniciarRuta(false);
-      showInfo(`Camión ${selectedCamion.matricula} marcado en ruta`);
+      showInfo(
+        `Ruta iniciada para ${selectedCamion.matricula} (${cargaPalets.length} palet${cargaPalets.length === 1 ? "" : "s"} en tránsito)`
+      );
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : "No se pudo iniciar la ruta"

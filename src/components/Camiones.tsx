@@ -24,6 +24,7 @@ import {
   finalizarRuta,
   type CargaCamion as CargaCamionType,
 } from "../../services/CargaCamionService";
+import { useAuth } from "../context/useAuth";
 import CamionPanel from "./CamionPanel";
 
 const ESTADO_STYLES: Record<EstadoCamion, string> = {
@@ -42,6 +43,7 @@ const labelEstado = (estado: EstadoCamion) =>
 
 export default function Camiones() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [camiones, setCamiones] = useState<Camion[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -152,7 +154,7 @@ export default function Camiones() {
     setFinalizandoMatricula(matricula);
     setLoadError("");
     try {
-      await finalizarRuta(matricula);
+      await finalizarRuta(matricula, user?.email ?? "anónimo");
       setCamiones((prev) =>
         prev.map((c) =>
           c.matricula === matricula ? { ...c, estado: "no_disponible" } : c

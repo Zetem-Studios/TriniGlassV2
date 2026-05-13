@@ -58,6 +58,7 @@ const ESTADOS_VISIBLES_LIST = [
 const ESTADOS_VISIBLES = new Set<string>(ESTADOS_VISIBLES_LIST);
 
 export const ESTADO_ENTREGADO = "Entregado";
+export const ESTADO_EN_TRANSITO = "En tránsito";
 
 export const computeVolumeM3 = (altura?: number, longitud?: number): number => {
   const h = Number(altura) || 0;
@@ -294,19 +295,118 @@ export const verificarPalet = async (docId: string): Promise<void> => {
 
 const CAMIONES = "camiones";
 const PALETS_ENTREGADOS = "palets_entregados";
+const RUTAS = "rutas";
+
+export type RutaEstado = "en_curso" | "finalizada";
+
+export interface Ruta {
+  id: string;
+  matricula: string;
+  conductor: string;
+  tipo: string;
+  estado: RutaEstado;
+  totalPalets: number;
+  totalEntregados?: number;
+  pesoTotalKg: number;
+  volumenTotalM3: number;
+  iniciadoPor: string;
+  finalizadoPor?: string;
+  paletsCargados: PaletAsignado[];
+  paletsEntregados?: PaletAsignado[];
+}
+
+export interface IniciarRutaParams {
+  matricula: string;
+  conductor: string;
+  tipo: string;
+  email: string;
+}
+
+export const iniciarRuta = async ({
+  matricula,
+  conductor,
+  tipo,
+  email,
+}: IniciarRutaParams): Promise<string> => {
+  const cargaRef = doc(db, CARGAS, matricula);
+  const camionRef = doc(db, CAMIONES, matricula);
+  const rutaRef = doc(collection(db, RUTAS));
+
+  await runTransaction(db, async (tx) => {
+    const cargaSnap = await tx.get(cargaRef);
+    const palets: PaletAsignado[] = cargaSnap.exists()
+      ? ((cargaSnap.data().palets as PaletAsignado[]) ?? [])
+      : [];
+
+    if (palets.length === 0) {
+      throw new Error("El camión no tiene palets cargados.");
+    }
+
+    const pesoTotal = palets.reduce((a, p) => a + (p.pesoKg ?? 0), 0);
+    const volumenTotal = palets.reduce((a, p) => a + (p.volumenM3 ?? 0), 0);
+
+    tx.set(rutaRef, {
+      matricula,
+      conductor: conductor || "",
+      tipo: tipo || "",
+      estado: "en_curso" as RutaEstado,
+      totalPalets: palets.length,
+      pesoTotalKg: Number(pesoTotal.toFixed(2)),
+      volumenTotalM3: Number(volumenTotal.toFixed(3)),
+      iniciadoPor: email || "anónimo",
+      paletsCargados: palets,
+      fechaInicio: serverTimestamp(),
+    });
+
+    tx.set(
+      camionRef,
+      {
+        estado: "en_ruta",
+        rutaActivaId: rutaRef.id,
+        actualizadoEn: serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    palets.forEach((p) => {
+      tx.update(doc(db, PRODUCTOS, p.docId), {
+        estado_pedido: ESTADO_EN_TRANSITO,
+        rutaId: rutaRef.id,
+        enTransitoDesdeIso: new Date().toISOString(),
+      });
+    });
+  });
+
+  return rutaRef.id;
+};
 
 export interface FinalizarRutaResultado {
   paletsEliminados: number;
+  rutaId: string | null;
 }
 
 export const finalizarRuta = async (
-  matricula: string
+  matricula: string,
+  email: string = "anónimo"
 ): Promise<FinalizarRutaResultado> => {
   const cargaRef = doc(db, CARGAS, matricula);
-  const cargaSnap = await getDoc(cargaRef);
+  const camionRef = doc(db, CAMIONES, matricula);
+
+  const [cargaSnap, camionSnap] = await Promise.all([
+    getDoc(cargaRef),
+    getDoc(camionRef),
+  ]);
+
   const palets: PaletAsignado[] = cargaSnap.exists()
     ? ((cargaSnap.data().palets as PaletAsignado[]) ?? [])
     : [];
+
+  const rutaActivaId = camionSnap.exists()
+    ? ((camionSnap.data().rutaActivaId as string | undefined) ?? null)
+    : null;
+
+  const pesoEntregado = palets.reduce((a, p) => a + (p.pesoKg ?? 0), 0);
+  const volumenEntregado = palets.reduce((a, p) => a + (p.volumenM3 ?? 0), 0);
 
   const batch = writeBatch(db);
 
@@ -315,6 +415,7 @@ export const finalizarRuta = async (
       estado_pedido: ESTADO_ENTREGADO,
       entregadoEn: serverTimestamp(),
       entregadoPorMatricula: matricula,
+      rutaId: rutaActivaId ?? null,
     });
 
     batch.set(doc(db, PALETS_ENTREGADOS, p.docId), {
@@ -329,8 +430,21 @@ export const finalizarRuta = async (
       matricula,
       estado: ESTADO_ENTREGADO,
       entregadoEn: serverTimestamp(),
+      rutaId: rutaActivaId ?? null,
     });
   });
+
+  if (rutaActivaId) {
+    batch.update(doc(db, RUTAS, rutaActivaId), {
+      estado: "finalizada" as RutaEstado,
+      paletsEntregados: palets,
+      totalEntregados: palets.length,
+      pesoEntregadoKg: Number(pesoEntregado.toFixed(2)),
+      volumenEntregadoM3: Number(volumenEntregado.toFixed(3)),
+      finalizadoPor: email,
+      fechaFin: serverTimestamp(),
+    });
+  }
 
   batch.set(
     cargaRef,
@@ -343,9 +457,10 @@ export const finalizarRuta = async (
   );
 
   batch.set(
-    doc(db, CAMIONES, matricula),
+    camionRef,
     {
       estado: "no_disponible",
+      rutaActivaId: null,
       actualizadoEn: serverTimestamp(),
     },
     { merge: true }
@@ -353,5 +468,5 @@ export const finalizarRuta = async (
 
   await batch.commit();
 
-  return { paletsEliminados: palets.length };
+  return { paletsEliminados: palets.length, rutaId: rutaActivaId };
 };
