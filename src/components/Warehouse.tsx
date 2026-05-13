@@ -130,7 +130,7 @@ interface Block {
   fila?: number;
   columna?: number;
   referencias?: string;
-  posicion?: string;
+  posicion?: string | null;
 }
 
 // Función para parsear fechas
@@ -299,7 +299,7 @@ const generarCodigoUbicacion = (zoneName: string, subZoneName: string, fila: num
   return `${zonaCode}${subzonaCode}${fila}${columna}`;
 };
 
-const getSlotFromPosition = (posicion?: string): { fila: number; columna: number } | null => {
+const getSlotFromPosition = (posicion?: string | null): { fila: number; columna: number } | null => {
   if (!posicion) return null;
   const legacyMatch = posicion.match(/F(\d+)C(\d+)$/i);
   if (legacyMatch) {
@@ -316,8 +316,16 @@ const getSlotFromPosition = (posicion?: string): { fila: number; columna: number
   };
 };
 
-const isLegacyPositionCode = (posicion?: string): boolean => {
+const isLegacyPositionCode = (posicion?: string | null): boolean => {
   return Boolean(posicion?.match(/F\d+C\d+$/i));
+};
+
+const getBlockZone = (block: Block): string => {
+  return ((block as any).zona as string) || block.zoneId;
+};
+
+const getBlockSubzone = (block: Block): string => {
+  return ((block as any).subzona as string) || block.area;
 };
 
 const getAggregatedDimensions = (pallets: Block[]): string => {
@@ -497,7 +505,7 @@ export default function Warehouse() {
           
           const block = {
             ...mapProductoToBlockSimple(producto, index),
-            posicion: data.posicion || ''
+            posicion: data.posicion ?? null
           };
           nuevosBlocks.push(block);
         });
@@ -773,26 +781,57 @@ export default function Warehouse() {
         for (let i = 0; i < productos.length; i++) {
           const block = {
             ...await mapProductoToBlock(productos[i], [], i),
-            posicion: productos[i].posicion || ''
+            posicion: productos[i].posicion ?? null,
+            posicionFieldExists: Object.prototype.hasOwnProperty.call(productos[i], 'posicion')
           };
           processedBlocks.push(block);
         }
 
-        const usedPositionsByLocation = new Map<string, Set<string>>();
-        const groupPositions = new Map<string, string>();
-        const pendingPositionUpdates: Array<{ id: string; posicion: string }> = [];
+        const pendingPositionUpdates: Array<{ id: string; posicion: string | null }> = [];
 
         processedBlocks.forEach((block) => {
-          if (!block.zoneId || !block.area || !block.posicion) return;
-          if (isLegacyPositionCode(block.posicion)) {
-            const slot = getSlotFromPosition(block.posicion);
-            const zoneName = zones.find(z => z.id === block.zoneId)?.name || block.zoneId;
-            if (slot) {
-              const newPosition = generarCodigoUbicacion(zoneName, block.area, slot.fila, slot.columna);
-              block.posicion = newPosition;
-              pendingPositionUpdates.push({ id: block.id, posicion: newPosition });
+          const currentPosition = typeof block.posicion === 'string' && block.posicion.trim() !== ''
+            ? block.posicion.trim()
+            : null;
+
+          if (!block.zoneId || !block.area) {
+            if (block.posicion !== null || !(block as any).posicionFieldExists) {
+              block.posicion = null;
+              pendingPositionUpdates.push({ id: block.id, posicion: null });
             }
+            return;
           }
+
+          if (!currentPosition) {
+            if (block.posicion !== null || !(block as any).posicionFieldExists) {
+              block.posicion = null;
+              pendingPositionUpdates.push({ id: block.id, posicion: null });
+            }
+            return;
+          }
+
+          const slot = getSlotFromPosition(currentPosition);
+          const zoneName = zones.find(z => z.id === block.zoneId)?.name || block.zoneId;
+
+          if (!slot) {
+            block.posicion = null;
+            pendingPositionUpdates.push({ id: block.id, posicion: null });
+            return;
+          }
+
+          const normalizedPosition = generarCodigoUbicacion(zoneName, block.area, slot.fila, slot.columna);
+          if (isLegacyPositionCode(currentPosition) || currentPosition !== normalizedPosition) {
+            block.posicion = normalizedPosition;
+            pendingPositionUpdates.push({ id: block.id, posicion: normalizedPosition });
+          } else {
+            block.posicion = currentPosition;
+          }
+
+        });
+
+        const usedPositionsByLocation = new Map<string, Set<string>>();
+        processedBlocks.forEach((block) => {
+          if (!block.zoneId || !block.area || !block.posicion) return;
           const key = `${block.zoneId}__${block.area}`;
           if (!usedPositionsByLocation.has(key)) usedPositionsByLocation.set(key, new Set());
           usedPositionsByLocation.get(key)?.add(block.posicion);
@@ -801,34 +840,47 @@ export default function Warehouse() {
         processedBlocks.forEach((block) => {
           if (!block.zoneId || !block.area || block.posicion) return;
 
-          const groupKey = generarClaveAgrupacion(block);
           const locationKey = `${block.zoneId}__${block.area}`;
           const zoneName = zones.find(z => z.id === block.zoneId)?.name || block.zoneId;
           const subzonaConfig = subzonas.find(sub => sub.zonaId === block.zoneId && sub.nombre === block.area);
           const capacidad = subzonaConfig?.capacidadMaxima;
-          const totalSlots = capacidad ? Math.ceil(capacidad / 2) * 2 : processedBlocks.filter(item => item.zoneId === block.zoneId && item.area === block.area).length + 1;
-          const tarjetasPorFila = Math.max(1, Math.ceil(totalSlots / 2));
-          let assignedPosition = groupPositions.get(groupKey);
+          const blocksInSubzone = processedBlocks.filter(item => item.zoneId === block.zoneId && item.area === block.area);
+          const maxColumnInUse = Math.max(
+            0,
+            ...blocksInSubzone
+              .map(item => getSlotFromPosition(item.posicion)?.columna || 0)
+          );
+          const tarjetasPorFila = capacidad
+            ? Math.ceil(capacidad / 2)
+            : Math.max(maxColumnInUse + 1, Math.ceil((blocksInSubzone.length + 1) / 2), 1);
+
+          if (!usedPositionsByLocation.has(locationKey)) usedPositionsByLocation.set(locationKey, new Set());
+          const usedPositions = usedPositionsByLocation.get(locationKey)!;
+          let assignedPosition: string | null = null;
+
+          for (let columna = 1; columna <= tarjetasPorFila; columna++) {
+            const candidatePosition = generarCodigoUbicacion(zoneName, block.area, 1, columna);
+            if (!usedPositions.has(candidatePosition)) {
+              assignedPosition = candidatePosition;
+              break;
+            }
+          }
 
           if (!assignedPosition) {
-            if (!usedPositionsByLocation.has(locationKey)) usedPositionsByLocation.set(locationKey, new Set());
-            const usedPositions = usedPositionsByLocation.get(locationKey)!;
-
-            for (let index = 0; index < totalSlots; index++) {
-              const fila = index < tarjetasPorFila ? 1 : 2;
-              const columna = index < tarjetasPorFila ? index + 1 : index - tarjetasPorFila + 1;
-              const candidatePosition = generarCodigoUbicacion(zoneName, block.area, fila, columna);
+            for (let columna = 1; columna <= tarjetasPorFila; columna++) {
+              const candidatePosition = generarCodigoUbicacion(zoneName, block.area, 2, columna);
               if (!usedPositions.has(candidatePosition)) {
                 assignedPosition = candidatePosition;
                 break;
               }
             }
-
-            if (!assignedPosition) assignedPosition = generarCodigoUbicacion(zoneName, block.area, 1, totalSlots + 1);
-            usedPositions.add(assignedPosition);
-            groupPositions.set(groupKey, assignedPosition);
           }
 
+          if (!assignedPosition) {
+            assignedPosition = generarCodigoUbicacion(zoneName, block.area, 1, tarjetasPorFila + 1);
+          }
+
+          usedPositions.add(assignedPosition);
           block.posicion = assignedPosition;
           pendingPositionUpdates.push({ id: block.id, posicion: assignedPosition });
         });
@@ -878,24 +930,63 @@ export default function Warehouse() {
     return selectedBlock ? [selectedBlock] : [];
   };
 
+  const getSelectedPalletsExpandedByPosition = (): Block[] => {
+    const selectedPallets = getSelectedPallets();
+    const selectedIds = new Set(selectedPallets.map(pallet => pallet.id));
+    const selectedPositions = selectedPallets
+      .filter(pallet => pallet.posicion)
+      .map(pallet => ({
+        zoneId: getBlockZone(pallet),
+        subzone: getBlockSubzone(pallet),
+        posicion: pallet.posicion
+      }));
+
+    return blocks.filter(block =>
+      selectedIds.has(block.id) ||
+      selectedPositions.some(position =>
+        getBlockZone(block) === position.zoneId &&
+        getBlockSubzone(block) === position.subzone &&
+        block.posicion === position.posicion
+      )
+    );
+  };
+
   const getAvailablePositions = (zoneId: string, subzone: string): string[] => {
-    const movingIds = getSelectedPallets().map(pallet => pallet.id);
+    const selectedPallets = getSelectedPalletsExpandedByPosition();
+    const movingIds = selectedPallets.map(pallet => pallet.id);
+    const movingPositions = selectedPallets
+      .filter(pallet => getBlockZone(pallet) === zoneId && getBlockSubzone(pallet) === subzone && pallet.posicion)
+      .map(pallet => pallet.posicion?.trim());
     const zoneName = zones.find(z => z.id === zoneId)?.name || zoneId;
     const subzonaConfig = subzonas.find(sub => sub.zonaId === zoneId && sub.nombre === subzone);
     const capacidad = subzonaConfig?.capacidadMaxima;
-    const totalSlots = capacidad ? Math.ceil(capacidad / 2) * 2 : blocks.filter(block => block.zoneId === zoneId && block.area === subzone).length + 1;
-    const tarjetasPorFila = Math.max(1, Math.ceil(totalSlots / 2));
+    const blocksInSubzone = blocks.filter(block => getBlockZone(block) === zoneId && getBlockSubzone(block) === subzone);
+    const maxColumnInUse = Math.max(
+      0,
+      ...blocksInSubzone
+        .map(block => getSlotFromPosition(block.posicion)?.columna || 0)
+    );
+    const tarjetasPorFila = capacidad
+      ? Math.ceil(capacidad / 2)
+      : Math.max(maxColumnInUse + 1, Math.ceil((blocksInSubzone.length + 1) / 2), 1);
     const occupiedPositions = new Set(
       blocks
-        .filter(block => block.zoneId === zoneId && block.area === subzone && !movingIds.includes(block.id) && block.posicion)
-        .map(block => block.posicion)
+        .map(block => ({
+          ...block,
+          normalizedPosition: typeof block.posicion === 'string' ? block.posicion.trim() : null
+        }))
+        .filter(block => getBlockZone(block) === zoneId && getBlockSubzone(block) === subzone && !movingIds.includes(block.id) && block.normalizedPosition && !movingPositions.includes(block.normalizedPosition))
+        .map(block => block.normalizedPosition)
     );
     const positions: string[] = [];
 
-    for (let index = 0; index < totalSlots; index++) {
-      const fila = index < tarjetasPorFila ? 1 : 2;
-      const columna = index < tarjetasPorFila ? index + 1 : index - tarjetasPorFila + 1;
-      const posicion = generarCodigoUbicacion(zoneName, subzone, fila, columna);
+    for (let columna = 1; columna <= tarjetasPorFila; columna++) {
+      const posicion = generarCodigoUbicacion(zoneName, subzone, 1, columna);
+      if (!occupiedPositions.has(posicion)) positions.push(posicion);
+    }
+
+    for (let columna = 1; columna <= tarjetasPorFila; columna++) {
+      const posicion = generarCodigoUbicacion(zoneName, subzone, 2, columna);
       if (!occupiedPositions.has(posicion)) positions.push(posicion);
     }
 
@@ -903,7 +994,7 @@ export default function Warehouse() {
   };
 
   const handleMovePallets = async (zoneId: string, subzone: string, position: string) => {
-    const palletsToMove = getSelectedPallets();
+    const palletsToMove = getSelectedPalletsExpandedByPosition();
     if (palletsToMove.length === 0) return;
     if (!position) {
       setMoveError('Selecciona una posición de destino');
@@ -948,7 +1039,7 @@ export default function Warehouse() {
   };
 
   const handleDeletePallets = async () => {
-    const palletsToDelete = getSelectedPallets();
+    const palletsToDelete = getSelectedPalletsExpandedByPosition();
     if (palletsToDelete.length === 0) return;
 
     const confirmed = window.confirm(`¿Eliminar ${palletsToDelete.length} pedido${palletsToDelete.length === 1 ? '' : 's'} del palet?`);
@@ -966,7 +1057,9 @@ export default function Warehouse() {
         const productSnapshot = await getDoc(productRef);
 
         if (productSnapshot.exists()) {
-          batch.set(deletedProductRef, productSnapshot.data());
+          const deletedProductData = productSnapshot.data();
+          delete deletedProductData.posicion;
+          batch.set(deletedProductRef, deletedProductData);
           batch.delete(productRef);
         }
       }
@@ -1115,7 +1208,16 @@ const renderSubzonesFromMap = () => {
   );
 };
 
-  const moveOptions = zones.flatMap((zone) => {
+  const selectedPalletZone = getBlockZone(getSelectedPallets()[0] || selectedBlock || ({} as Block));
+  const orderedMoveZones = getZonesOrderedByPosition();
+  const moveZones = selectedPalletZone
+    ? [
+        ...orderedMoveZones.filter((zone) => zone.id === selectedPalletZone),
+        ...orderedMoveZones.filter((zone) => zone.id !== selectedPalletZone)
+      ]
+    : orderedMoveZones;
+
+  const moveOptions = moveZones.flatMap((zone) => {
     const subzonesFromCollection = subzonas
       .filter((subzona) => subzona.zonaId === zone.id)
       .map((subzona) => ({
@@ -1586,12 +1688,12 @@ const renderSubzonesFromMap = () => {
                     const clavesProcesadas: string[] = [];
                     
                     paletsEnSubzona.forEach(pallet => {
-                      const claveAgrupacion = generarClaveAgrupacion(pallet);
+                      const claveAgrupacion = pallet.posicion || generarClaveAgrupacion(pallet);
                       
                       if (!clavesProcesadas.includes(claveAgrupacion)) {
                         // Primer palet con esta clave - buscar si hay más
                         const paletsMismaClave = paletsEnSubzona.filter(p => 
-                          generarClaveAgrupacion(p) === claveAgrupacion
+                          (p.posicion || generarClaveAgrupacion(p)) === claveAgrupacion
                         );
                         
                         if (paletsMismaClave.length > 1) {
@@ -1647,6 +1749,27 @@ const renderSubzonesFromMap = () => {
                     const filaInferior = tarjetas.slice(tarjetasPorFila, totalTarjetas);
                     
                     const isExpanded = expandedSubzones.has(subZone.id);
+                    const selectTarjeta = (tarjeta: {
+                      occupied: boolean;
+                      pallet?: Block;
+                      allPalets?: Block[];
+                    }, fila: number, columna: number) => {
+                      if (tarjeta.occupied && tarjeta.pallet) {
+                        const cardPosition = generarCodigoUbicacion(
+                          zones.find(z => z.id === selectedZone)?.name || '',
+                          subZone.nombre,
+                          fila,
+                          columna
+                        );
+                        const palletsAtPosition = blocks.filter(block =>
+                          getBlockZone(block) === selectedZone &&
+                          getBlockSubzone(block) === subZone.nombre &&
+                          block.posicion === cardPosition
+                        );
+                        setSelectedBlock(tarjeta.pallet);
+                        setSelectedPalletGroup(palletsAtPosition.length > 0 ? palletsAtPosition : tarjeta.allPalets || [tarjeta.pallet]);
+                      }
+                    };
                     
                     return (
                       <div key={subZone.id} className="space-y-3">
@@ -1703,12 +1826,7 @@ const renderSubzonesFromMap = () => {
                                       </span>
                                     )}
                                     <button
-                                      onClick={() => {
-                                        if (tarjeta.occupied && tarjeta.pallet) {
-                                          setSelectedBlock(tarjeta.pallet);
-                                          setSelectedPalletGroup(tarjeta.allPalets || [tarjeta.pallet]);
-                                        }
-                                      }}
+                                      onClick={() => selectTarjeta(tarjeta, 1, index + 1)}
                                       className={`relative rounded-2xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-1 shadow-md hover:shadow-lg hover:shadow-blue-500/30 min-w-[110px] h-[110px] ${
                                         tarjeta.occupied 
                                           ? `bg-gradient-to-br from-white to-blue-50 dark:from-slate-800 dark:to-slate-700 ${getStorageBorderClasses(tarjeta.daysInStorage)} hover:scale-105`
@@ -1811,12 +1929,7 @@ const renderSubzonesFromMap = () => {
                                       </span>
                                     )}
                                     <button
-                                      onClick={() => {
-                                        if (tarjeta.occupied && tarjeta.pallet) {
-                                          setSelectedBlock(tarjeta.pallet);
-                                          setSelectedPalletGroup(tarjeta.allPalets || [tarjeta.pallet]);
-                                        }
-                                      }}
+                                      onClick={() => selectTarjeta(tarjeta, 2, index + 1)}
                                       className={`relative rounded-2xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-1 shadow-md hover:shadow-lg hover:shadow-blue-500/30 min-w-[110px] h-[110px] ${
                                         tarjeta.occupied 
                                           ? `bg-gradient-to-br from-white to-blue-50 dark:from-slate-800 dark:to-slate-700 ${getStorageBorderClasses(tarjeta.daysInStorage)} hover:scale-105`
