@@ -293,6 +293,7 @@ export const verificarPalet = async (docId: string): Promise<void> => {
 };
 
 const CAMIONES = "camiones";
+const PALETS_ENTREGADOS = "palets_entregados";
 
 export interface FinalizarRutaResultado {
   paletsEliminados: number;
@@ -314,6 +315,20 @@ export const finalizarRuta = async (
       estado_pedido: ESTADO_ENTREGADO,
       entregadoEn: serverTimestamp(),
       entregadoPorMatricula: matricula,
+    });
+
+    batch.set(doc(db, PALETS_ENTREGADOS, p.docId), {
+      docId: p.docId,
+      codigoBarra: p.codigoBarra,
+      cliente: p.cliente,
+      descripcion: p.descripcion,
+      pesoKg: p.pesoKg,
+      volumenM3: p.volumenM3,
+      asignadoPor: p.asignadoPor,
+      asignadoEnIso: p.asignadoEnIso,
+      matricula,
+      estado: ESTADO_ENTREGADO,
+      entregadoEn: serverTimestamp(),
     });
   });
 
