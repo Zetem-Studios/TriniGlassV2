@@ -1,13 +1,11 @@
 // Warehouse2.tsx - Implementación dinámica sin hardcode
 import { useState, useEffect } from "react";
 import { 
-  Search, ChevronDown, Plus, X, Package, 
-  Layers, Maximize2, View, Zap, DoorOpen, Box, Check
+  Search, ChevronDown, X, Package, 
+  Layers, Zap, Box, Check
 } from "lucide-react";
 import { db } from "../firebase";
-import { collection, getDocs, writeBatch, doc, updateDoc, doc as firestoreDoc } from "firebase/firestore";
-import Map from "./Map";
-import Zone from "./Zone";
+import { collection, getDocs, writeBatch, doc } from "firebase/firestore";
 import RuleEditor from "./RuleEditor";
 import { useMapDesigns } from '../hooks/useMapDesigns';
 
@@ -224,7 +222,7 @@ const getZones = async (): Promise<ZoneConfig[]> => {
 // };
 
 // Función para mapear productos a bloques (posicionamiento ahora viene de BD)
-const mapProductoToBlock = async (producto: Producto, rules: any[], index: number): Promise<Block> => {
+const mapProductoToBlock = async (producto: Producto, _rules: any[], index: number): Promise<Block> => {
   const fechaPedido = parseFechaLineaPedido(producto.fecha_linea_pedido);
   const hoy = new Date();
   let daysInStorage = 0;
@@ -294,6 +292,39 @@ const generarCodigoUbicacion = (zoneName: string, subZoneName: string, fila: num
   const zonaCode = zoneName.substring(0, 3).toUpperCase();
   const subzonaCode = subZoneName.substring(0, 3).toUpperCase();
   return `${zonaCode}${subzonaCode}F${fila}C${columna}`;
+};
+
+const getAggregatedDimensions = (pallets: Block[]): string => {
+  const parsedDimensions = pallets
+    .map((pallet) => {
+      const matches = pallet.dimensions.match(/(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)/i);
+      if (!matches) return null;
+      return {
+        width: Number(matches[1].replace(',', '.')),
+        length: Number(matches[2].replace(',', '.'))
+      };
+    })
+    .filter((dimensions): dimensions is { width: number; length: number } => Boolean(dimensions));
+
+  if (parsedDimensions.length === 0) return 'N/A';
+
+  const maxWidth = Math.max(...parsedDimensions.map((dimensions) => dimensions.width));
+  const maxLength = Math.max(...parsedDimensions.map((dimensions) => dimensions.length));
+
+  return `${maxWidth} x ${maxLength} mm`;
+};
+
+const getAggregatedWeight = (pallets: Block[]): string => {
+  const weights = pallets
+    .map((pallet) => {
+      const match = pallet.weight.match(/(\d+(?:[.,]\d+)?)/);
+      return match ? Number(match[1].replace(',', '.')) : null;
+    })
+    .filter((weight): weight is number => typeof weight === 'number' && !Number.isNaN(weight));
+
+  if (weights.length === 0) return 'N/A';
+
+  return `${Number(weights.reduce((total, weight) => total + weight, 0).toFixed(2))} kg`;
 };
 
 // Versión síncrona simplificada para usar en el bucle
@@ -366,36 +397,14 @@ export default function Warehouse2() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedZone, setSelectedZone] = useState("");
   const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
+  const [selectedPalletGroup, setSelectedPalletGroup] = useState<Block[]>([]);
   const [isZoneDropdownOpen, setIsZoneDropdownOpen] = useState(false);
-  const [isNewZoneModalOpen, setIsNewZoneModalOpen] = useState(false);
   const [zones, setZones] = useState<ZoneConfig[]>([]);
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [subzonas, setSubzonas] = useState<any[]>([]);
   const [expandedSubzones, setExpandedSubzones] = useState<Set<string>>(new Set());
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [addPalletZone, setAddPalletZone] = useState<string | null>(null);
-  const [addPalletSubzone, setAddPalletSubzone] = useState<string | null>(null);
-  const [addPalletForm, setAddPalletForm] = useState<any>({
-    codigo_barra: '',
-    apellido_cliente: '',
-    nombre_abreviado: '',
-    altura: '',
-    longitud: '',
-    peso_total_kg: '',
-    cantidad_encargada: 1,
-    descripcion_producido_longitud: '',
-    referencia_linea_pedido: '',
-    fecha_entrega: '',
-    fecha_linea_pedido: '',
-    subzona: '',
-  });
-  const [addPalletLoading, setAddPalletLoading] = useState(false);
-  const [addPalletError, setAddPalletError] = useState<string | null>(null);
-  const [moveMode, setMoveMode] = useState(false);
-  const [moveLoading, setMoveLoading] = useState(false);
-  const [moveError, setMoveError] = useState<string | null>(null);
   const [showRuleEditor, setShowRuleEditor] = useState(false);
   const [selectedMapDesign, setSelectedMapDesign] = useState("default");
   const [isMapDesignDropdownOpen, setIsMapDesignDropdownOpen] = useState(false);
@@ -616,18 +625,6 @@ export default function Warehouse2() {
     };
   };
 
-  const handleEmptySlotClick = (zoneId: string, subzone: string) => {
-    setAddPalletZone(zoneId);
-    setAddPalletSubzone(subzone);
-    setAddPalletForm((prev: any) => ({ ...prev, subzona: subzone }));
-    setShowAddModal(true);
-  };
-
-  const handleAddPalletFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setAddPalletForm((prev: any) => ({ ...prev, [name]: value }));
-  };
-
   // Función para toggle de subzonas expandidas
   const toggleSubzone = (subzoneId: string) => {
     setExpandedSubzones(prev => {
@@ -767,33 +764,6 @@ export default function Warehouse2() {
       }
     }
   }, [searchTerm, blocks]);
-
-  const handleZoneCreated = async (zoneId: string) => {
-    try {
-      const data = await getZones();
-      setZones(data);
-      setSelectedZone(zoneId.toLowerCase());
-    } catch (error) {
-      console.error("❌ Error refrescando zonas:", error);
-      setError("Error al actualizar la lista de zonas");
-    } finally {
-      setIsNewZoneModalOpen(false);
-    }
-  };
-
-  const handleAddPalletSave = async () => {
-    try {
-      setAddPalletLoading(true);
-      setAddPalletError(null);
-      // await addDoc(collection(db, 'productos'), addPalletForm);
-      setShowAddModal(false);
-      setSelectedBlock(null);
-    } catch {
-      setAddPalletError('Error al guardar el pallet');
-    } finally {
-      setAddPalletLoading(false);
-    }
-  };
 
   // Función para ordenar zonas según su posición en el mapa
 const getZonesOrderedByPosition = () => {
@@ -1207,12 +1177,7 @@ const renderSubzonesFromMap = () => {
                   {selectedDesign.areas.map((area, areaIndex) => {
                     const areaStartRow = Math.floor(area.y / 40) + 1;
                     const areaStartCol = colToNumber(area.col);
-                    const areaEndRow = areaStartRow + Math.floor(area.height / 40) - 1;
                     const areaEndCol = areaStartCol + Math.floor(area.width / 40) - 1;
-                    
-                    // Calcular centro del área
-                    const areaCenterRow = Math.floor((areaStartRow + areaEndRow) / 2);
-                    const areaCenterCol = Math.floor((areaStartCol + areaEndCol) / 2);
                     
                     return (
                       <div key={`area-label-${areaIndex}`}>
@@ -1238,10 +1203,6 @@ const renderSubzonesFromMap = () => {
                           const subStartCol = colToNumber(subArea.col);
                           const subEndRow = subStartRow + Math.floor(subArea.height / 40) - 1;
                           const subEndCol = subStartCol + Math.floor(subArea.width / 40) - 1;
-                          
-                          // Calcular centro exacto de la subárea
-                          const subCenterRow = (subStartRow + subEndRow) / 2;
-                          const subCenterCol = (subStartCol + subEndCol) / 2;
                           
                           return (
                             <div
@@ -1283,7 +1244,7 @@ const renderSubzonesFromMap = () => {
               {isZoneDropdownOpen && (
                 <div className="absolute left-0 mt-3 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl z-50 overflow-hidden">
                   {getZonesOrderedByPosition().map(zone => (
-                    <button key={zone.id} className="w-full text-left px-6 py-4 text-sm font-bold hover:bg-blue-50 dark:hover:bg-slate-700 flex items-center justify-between" onClick={() => { setSelectedZone(zone.id); setIsZoneDropdownOpen(false); setSelectedBlock(null); }}>
+                    <button key={zone.id} className="w-full text-left px-6 py-4 text-sm font-bold hover:bg-blue-50 dark:hover:bg-slate-700 flex items-center justify-between" onClick={() => { setSelectedZone(zone.id); setIsZoneDropdownOpen(false); setSelectedBlock(null); setSelectedPalletGroup([]); }}>
                       {zone.name} {selectedZone === zone.id && <Check size={16} className="text-blue-500" />}
                     </button>
                   ))}
@@ -1479,6 +1440,12 @@ const renderSubzonesFromMap = () => {
                                   >
                                     <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-2xl opacity-0 group-hover:opacity-20 transition-opacity duration-300 blur-xl"></div>
                                     <button
+                                      onClick={() => {
+                                        if (tarjeta.occupied && tarjeta.pallet) {
+                                          setSelectedBlock(tarjeta.pallet);
+                                          setSelectedPalletGroup(tarjeta.allPalets || [tarjeta.pallet]);
+                                        }
+                                      }}
                                       className={`relative rounded-2xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-1 shadow-md hover:shadow-lg hover:shadow-blue-500/30 min-w-[110px] h-[110px] ${
                                         tarjeta.occupied 
                                           ? `bg-gradient-to-br from-white to-blue-50 dark:from-slate-800 dark:to-slate-700 border-blue-200 dark:border-slate-600 hover:border-blue-300 dark:hover:border-slate-500 hover:scale-105`
@@ -1571,6 +1538,12 @@ const renderSubzonesFromMap = () => {
                                   >
                                     <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-2xl opacity-0 group-hover:opacity-20 transition-opacity duration-300 blur-xl"></div>
                                     <button
+                                      onClick={() => {
+                                        if (tarjeta.occupied && tarjeta.pallet) {
+                                          setSelectedBlock(tarjeta.pallet);
+                                          setSelectedPalletGroup(tarjeta.allPalets || [tarjeta.pallet]);
+                                        }
+                                      }}
                                       className={`relative rounded-2xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-1 shadow-md hover:shadow-lg hover:shadow-blue-500/30 min-w-[110px] h-[110px] ${
                                         tarjeta.occupied 
                                           ? `bg-gradient-to-br from-white to-blue-50 dark:from-slate-800 dark:to-slate-700 border-blue-200 dark:border-slate-600 hover:border-blue-300 dark:hover:border-slate-500 hover:scale-105`
@@ -1666,6 +1639,80 @@ const renderSubzonesFromMap = () => {
           </div>
         </div>
       </div>
+
+      {/* SIDEBAR DE DETALLES DEL PALET */}
+      {selectedBlock && (
+        <div className="fixed top-0 right-0 h-full w-[460px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 z-50 shadow-[-20px_0_60px_rgba(0,0,0,0.2)] animate-in slide-in-from-right duration-500 flex flex-col overflow-hidden">
+          <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900 shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-blue-500 rounded-2xl text-white shadow-lg">
+                <Package size={24} />
+              </div>
+              <h2 className="text-xl font-black uppercase italic tracking-tighter text-slate-800 dark:text-white leading-none">
+                Detalle del Palet
+              </h2>
+            </div>
+            <button
+              onClick={() => {
+                setSelectedBlock(null);
+                setSelectedPalletGroup([]);
+              }}
+              className="p-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 hover:text-red-500"
+            >
+              <X size={32} strokeWidth={3}/>
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-vertical-custom">
+            <div className="bg-gradient-to-br from-blue-100 via-blue-50 to-white dark:from-blue-900 dark:via-slate-900 dark:to-slate-800 rounded-[2.5rem] p-10 border border-slate-100 dark:border-slate-700 text-center relative overflow-hidden shadow-lg">
+              <div className="text-[11px] uppercase text-slate-400 dark:text-slate-500 font-black mb-2 tracking-[0.4em]">
+                GLASS ID
+              </div>
+              <div className="text-5xl font-black tracking-tighter text-blue-600 dark:text-blue-400 leading-none break-all uppercase drop-shadow-lg">
+                {selectedBlock.codigo_barra || 'Sin código'}
+              </div>
+              <div className="flex justify-center gap-2 mt-6">
+                <div className="inline-flex px-4 py-1.5 rounded-full bg-blue-500/10 text-blue-500 text-[11px] font-black uppercase tracking-widest border border-blue-500/20">
+                  Prioridad {selectedBlock.priority || 'N/A'}
+                </div>
+                {selectedPalletGroup.length > 1 && (
+                  <div className="inline-flex px-4 py-1.5 rounded-full bg-purple-500/10 text-purple-500 text-[11px] font-black uppercase tracking-widest border border-purple-500/20">
+                    {selectedPalletGroup.length} pedidos
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-800/60 rounded-2xl p-6 border border-slate-100 dark:border-slate-700 mt-2 grid grid-cols-1 gap-3 shadow-inner">
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Código de barras</span><span className="text-sm font-mono break-all">{selectedBlock.codigo_barra || 'Sin código'}</span></div>
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Cliente</span><span className="text-sm font-mono">{selectedBlock.client || 'Desconocido'}</span></div>
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Dimensiones totales</span><span className="text-sm font-mono">{selectedPalletGroup.length > 1 ? getAggregatedDimensions(selectedPalletGroup) : selectedBlock.dimensions || 'N/A'}</span></div>
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Peso total</span><span className="text-sm font-mono">{selectedPalletGroup.length > 1 ? getAggregatedWeight(selectedPalletGroup) : selectedBlock.weight || 'N/A'}</span></div>
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Estado pedido</span><span className="text-sm font-mono">{selectedBlock.estadoPedido || 'N/A'}</span></div>
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Referencia pedido</span><span className="text-sm font-mono">{selectedBlock.referencias || 'N/A'}</span></div>
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Fecha entrega</span><span className="text-sm font-mono">{selectedBlock.lastUpdate || 'N/A'}</span></div>
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Días en almacén</span><span className="text-sm font-mono">{selectedBlock.daysInStorage}d</span></div>
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Zona</span><span className="text-sm font-mono">{zones.find(z => z.id === selectedBlock.zoneId)?.name || selectedBlock.zoneId || 'N/A'}</span></div>
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Subzona</span><span className="text-sm font-mono">{selectedBlock.area || 'N/A'}</span></div>
+            </div>
+
+            {selectedPalletGroup.length > 1 && (
+              <div className="bg-white dark:bg-slate-800/60 rounded-2xl p-6 border border-purple-100 dark:border-purple-700 mt-2 grid grid-cols-1 gap-3 shadow-inner">
+                <h3 className="text-sm font-black uppercase tracking-widest text-purple-600 dark:text-purple-300">
+                  Pedidos agrupados
+                </h3>
+                {selectedPalletGroup.map((pallet, index) => (
+                  <div key={pallet.id} className="rounded-xl bg-purple-50 dark:bg-purple-950/30 p-3 flex flex-col border border-purple-100 dark:border-purple-800">
+                    <span className="font-bold text-xs text-purple-700 dark:text-purple-300 mb-1">Pedido {index + 1}</span>
+                    <span className="text-sm font-mono break-all">{pallet.referencias || pallet.numeroLineaPedido || pallet.id}</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400 mt-1">{pallet.client || 'Cliente desconocido'} · {pallet.dimensions || 'N/A'} · {pallet.weight || 'N/A'} · {pallet.type || 'N/A'}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* MODAL DE EDITOR DE REGLAS */}
       {showRuleEditor && (
