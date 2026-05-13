@@ -2,10 +2,10 @@
 import { useState, useEffect } from "react";
 import { 
   Search, ChevronDown, X, Package, 
-  Layers, Zap, Box, Check
+  Layers, Zap, Box, Check, Maximize2
 } from "lucide-react";
 import { db } from "../firebase";
-import { collection, getDocs, writeBatch, doc } from "firebase/firestore";
+import { collection, getDocs, writeBatch, doc, getDoc } from "firebase/firestore";
 import RuleEditor from "./RuleEditor";
 import { useMapDesigns } from '../hooks/useMapDesigns';
 
@@ -408,6 +408,11 @@ export default function Warehouse2() {
   const [showRuleEditor, setShowRuleEditor] = useState(false);
   const [selectedMapDesign, setSelectedMapDesign] = useState("default");
   const [isMapDesignDropdownOpen, setIsMapDesignDropdownOpen] = useState(false);
+  const [moveMode, setMoveMode] = useState(false);
+  const [moveLoading, setMoveLoading] = useState(false);
+  const [moveError, setMoveError] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   // const [assignmentRules, setAssignmentRules] = useState<any[]>([]);
 
   const { designs, loading: designsLoading, error: designsError } = useMapDesigns();
@@ -690,7 +695,7 @@ export default function Warehouse2() {
       try {
         const { collection, getDocs } = await import('firebase/firestore');
         const subzonasSnapshot = await getDocs(collection(db, 'subzonas'));
-        const subzonasData = subzonasSnapshot.docs.map(doc => doc.data());
+        const subzonasData = subzonasSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
         setSubzonas(subzonasData);
       } catch (error) {
         console.error("Error cargando subzonas:", error);
@@ -751,8 +756,8 @@ export default function Warehouse2() {
   }, [zones]);
 
   useEffect(() => {
-    const term = searchTerm.trim().toLowerCase();
-    if (term.length >= 3) {
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
       const foundBlock = blocks.find(b => 
         b.id.toLowerCase() === term || 
         (b.occupied && b.client.toLowerCase().includes(term))
@@ -764,6 +769,90 @@ export default function Warehouse2() {
       }
     }
   }, [searchTerm, blocks]);
+
+  const getSelectedPallets = (): Block[] => {
+    if (selectedPalletGroup.length > 0) return selectedPalletGroup;
+    return selectedBlock ? [selectedBlock] : [];
+  };
+
+  const handleMovePallets = async (zoneId: string, subzone: string) => {
+    const palletsToMove = getSelectedPallets();
+    if (palletsToMove.length === 0) return;
+
+    setMoveLoading(true);
+    setMoveError(null);
+
+    try {
+      const batch = writeBatch(db);
+
+      palletsToMove.forEach((pallet) => {
+        const productRef = doc(db, 'productos', pallet.id);
+        batch.update(productRef, { zona: zoneId, subzona: subzone });
+      });
+
+      await batch.commit();
+
+      setBlocks((currentBlocks) =>
+        currentBlocks.map((block) =>
+          palletsToMove.some((pallet) => pallet.id === block.id)
+            ? { ...block, zoneId, area: subzone }
+            : block
+        )
+      );
+
+      if (selectedBlock) {
+        setSelectedBlock({ ...selectedBlock, zoneId, area: subzone });
+      }
+      setSelectedPalletGroup((currentGroup) =>
+        currentGroup.map((pallet) => ({ ...pallet, zoneId, area: subzone }))
+      );
+      setSelectedZone(zoneId);
+      setMoveMode(false);
+    } catch {
+      setMoveError('Error al mover el pallet');
+    } finally {
+      setMoveLoading(false);
+    }
+  };
+
+  const handleDeletePallets = async () => {
+    const palletsToDelete = getSelectedPallets();
+    if (palletsToDelete.length === 0) return;
+
+    const confirmed = window.confirm(`¿Eliminar ${palletsToDelete.length} pedido${palletsToDelete.length === 1 ? '' : 's'} del palet?`);
+    if (!confirmed) return;
+
+    setDeleteLoading(true);
+    setDeleteError(null);
+
+    try {
+      const batch = writeBatch(db);
+
+      for (const pallet of palletsToDelete) {
+        const productRef = doc(db, 'productos', pallet.id);
+        const deletedProductRef = doc(db, 'productos_eliminados', pallet.id);
+        const productSnapshot = await getDoc(productRef);
+
+        if (productSnapshot.exists()) {
+          batch.set(deletedProductRef, productSnapshot.data());
+          batch.delete(productRef);
+        }
+      }
+
+      await batch.commit();
+
+      const deletedIds = new Set(palletsToDelete.map((pallet) => pallet.id));
+      setBlocks((currentBlocks) => currentBlocks.filter((block) => !deletedIds.has(block.id)));
+      setSelectedBlock(null);
+      setSelectedPalletGroup([]);
+      setMoveMode(false);
+      setDeleteError(null);
+    } catch {
+      setDeleteError('Error al eliminar el pallet');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   // Función para ordenar zonas según su posición en el mapa
 const getZonesOrderedByPosition = () => {
@@ -894,6 +983,24 @@ const renderSubzonesFromMap = () => {
   );
 };
 
+  const moveOptions = zones.flatMap((zone) => {
+    const subzonesFromCollection = subzonas
+      .filter((subzona) => subzona.zonaId === zone.id)
+      .map((subzona) => ({
+        zoneId: zone.id,
+        zoneName: zone.name,
+        subzone: subzona.nombre || subzona.name || subzona.id
+      }));
+
+    if (subzonesFromCollection.length > 0) return subzonesFromCollection;
+
+    return Object.keys(zone.subzones || {}).map((subzone) => ({
+      zoneId: zone.id,
+      zoneName: zone.name,
+      subzone
+    }));
+  });
+
   return (
     <div className="min-h-screen relative flex flex-col bg-slate-50 dark:bg-[#0f172a] text-slate-900 dark:text-white transition-colors duration-300 font-sans">
       
@@ -919,7 +1026,7 @@ const renderSubzonesFromMap = () => {
       {!loading && blocks.length > 0 && (
         <div className="bg-blue-100 dark:bg-blue-900/30 border border-blue-400 dark:border-blue-700 px-6 py-4 rounded-2xl m-6">
           <p className="font-bold text-blue-700 dark:text-blue-200">
-            ✅ {blocks.length} productos cargados 
+            ✅ {blocks.length} productos cargados · {blocks.filter(block => block.zoneId && block.area).length} productos posicionados
             {TEST_MODE && <span className="ml-2 text-xs bg-yellow-400 text-yellow-900 px-2 py-1 rounded-full font-bold">MODO TEST</span>}
             {!TEST_MODE && <span className="ml-2 text-xs bg-green-400 text-green-900 px-2 py-1 rounded-full font-bold">MODO ENTREGA</span>}
           </p>
@@ -1656,6 +1763,9 @@ const renderSubzonesFromMap = () => {
               onClick={() => {
                 setSelectedBlock(null);
                 setSelectedPalletGroup([]);
+                setMoveMode(false);
+                setMoveError(null);
+                setDeleteError(null);
               }}
               className="p-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 hover:text-red-500"
             >
@@ -1710,6 +1820,64 @@ const renderSubzonesFromMap = () => {
                 ))}
               </div>
             )}
+
+            <div className="flex flex-row gap-3 mt-6 mb-2 justify-center">
+              <button
+                className={`bg-green-500 hover:bg-green-600 disabled:bg-green-300 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow active:scale-95 transition-all ${moveMode ? 'ring-2 ring-green-400' : ''}`}
+                onClick={() => {
+                  setMoveError(null);
+                  setMoveMode((currentMode) => !currentMode);
+                }}
+                disabled={moveLoading || deleteLoading}
+              >
+                <Maximize2 size={16}/> {moveMode ? 'Cancelar' : 'Mover'}
+              </button>
+              <button
+                className="bg-yellow-400 hover:bg-yellow-500 disabled:bg-yellow-300 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow active:scale-95 transition-all"
+                disabled={moveLoading || deleteLoading}
+              >
+                <Package size={16}/> Despachar
+              </button>
+              <button
+                className="bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow active:scale-95 transition-all"
+                onClick={handleDeletePallets}
+                disabled={moveLoading || deleteLoading}
+              >
+                <X size={16}/> {deleteLoading ? 'Eliminando...' : 'Eliminar'}
+              </button>
+            </div>
+
+            {deleteError && <div className="text-red-500 text-xs text-center font-bold">{deleteError}</div>}
+          </div>
+        </div>
+      )}
+
+      {selectedBlock && moveMode && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-blue-200 dark:border-blue-700 shadow-2xl p-8 flex flex-col items-center min-w-[320px] max-w-[520px] w-full mx-4 relative">
+            <div className="text-lg font-black mb-6 text-blue-700 dark:text-blue-300 text-center">
+              Selecciona la nueva subzona
+            </div>
+            <div className="w-full max-h-[60vh] overflow-y-auto scrollbar-vertical-custom grid grid-cols-2 gap-4 mb-4 pr-2">
+              {moveOptions.map(({ zoneId, zoneName, subzone }) => (
+                <button
+                  key={`${zoneId}-${subzone}`}
+                  className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 font-bold py-4 px-3 rounded-xl text-sm hover:bg-blue-200 dark:hover:bg-blue-800 transition-all border border-blue-200 dark:border-blue-700 shadow"
+                  onClick={() => handleMovePallets(zoneId, subzone)}
+                  disabled={moveLoading}
+                >
+                  {zoneName} - {subzone}
+                </button>
+              ))}
+            </div>
+            {moveError && <div className="text-red-500 text-xs mb-2 text-center font-bold">{moveError}</div>}
+            <button
+              className="mt-2 px-6 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-white font-bold text-xs hover:bg-slate-300 dark:hover:bg-slate-600 transition-all"
+              onClick={() => setMoveMode(false)}
+              disabled={moveLoading}
+            >
+              Cancelar
+            </button>
           </div>
         </div>
       )}
