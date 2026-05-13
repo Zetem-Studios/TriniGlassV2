@@ -292,16 +292,23 @@ const generarClaveAgrupacion = (producto: any): string => {
 const generarCodigoUbicacion = (zoneName: string, subZoneName: string, fila: number, columna: number): string => {
   const zonaCode = zoneName.substring(0, 3).toUpperCase();
   const subzonaCode = subZoneName.substring(0, 3).toUpperCase();
-  return `${zonaCode}${subzonaCode}F${fila}C${columna}`;
+  return `${zonaCode}${subzonaCode}${fila}${columna}`;
 };
 
 const getSlotFromPosition = (posicion?: string): { fila: number; columna: number } | null => {
   if (!posicion) return null;
-  const match = posicion.match(/F(\d+)C(\d+)$/i);
-  if (!match) return null;
+  const legacyMatch = posicion.match(/F(\d+)C(\d+)$/i);
+  if (legacyMatch) {
+    return {
+      fila: Number(legacyMatch[1]),
+      columna: Number(legacyMatch[2])
+    };
+  }
+  const shortMatch = posicion.match(/(\d)(\d+)$/);
+  if (!shortMatch) return null;
   return {
-    fila: Number(match[1]),
-    columna: Number(match[2])
+    fila: Number(shortMatch[1]),
+    columna: Number(shortMatch[2])
   };
 };
 
