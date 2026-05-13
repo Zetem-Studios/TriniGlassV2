@@ -14,6 +14,10 @@ import {
   GripVertical,
   Trash2,
   Play,
+  MapPin,
+  Flag,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -24,14 +28,18 @@ import {
   vaciarCamion,
   validarCarga,
   iniciarRuta,
+  computeParadasFromPalets,
   type PaletPendiente,
   type CargaCamion as CargaCamionType,
+  type Parada,
 } from "../../services/CargaCamionService";
 import { getCamiones, type Camion } from "../../services/CamionService";
 import { useAuth } from "../context/useAuth";
 
 const formatNumber = (n: number, decimals = 0) =>
   Number.isFinite(n) ? n.toFixed(decimals) : "0";
+
+const ORIGEN_STORAGE_KEY = "triniglass:cargaCamion:origen";
 
 const PaletCard = ({
   palet,
@@ -202,6 +210,11 @@ export default function CargaCamion() {
   const [confirmVaciar, setConfirmVaciar] = useState(false);
   const [iniciandoRuta, setIniciandoRuta] = useState(false);
   const [confirmIniciarRuta, setConfirmIniciarRuta] = useState(false);
+  const [origen, setOrigen] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    return window.localStorage.getItem(ORIGEN_STORAGE_KEY) ?? "";
+  });
+  const [ordenClientes, setOrdenClientes] = useState<string[]>([]);
 
   const infoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -261,7 +274,14 @@ export default function CargaCamion() {
   useEffect(() => {
     setConfirmVaciar(false);
     setConfirmIniciarRuta(false);
+    setOrdenClientes([]);
   }, [selectedMatricula]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (origen) window.localStorage.setItem(ORIGEN_STORAGE_KEY, origen);
+    else window.localStorage.removeItem(ORIGEN_STORAGE_KEY);
+  }, [origen]);
 
   const assignedDocIds = useMemo(() => {
     const set = new Set<string>();
@@ -415,6 +435,22 @@ export default function CargaCamion() {
 
   const cargaPalets = cargaActual?.palets ?? [];
 
+  const paradas: Parada[] = useMemo(
+    () => computeParadasFromPalets(cargaPalets, ordenClientes),
+    [cargaPalets, ordenClientes]
+  );
+
+  const moverParada = (cliente: string, direccion: -1 | 1) => {
+    const orden = paradas.map((p) => p.cliente);
+    const idx = orden.indexOf(cliente);
+    if (idx < 0) return;
+    const nuevoIdx = idx + direccion;
+    if (nuevoIdx < 0 || nuevoIdx >= orden.length) return;
+    const next = [...orden];
+    [next[idx], next[nuevoIdx]] = [next[nuevoIdx], next[idx]];
+    setOrdenClientes(next);
+  };
+
   const handleIniciarRuta = async () => {
     if (!selectedCamion) return;
     if (selectedCamion.estado !== "disponible") {
@@ -423,6 +459,14 @@ export default function CargaCamion() {
     }
     if (cargaPalets.length === 0) {
       setError("Carga al menos un palet antes de iniciar la ruta.");
+      return;
+    }
+    if (!origen.trim()) {
+      setError("Indica el origen de la ruta antes de iniciarla.");
+      return;
+    }
+    if (paradas.length === 0) {
+      setError("La ruta debe tener al menos una parada.");
       return;
     }
     if (!confirmIniciarRuta) {
@@ -437,6 +481,8 @@ export default function CargaCamion() {
         conductor: selectedCamion.conductor,
         tipo: String(selectedCamion.tipo),
         email: user?.email ?? "anónimo",
+        origen: origen.trim(),
+        paradas,
       });
       setCamiones((prev) =>
         prev.map((c) =>
@@ -637,31 +683,89 @@ export default function CargaCamion() {
 
                     {selectedCamion.estado === "disponible" &&
                       cargaPalets.length > 0 && (
-                        <button
-                          type="button"
-                          disabled={iniciandoRuta}
-                          onClick={handleIniciarRuta}
-                          onBlur={() => {
-                            if (confirmIniciarRuta && !iniciandoRuta)
-                              setConfirmIniciarRuta(false);
-                          }}
-                          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-md active:scale-95 transition-all disabled:opacity-60 ${
-                            confirmIniciarRuta
-                              ? "bg-blue-700 hover:bg-blue-600 text-white"
-                              : "bg-blue-600 hover:bg-blue-500 text-white"
-                          }`}
-                        >
-                          {iniciandoRuta ? (
-                            <Loader2 size={14} className="animate-spin" />
-                          ) : (
-                            <Play size={14} />
-                          )}
-                          {iniciandoRuta
-                            ? "Iniciando..."
-                            : confirmIniciarRuta
-                              ? `Confirmar (${cargaPalets.length} palet${cargaPalets.length === 1 ? "" : "s"})`
-                              : "Marcar en ruta"}
-                        </button>
+                        <div className="flex flex-col gap-3 w-full sm:w-auto sm:min-w-70">
+                          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                            <MapPin size={12} />
+                            Origen
+                          </div>
+                          <input
+                            type="text"
+                            value={origen}
+                            onChange={(e) => setOrigen(e.target.value)}
+                            placeholder="Ej. Almacén Central"
+                            className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-blue-500/40"
+                          />
+
+                          <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
+                            <span className="flex items-center gap-2">
+                              <Flag size={12} />
+                              Paradas
+                            </span>
+                            <span>{paradas.length}</span>
+                          </div>
+                          <ul className="flex flex-col gap-1.5 max-h-44 overflow-y-auto pr-1">
+                            {paradas.map((p, idx) => (
+                              <li
+                                key={p.cliente}
+                                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+                              >
+                                <span className="w-5 h-5 flex items-center justify-center rounded-full bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-300 text-[10px] font-black">
+                                  {idx + 1}
+                                </span>
+                                <span className="flex-1 truncate text-xs font-bold text-slate-700 dark:text-slate-200">
+                                  {p.cliente}
+                                </span>
+                                <span className="text-[10px] font-black tracking-wider text-slate-400">
+                                  {p.totalPalets} pal{p.totalPalets === 1 ? "" : "s"}
+                                </span>
+                                <button
+                                  type="button"
+                                  disabled={idx === 0}
+                                  onClick={() => moverParada(p.cliente, -1)}
+                                  className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-transparent"
+                                  title="Subir parada"
+                                >
+                                  <ArrowUp size={12} />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={idx === paradas.length - 1}
+                                  onClick={() => moverParada(p.cliente, 1)}
+                                  className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-transparent"
+                                  title="Bajar parada"
+                                >
+                                  <ArrowDown size={12} />
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+
+                          <button
+                            type="button"
+                            disabled={iniciandoRuta}
+                            onClick={handleIniciarRuta}
+                            onBlur={() => {
+                              if (confirmIniciarRuta && !iniciandoRuta)
+                                setConfirmIniciarRuta(false);
+                            }}
+                            className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-md active:scale-95 transition-all disabled:opacity-60 ${
+                              confirmIniciarRuta
+                                ? "bg-blue-700 hover:bg-blue-600 text-white"
+                                : "bg-blue-600 hover:bg-blue-500 text-white"
+                            }`}
+                          >
+                            {iniciandoRuta ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                              <Play size={14} />
+                            )}
+                            {iniciandoRuta
+                              ? "Iniciando..."
+                              : confirmIniciarRuta
+                                ? `Confirmar (${paradas.length} parada${paradas.length === 1 ? "" : "s"})`
+                                : "Marcar en ruta"}
+                          </button>
+                        </div>
                       )}
                   </div>
 

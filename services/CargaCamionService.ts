@@ -299,12 +299,22 @@ const RUTAS = "rutas";
 
 export type RutaEstado = "en_curso" | "finalizada";
 
+export interface Parada {
+  cliente: string;
+  paletsIds: string[];
+  totalPalets: number;
+  orden: number;
+  entregado: boolean;
+}
+
 export interface Ruta {
   id: string;
   matricula: string;
   conductor: string;
   tipo: string;
   estado: RutaEstado;
+  origen: string;
+  paradas: Parada[];
   totalPalets: number;
   totalEntregados?: number;
   pesoTotalKg: number;
@@ -320,13 +330,45 @@ export interface IniciarRutaParams {
   conductor: string;
   tipo: string;
   email: string;
+  origen: string;
+  paradas: Parada[];
 }
+
+export const computeParadasFromPalets = (
+  palets: PaletAsignado[],
+  ordenPrevio: string[] = []
+): Parada[] => {
+  const map = new Map<string, string[]>();
+  palets.forEach((p) => {
+    const key = p.cliente?.trim() || "Sin cliente";
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(p.docId);
+  });
+
+  const clientes = Array.from(map.keys());
+  const ordenadosPrevios = ordenPrevio.filter((c) => map.has(c));
+  const nuevos = clientes.filter((c) => !ordenadosPrevios.includes(c));
+  const ordenFinal = [...ordenadosPrevios, ...nuevos];
+
+  return ordenFinal.map((cliente, idx) => {
+    const paletsIds = map.get(cliente) ?? [];
+    return {
+      cliente,
+      paletsIds,
+      totalPalets: paletsIds.length,
+      orden: idx + 1,
+      entregado: false,
+    };
+  });
+};
 
 export const iniciarRuta = async ({
   matricula,
   conductor,
   tipo,
   email,
+  origen,
+  paradas,
 }: IniciarRutaParams): Promise<string> => {
   const cargaRef = doc(db, CARGAS, matricula);
   const camionRef = doc(db, CAMIONES, matricula);
@@ -342,14 +384,35 @@ export const iniciarRuta = async ({
       throw new Error("El camión no tiene palets cargados.");
     }
 
+    const docIdsCarga = new Set(palets.map((p) => p.docId));
+    const paradasConsistentes = paradas.every((p) =>
+      p.paletsIds.every((id) => docIdsCarga.has(id))
+    );
+    if (!paradasConsistentes) {
+      throw new Error(
+        "Las paradas no coinciden con los palets cargados. Vuelve a abrir la página."
+      );
+    }
+
     const pesoTotal = palets.reduce((a, p) => a + (p.pesoKg ?? 0), 0);
     const volumenTotal = palets.reduce((a, p) => a + (p.volumenM3 ?? 0), 0);
+
+    const paradasNormalizadas: Parada[] = paradas.map((p, idx) => ({
+      cliente: p.cliente,
+      paletsIds: p.paletsIds,
+      totalPalets: p.paletsIds.length,
+      orden: idx + 1,
+      entregado: false,
+    }));
 
     tx.set(rutaRef, {
       matricula,
       conductor: conductor || "",
       tipo: tipo || "",
       estado: "en_curso" as RutaEstado,
+      origen: origen?.trim() || "",
+      paradas: paradasNormalizadas,
+      totalParadas: paradasNormalizadas.length,
       totalPalets: palets.length,
       pesoTotalKg: Number(pesoTotal.toFixed(2)),
       volumenTotalM3: Number(volumenTotal.toFixed(3)),
@@ -368,10 +431,16 @@ export const iniciarRuta = async ({
       { merge: true }
     );
 
+    const paradaPorPalet = new Map<string, number>();
+    paradasNormalizadas.forEach((parada) => {
+      parada.paletsIds.forEach((id) => paradaPorPalet.set(id, parada.orden));
+    });
+
     palets.forEach((p) => {
       tx.update(doc(db, PRODUCTOS, p.docId), {
         estado_pedido: ESTADO_EN_TRANSITO,
         rutaId: rutaRef.id,
+        paradaOrden: paradaPorPalet.get(p.docId) ?? null,
         enTransitoDesdeIso: new Date().toISOString(),
       });
     });
