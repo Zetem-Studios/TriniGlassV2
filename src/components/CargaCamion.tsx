@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   GripVertical,
   Trash2,
+  Play,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -25,7 +26,11 @@ import {
   type PaletPendiente,
   type CargaCamion as CargaCamionType,
 } from "../../services/CargaCamionService";
-import { getCamiones, type Camion } from "../../services/CamionService";
+import {
+  getCamiones,
+  updateEstadoCamion,
+  type Camion,
+} from "../../services/CamionService";
 import { useAuth } from "../context/useAuth";
 
 const formatNumber = (n: number, decimals = 0) =>
@@ -198,6 +203,8 @@ export default function CargaCamion() {
   const [saving, setSaving] = useState(false);
   const [vaciando, setVaciando] = useState(false);
   const [confirmVaciar, setConfirmVaciar] = useState(false);
+  const [iniciandoRuta, setIniciandoRuta] = useState(false);
+  const [confirmIniciarRuta, setConfirmIniciarRuta] = useState(false);
 
   const infoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -256,6 +263,7 @@ export default function CargaCamion() {
 
   useEffect(() => {
     setConfirmVaciar(false);
+    setConfirmIniciarRuta(false);
   }, [selectedMatricula]);
 
   const assignedDocIds = useMemo(() => {
@@ -409,6 +417,42 @@ export default function CargaCamion() {
   };
 
   const cargaPalets = cargaActual?.palets ?? [];
+
+  const handleIniciarRuta = async () => {
+    if (!selectedCamion) return;
+    if (selectedCamion.estado !== "disponible") {
+      setError("Solo se puede iniciar la ruta desde un camión disponible.");
+      return;
+    }
+    if (cargaPalets.length === 0) {
+      setError("Carga al menos un palet antes de iniciar la ruta.");
+      return;
+    }
+    if (!confirmIniciarRuta) {
+      setConfirmIniciarRuta(true);
+      return;
+    }
+    setError("");
+    setIniciandoRuta(true);
+    try {
+      await updateEstadoCamion(selectedCamion.matricula, "en_ruta");
+      setCamiones((prev) =>
+        prev.map((c) =>
+          c.matricula === selectedCamion.matricula
+            ? { ...c, estado: "en_ruta" }
+            : c
+        )
+      );
+      setConfirmIniciarRuta(false);
+      showInfo(`Camión ${selectedCamion.matricula} marcado en ruta`);
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : "No se pudo iniciar la ruta"
+      );
+    } finally {
+      setIniciandoRuta(false);
+    }
+  };
 
   return (
     <div className="min-h-full text-slate-900 dark:text-white font-sans">
@@ -574,16 +618,47 @@ export default function CargaCamion() {
                 </p>
               ) : (
                 <div className="flex flex-wrap items-center gap-4 justify-between">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                      Matrícula
-                    </p>
-                    <p className="text-2xl font-black tracking-tight text-blue-600 dark:text-blue-400">
-                      {selectedCamion.matricula}
-                    </p>
-                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mt-0.5">
-                      {selectedCamion.tipo} · {selectedCamion.conductor || "Sin conductor"}
-                    </p>
+                  <div className="flex flex-col gap-3">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
+                        Matrícula
+                      </p>
+                      <p className="text-2xl font-black tracking-tight text-blue-600 dark:text-blue-400">
+                        {selectedCamion.matricula}
+                      </p>
+                      <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mt-0.5">
+                        {selectedCamion.tipo} · {selectedCamion.conductor || "Sin conductor"}
+                      </p>
+                    </div>
+
+                    {selectedCamion.estado === "disponible" &&
+                      cargaPalets.length > 0 && (
+                        <button
+                          type="button"
+                          disabled={iniciandoRuta}
+                          onClick={handleIniciarRuta}
+                          onBlur={() => {
+                            if (confirmIniciarRuta && !iniciandoRuta)
+                              setConfirmIniciarRuta(false);
+                          }}
+                          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-md active:scale-95 transition-all disabled:opacity-60 ${
+                            confirmIniciarRuta
+                              ? "bg-blue-700 hover:bg-blue-600 text-white"
+                              : "bg-blue-600 hover:bg-blue-500 text-white"
+                          }`}
+                        >
+                          {iniciandoRuta ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Play size={14} />
+                          )}
+                          {iniciandoRuta
+                            ? "Iniciando..."
+                            : confirmIniciarRuta
+                              ? `Confirmar (${cargaPalets.length} palet${cargaPalets.length === 1 ? "" : "s"})`
+                              : "Marcar en ruta"}
+                        </button>
+                      )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 flex-1 min-w-[280px]">

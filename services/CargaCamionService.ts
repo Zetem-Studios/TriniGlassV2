@@ -345,7 +345,7 @@ export const finalizarRuta = async (
   batch.set(
     doc(db, CAMIONES, matricula),
     {
-      estado: "disponible",
+      estado: "no_disponible",
       actualizadoEn: serverTimestamp(),
     },
     { merge: true }

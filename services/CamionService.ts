@@ -13,11 +13,13 @@ import { db } from "../src/firebase";
 export type EstadoCamion =
   | "disponible"
   | "en_ruta"
+  | "no_disponible"
   | "mantenimiento";
 
 export const ESTADOS_CAMION: { value: EstadoCamion; label: string }[] = [
   { value: "disponible", label: "Disponible" },
   { value: "en_ruta", label: "En ruta" },
+  { value: "no_disponible", label: "No disponible" },
   { value: "mantenimiento", label: "En mantenimiento" },
 ];
 
@@ -65,6 +67,7 @@ export const validateCamion = (data: Camion): string | null => {
 const ESTADOS_VALIDOS: ReadonlySet<EstadoCamion> = new Set([
   "disponible",
   "en_ruta",
+  "no_disponible",
   "mantenimiento",
 ]);
 
@@ -122,4 +125,19 @@ export const saveCamion = async (
 export const deleteCamion = async (matricula: string): Promise<void> => {
   const id = normalizeMatricula(matricula);
   await deleteDoc(doc(db, COLLECTION, id));
+};
+
+export const updateEstadoCamion = async (
+  matricula: string,
+  estado: EstadoCamion
+): Promise<void> => {
+  const id = normalizeMatricula(matricula);
+  await setDoc(
+    doc(db, COLLECTION, id),
+    {
+      estado,
+      actualizadoEn: serverTimestamp(),
+    },
+    { merge: true }
+  );
 };
