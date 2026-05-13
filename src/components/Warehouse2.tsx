@@ -126,6 +126,7 @@ interface Block {
   fila?: number;
   columna?: number;
   referencias?: string;
+  posicion?: string;
 }
 
 // Función para parsear fechas
@@ -292,6 +293,16 @@ const generarCodigoUbicacion = (zoneName: string, subZoneName: string, fila: num
   const zonaCode = zoneName.substring(0, 3).toUpperCase();
   const subzonaCode = subZoneName.substring(0, 3).toUpperCase();
   return `${zonaCode}${subzonaCode}F${fila}C${columna}`;
+};
+
+const getSlotFromPosition = (posicion?: string): { fila: number; columna: number } | null => {
+  if (!posicion) return null;
+  const match = posicion.match(/F(\d+)C(\d+)$/i);
+  if (!match) return null;
+  return {
+    fila: Number(match[1]),
+    columna: Number(match[2])
+  };
 };
 
 const getAggregatedDimensions = (pallets: Block[]): string => {
@@ -462,7 +473,10 @@ export default function Warehouse2() {
             // Código de depuración eliminado
           }
           
-          const block = mapProductoToBlockSimple(producto, index);
+          const block = {
+            ...mapProductoToBlockSimple(producto, index),
+            posicion: data.posicion || ''
+          };
           nuevosBlocks.push(block);
         });
         
@@ -735,9 +749,67 @@ export default function Warehouse2() {
         // Procesar productos de forma secuencial para evitar problemas con Promise
         const processedBlocks: Block[] = [];
         for (let i = 0; i < productos.length; i++) {
-          const block = await mapProductoToBlock(productos[i], [], i);
+          const block = {
+            ...await mapProductoToBlock(productos[i], [], i),
+            posicion: productos[i].posicion || ''
+          };
           processedBlocks.push(block);
         }
+
+        const usedPositionsByLocation = new Map<string, Set<string>>();
+        const groupPositions = new Map<string, string>();
+        const pendingPositionUpdates: Array<{ id: string; posicion: string }> = [];
+
+        processedBlocks.forEach((block) => {
+          if (!block.zoneId || !block.area || !block.posicion) return;
+          const key = `${block.zoneId}__${block.area}`;
+          if (!usedPositionsByLocation.has(key)) usedPositionsByLocation.set(key, new Set());
+          usedPositionsByLocation.get(key)?.add(block.posicion);
+        });
+
+        processedBlocks.forEach((block) => {
+          if (!block.zoneId || !block.area || block.posicion) return;
+
+          const groupKey = generarClaveAgrupacion(block);
+          const locationKey = `${block.zoneId}__${block.area}`;
+          const zoneName = zones.find(z => z.id === block.zoneId)?.name || block.zoneId;
+          const subzonaConfig = subzonas.find(sub => sub.zonaId === block.zoneId && sub.nombre === block.area);
+          const capacidad = subzonaConfig?.capacidadMaxima;
+          const totalSlots = capacidad ? Math.ceil(capacidad / 2) * 2 : processedBlocks.filter(item => item.zoneId === block.zoneId && item.area === block.area).length + 1;
+          const tarjetasPorFila = Math.max(1, Math.ceil(totalSlots / 2));
+          let assignedPosition = groupPositions.get(groupKey);
+
+          if (!assignedPosition) {
+            if (!usedPositionsByLocation.has(locationKey)) usedPositionsByLocation.set(locationKey, new Set());
+            const usedPositions = usedPositionsByLocation.get(locationKey)!;
+
+            for (let index = 0; index < totalSlots; index++) {
+              const fila = index < tarjetasPorFila ? 1 : 2;
+              const columna = index < tarjetasPorFila ? index + 1 : index - tarjetasPorFila + 1;
+              const candidatePosition = generarCodigoUbicacion(zoneName, block.area, fila, columna);
+              if (!usedPositions.has(candidatePosition)) {
+                assignedPosition = candidatePosition;
+                break;
+              }
+            }
+
+            if (!assignedPosition) assignedPosition = generarCodigoUbicacion(zoneName, block.area, 1, totalSlots + 1);
+            usedPositions.add(assignedPosition);
+            groupPositions.set(groupKey, assignedPosition);
+          }
+
+          block.posicion = assignedPosition;
+          pendingPositionUpdates.push({ id: block.id, posicion: assignedPosition });
+        });
+
+        for (let i = 0; i < pendingPositionUpdates.length; i += 500) {
+          const batch = writeBatch(db);
+          pendingPositionUpdates.slice(i, i + 500).forEach((item) => {
+            batch.update(doc(db, 'productos', item.id), { posicion: item.posicion });
+          });
+          await batch.commit();
+        }
+
         setBlocks(processedBlocks);
         
         setError(null);
@@ -750,10 +822,10 @@ export default function Warehouse2() {
       }
     };
 
-    if (zones.length > 0) {
+    if (zones.length > 0 && subzonas.length > 0) {
       fetchProductos();
     }
-  }, [zones]);
+  }, [zones, subzonas]);
 
   useEffect(() => {
     if (searchTerm.trim()) {
@@ -775,19 +847,48 @@ export default function Warehouse2() {
     return selectedBlock ? [selectedBlock] : [];
   };
 
-  const handleMovePallets = async (zoneId: string, subzone: string) => {
+  const getAvailablePositions = (zoneId: string, subzone: string): string[] => {
+    const movingIds = getSelectedPallets().map(pallet => pallet.id);
+    const zoneName = zones.find(z => z.id === zoneId)?.name || zoneId;
+    const subzonaConfig = subzonas.find(sub => sub.zonaId === zoneId && sub.nombre === subzone);
+    const capacidad = subzonaConfig?.capacidadMaxima;
+    const totalSlots = capacidad ? Math.ceil(capacidad / 2) * 2 : blocks.filter(block => block.zoneId === zoneId && block.area === subzone).length + 1;
+    const tarjetasPorFila = Math.max(1, Math.ceil(totalSlots / 2));
+    const occupiedPositions = new Set(
+      blocks
+        .filter(block => block.zoneId === zoneId && block.area === subzone && !movingIds.includes(block.id) && block.posicion)
+        .map(block => block.posicion)
+    );
+    const positions: string[] = [];
+
+    for (let index = 0; index < totalSlots; index++) {
+      const fila = index < tarjetasPorFila ? 1 : 2;
+      const columna = index < tarjetasPorFila ? index + 1 : index - tarjetasPorFila + 1;
+      const posicion = generarCodigoUbicacion(zoneName, subzone, fila, columna);
+      if (!occupiedPositions.has(posicion)) positions.push(posicion);
+    }
+
+    return positions;
+  };
+
+  const handleMovePallets = async (zoneId: string, subzone: string, position: string) => {
     const palletsToMove = getSelectedPallets();
     if (palletsToMove.length === 0) return;
+    if (!position) {
+      setMoveError('Selecciona una posición de destino');
+      return;
+    }
 
     setMoveLoading(true);
     setMoveError(null);
 
     try {
       const batch = writeBatch(db);
+      const newPosition = position;
 
       palletsToMove.forEach((pallet) => {
         const productRef = doc(db, 'productos', pallet.id);
-        batch.update(productRef, { zona: zoneId, subzona: subzone });
+        batch.update(productRef, { zona: zoneId, subzona: subzone, posicion: newPosition });
       });
 
       await batch.commit();
@@ -795,16 +896,16 @@ export default function Warehouse2() {
       setBlocks((currentBlocks) =>
         currentBlocks.map((block) =>
           palletsToMove.some((pallet) => pallet.id === block.id)
-            ? { ...block, zoneId, area: subzone }
+            ? { ...block, zoneId, area: subzone, posicion: newPosition }
             : block
         )
       );
 
       if (selectedBlock) {
-        setSelectedBlock({ ...selectedBlock, zoneId, area: subzone });
+        setSelectedBlock({ ...selectedBlock, zoneId, area: subzone, posicion: newPosition });
       }
       setSelectedPalletGroup((currentGroup) =>
-        currentGroup.map((pallet) => ({ ...pallet, zoneId, area: subzone }))
+        currentGroup.map((pallet) => ({ ...pallet, zoneId, area: subzone, posicion: newPosition }))
       );
       setSelectedZone(zoneId);
       setMoveMode(false);
@@ -1437,6 +1538,18 @@ const renderSubzonesFromMap = () => {
                       groupCount?: number;
                       allPalets?: Block[];
                     }> = [];
+
+                    if (tieneLimite && capacidad) {
+                      tarjetas = Array.from({ length: totalTarjetas }, (_, index) => {
+                        const fila = index < tarjetasPorFila ? 1 : 2;
+                        const columna = index < tarjetasPorFila ? index + 1 : index - tarjetasPorFila + 1;
+                        return {
+                          id: `${subZone.id}-vacio-${fila}-${columna}`,
+                          occupied: false,
+                          daysInStorage: 0
+                        };
+                      });
+                    }
                     
                     // Primero, identificar productos duplicados usando clave de agrupación
                     const clavesProcesadas: string[] = [];
@@ -1452,7 +1565,7 @@ const renderSubzonesFromMap = () => {
                         
                         if (paletsMismaClave.length > 1) {
                           // Múltiples productos con misma clave - tarjeta especial agrupada
-                          tarjetas.push({
+                          const tarjetaAgrupada = {
                             id: claveAgrupacion,
                             occupied: true,
                             daysInStorage: Math.min(...paletsMismaClave.map(p => p.daysInStorage)),
@@ -1460,10 +1573,17 @@ const renderSubzonesFromMap = () => {
                             isGrouped: true,
                             groupCount: paletsMismaClave.length,
                             allPalets: paletsMismaClave
-                          });
+                          };
+                          const slot = getSlotFromPosition(paletsMismaClave[0].posicion);
+                          const targetIndex = slot ? (slot.fila === 1 ? slot.columna - 1 : tarjetasPorFila + slot.columna - 1) : tarjetas.findIndex(t => !t.occupied);
+                          if (tieneLimite && targetIndex >= 0 && targetIndex < tarjetas.length) {
+                            tarjetas[targetIndex] = tarjetaAgrupada;
+                          } else {
+                            tarjetas.push(tarjetaAgrupada);
+                          }
                         } else {
                           // Producto individual
-                          tarjetas.push({
+                          const tarjetaIndividual = {
                             id: pallet.id,
                             occupied: true,
                             daysInStorage: pallet.daysInStorage,
@@ -1471,24 +1591,19 @@ const renderSubzonesFromMap = () => {
                             isGrouped: false,
                             groupCount: 1,
                             allPalets: [pallet]
-                          });
+                          };
+                          const slot = getSlotFromPosition(pallet.posicion);
+                          const targetIndex = slot ? (slot.fila === 1 ? slot.columna - 1 : tarjetasPorFila + slot.columna - 1) : tarjetas.findIndex(t => !t.occupied);
+                          if (tieneLimite && targetIndex >= 0 && targetIndex < tarjetas.length) {
+                            tarjetas[targetIndex] = tarjetaIndividual;
+                          } else {
+                            tarjetas.push(tarjetaIndividual);
+                          }
                         }
                         
                         clavesProcesadas.push(claveAgrupacion);
                       }
                     });
-                    
-                    // Rellenar espacios vacíos hasta alcanzar la capacidad máxima (solo si hay límite)
-                    if (tieneLimite && capacidad) {
-                      const espaciosVacios = totalTarjetas - tarjetas.length;
-                      for (let i = 0; i < espaciosVacios; i++) {
-                        tarjetas.push({
-                          id: `${subZone.id}-vacio-${i}`,
-                          occupied: false,
-                          daysInStorage: 0
-                        });
-                      }
-                    }
                     
                     // Calcular filas dinámicamente si no hay límite
                     if (!tieneLimite) {
@@ -1546,6 +1661,16 @@ const renderSubzonesFromMap = () => {
                                     className="group relative"
                                   >
                                     <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-2xl opacity-0 group-hover:opacity-20 transition-opacity duration-300 blur-xl"></div>
+                                    {!tarjeta.occupied && (
+                                      <span className="pointer-events-none absolute top-[72px] left-1/2 -translate-x-1/2 z-10 text-[8px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-center">
+                                        {generarCodigoUbicacion(
+                                          zones.find(z => z.id === selectedZone)?.name || '',
+                                          subZone.nombre,
+                                          1,
+                                          index + 1
+                                        )}
+                                      </span>
+                                    )}
                                     <button
                                       onClick={() => {
                                         if (tarjeta.occupied && tarjeta.pallet) {
@@ -1644,6 +1769,16 @@ const renderSubzonesFromMap = () => {
                                     className="group relative"
                                   >
                                     <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-2xl opacity-0 group-hover:opacity-20 transition-opacity duration-300 blur-xl"></div>
+                                    {!tarjeta.occupied && (
+                                      <span className="pointer-events-none absolute top-[72px] left-1/2 -translate-x-1/2 z-10 text-[8px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-center">
+                                        {generarCodigoUbicacion(
+                                          zones.find(z => z.id === selectedZone)?.name || '',
+                                          subZone.nombre,
+                                          2,
+                                          index + 1
+                                        )}
+                                      </span>
+                                    )}
                                     <button
                                       onClick={() => {
                                         if (tarjeta.occupied && tarjeta.pallet) {
@@ -1856,19 +1991,33 @@ const renderSubzonesFromMap = () => {
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-blue-200 dark:border-blue-700 shadow-2xl p-8 flex flex-col items-center min-w-[320px] max-w-[520px] w-full mx-4 relative">
             <div className="text-lg font-black mb-6 text-blue-700 dark:text-blue-300 text-center">
-              Selecciona la nueva subzona
+              Selecciona la posición de destino
             </div>
-            <div className="w-full max-h-[60vh] overflow-y-auto scrollbar-vertical-custom grid grid-cols-2 gap-4 mb-4 pr-2">
-              {moveOptions.map(({ zoneId, zoneName, subzone }) => (
-                <button
-                  key={`${zoneId}-${subzone}`}
-                  className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 font-bold py-4 px-3 rounded-xl text-sm hover:bg-blue-200 dark:hover:bg-blue-800 transition-all border border-blue-200 dark:border-blue-700 shadow"
-                  onClick={() => handleMovePallets(zoneId, subzone)}
-                  disabled={moveLoading}
-                >
-                  {zoneName} - {subzone}
-                </button>
-              ))}
+            <div className="w-full max-h-[60vh] overflow-y-auto scrollbar-vertical-custom space-y-4 mb-4 pr-2">
+              {moveOptions.map(({ zoneId, zoneName, subzone }) => {
+                const availablePositions = getAvailablePositions(zoneId, subzone);
+                if (availablePositions.length === 0) return null;
+
+                return (
+                  <div key={`${zoneId}-${subzone}`} className="bg-slate-50 dark:bg-slate-800/70 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+                    <div className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
+                      {zoneName} - {subzone}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {availablePositions.map((position) => (
+                        <button
+                          key={`${zoneId}-${subzone}-${position}`}
+                          className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 font-bold py-3 px-2 rounded-xl text-xs hover:bg-blue-200 dark:hover:bg-blue-800 transition-all border border-blue-200 dark:border-blue-700 shadow"
+                          onClick={() => handleMovePallets(zoneId, subzone, position)}
+                          disabled={moveLoading}
+                        >
+                          {position}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
             {moveError && <div className="text-red-500 text-xs mb-2 text-center font-bold">{moveError}</div>}
             <button
