@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import Stock from './components/Stock'; 
 import Warehouse from './components/Warehouse';
-import Warehouse2 from './components/Warehouse2';
 import Resumen from './components/Resumen';
 import Login from './components/Login';
 import  AddUser  from "./components/AddUser";
@@ -44,7 +43,6 @@ function App() {
           <Route path="add-user" element={<AddUser />} />
           <Route path="inventario" element={<Stock />} />
           <Route path="almacen" element={<Warehouse />} />
-          <Route path="warehouse2" element={<Warehouse2 />} />
           <Route path="scanner" element={<MobileScanner />} />
           <Route path="camiones" element={<Camiones />} />
           <Route path="camiones/cargar" element={<CargaCamion />} />
