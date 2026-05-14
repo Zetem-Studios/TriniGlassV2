@@ -32,7 +32,9 @@ const Zone: React.FC<ZoneProps> = ({ zoneId, zoneName, subzones, blocks, selecte
   // For each subzone, assign blocks to positions
   Object.entries(subzones).forEach(([subzoneName, positions]) => {
     const subzoneBlocks = blocks.filter(b => b.area === subzoneName);
-    positions.forEach((position, index) => {
+    // Asegurar que positions sea un array
+    const positionsArray = Array.isArray(positions) ? positions : [];
+    positionsArray.forEach((position, index) => {
       if (subzoneBlocks[index]) {
         positionToBlock[position] = subzoneBlocks[index];
       } else {
@@ -55,7 +57,8 @@ const Zone: React.FC<ZoneProps> = ({ zoneId, zoneName, subzones, blocks, selecte
   // Crear un set de posiciones que pertenecen a subzonas
   const subzonePositions = new Set<string>();
   Object.entries(subzones).forEach(([, positions]) => {
-    positions.forEach(pos => subzonePositions.add(pos));
+    const positionsArray = Array.isArray(positions) ? positions : [];
+    positionsArray.forEach(pos => subzonePositions.add(pos));
   });
 
   return (
@@ -67,9 +70,11 @@ const Zone: React.FC<ZoneProps> = ({ zoneId, zoneName, subzones, blocks, selecte
         {preview ? (
           // Renderizar cada subzona como un solo rectángulo absoluto, color según el pallet más antiguo, sin interactividad ni tooltips
           Object.entries(subzones).map(([subzoneName, positions]) => {
+            // Asegurar que positions sea un array
+            const positionsArray = Array.isArray(positions) ? positions : [];
             // Calcular bounding box de la subzona
-            const colIdxs = positions.map(pos => cols.indexOf(pos[0])).filter(i => i >= 0);
-            const rowIdxs = positions.map(pos => rows.indexOf(pos.slice(1))).filter(i => i >= 0);
+            const colIdxs = positionsArray.map(pos => cols.indexOf(pos[0])).filter(i => i >= 0);
+            const rowIdxs = positionsArray.map(pos => rows.indexOf(pos.slice(1))).filter(i => i >= 0);
             if (colIdxs.length === 0 || rowIdxs.length === 0) return null;
             const minCol = Math.min(...colIdxs);
             const maxCol = Math.max(...colIdxs);
