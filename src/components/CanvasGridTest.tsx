@@ -1251,7 +1251,7 @@ const CanvasGridTest: React.FC = () => {
 
   // Función para verificar expansión vertical (independiente)
   const checkVerticalExpansion = (area: Area) => {
-    const columns = generateColumnLetters(gridBounds.startCol, gridBounds.endCol);
+    //const columns = generateColumnLetters(gridBounds.startCol, gridBounds.endCol);
     const currentRowIndex = area.row - gridBounds.startRow;
     
     // Calcular límite vertical del área

@@ -241,9 +241,7 @@ export const ZoneEditModal: React.FC<ZoneEditModalProps> = ({
                     <div>
                       <h4 className="font-medium text-gray-900 dark:text-gray-100 text-sm">Color</h4>
                       <p className="text-xs text-gray-700 dark:text-gray-300 mt-1">
-                        {editType === 'zona' 
-                          ? 'Las zonas tienen un color gris fijo.'
-                          : 'Las subzonas tienen un color gris oscuro fijo.'}
+                        Las subzonas tienen un color gris oscuro fijo.
                       </p>
                     </div>
                   </div>

@@ -15,7 +15,7 @@ import GestionUsuarios from "./components/GestionUsuarios";
 import MobileScanner from "./components/Scanner";
 import CanvasGridTest from "./components/CanvasGridTest";
 import { ZoneManager } from './components/ZoneManager';
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 
 function App() {

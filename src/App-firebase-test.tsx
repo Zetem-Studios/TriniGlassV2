@@ -42,10 +42,11 @@ function App() {
         setFirebaseStatus('Probando Auth...');
         const { getAuth } = await import('firebase/auth');
         const auth = getAuth(app);
+        console.log('Auth initialized:', auth);
         setFirebaseStatus('✅ Auth inicializado');
         
       } catch (err) {
-        setError(err.message);
+        setError(err instanceof Error ? err.message : String(err));
         setFirebaseStatus('❌ Error en Firebase');
       }
     };

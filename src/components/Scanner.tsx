@@ -4,7 +4,7 @@ import { verificarPalet } from "../../services/CargaCamionService";
 
 import {
   CheckCircle2, AlertCircle, Smartphone, User, Clock, Truck, Search, Loader2,
-  ChevronLeft, Navigation, Box, Maximize2, ArrowRightLeft, Map as MapIcon
+  ChevronLeft, Navigation, Box, Maximize2, ArrowRightLeft
 } from "lucide-react";
 import { db } from "../firebase";
 import { collection, getDocs, query, where } from "firebase/firestore";
@@ -165,9 +165,9 @@ export default function MobileScanner() {
         };
       };
     // Utilidad para obtener el primer valor definido
-    function getFirstDefined<T>(...args: (T | undefined | null)[]): T | undefined {
+    /* function getFirstDefined<T>(...args: (T | undefined | null)[]): T | undefined {
       return args.find((v) => v !== undefined && v !== null);
-    }
+    } */
   const [activeTab, setActiveTab] = useState("scan");
   const [scanning, setScanning] = useState(false); // true = mostrando loader
   const [isSearching, setIsSearching] = useState(false);
@@ -259,7 +259,7 @@ export default function MobileScanner() {
 
   // Nuevo: callback para QRScanner
   // Para depuración: guardar el resultado de búsqueda
-  const [lookupDebug, setLookupDebug] = useState<LookupDebug>(null);
+  const [_, setLookupDebug] = useState<LookupDebug>(null);
 
   const onScanSuccess = async (decodedText: string) => {
     setLastScan(decodedText);
@@ -283,7 +283,7 @@ export default function MobileScanner() {
       const q = query(productosCol, where("codigo_barra", ">=", cleanedScan), where("codigo_barra", "<=", cleanedScan + '\uf8ff'));
       const snapshot = await getDocs(q);
       let found: any[] = [];
-      let tried = 0;
+      //let tried = 0;
       let debugInfo: any = {
         query: decodedText,
         queryType: typeof decodedText,

@@ -1,6 +1,6 @@
 import { getAuth } from "firebase/auth";
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, doc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, getDoc, Timestamp, writeBatch } from "firebase/firestore";
+import { getFirestore, collection, doc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, Timestamp, writeBatch } from "firebase/firestore";
 
 export const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,

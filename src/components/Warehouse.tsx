@@ -1,8 +1,8 @@
 // Warehouse.tsx - Implementación dinámica sin hardcode
 import { useState, useEffect } from "react";
 import {
-  Search, Plus, ChevronDown, Check, X, Package, 
-  Layers, Maximize2, View, Zap, DoorOpen, Box
+  Search, ChevronDown, Check, X, Package, 
+  Layers, Maximize2, Zap, Box
 } from "lucide-react";
 import { db } from "../firebase";
 import { collection, getDocs, writeBatch, doc, getDoc } from "firebase/firestore";
@@ -355,7 +355,7 @@ const getStorageBorderClasses = (daysInStorage: number): string => {
 };
 
 // Versión síncrona simplificada para usar en el bucle
-const mapProductoToBlockSimple = (producto: Producto, index: number): Block => {
+/* const mapProductoToBlockSimple = (producto: Producto, index: number): Block => {
   const fechaPedido = parseFechaLineaPedido(producto.fecha_linea_pedido);
   const hoy = new Date();
   let daysInStorage = 0;
@@ -407,7 +407,7 @@ const mapProductoToBlockSimple = (producto: Producto, index: number): Block => {
     empresa: producto.empresa as string,
     referencias: producto.referencia_linea_pedido as string
   };
-};
+}; */
 
 export default function Warehouse() {
   // Inyectar estilos CSS personalizados
