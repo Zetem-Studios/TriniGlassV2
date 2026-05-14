@@ -11,8 +11,10 @@ let isScannerInitiating = false;
 
 const QRScanner = ({ onScanSuccess }: QRScannerProps) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const hasScannedRef = useRef(false);
 
   useEffect(() => {
+    hasScannedRef.current = false;
     if (!wrapperRef.current) return;
     
     const currentWrapper = wrapperRef.current;
@@ -46,7 +48,15 @@ const QRScanner = ({ onScanSuccess }: QRScannerProps) => {
     globalScannerInstance.start(
       { facingMode: "environment" },
       { fps: 10, qrbox: { width: 250, height: 250 } },
-      (text) => onScanSuccess(text),
+      (text) => {
+        if (hasScannedRef.current) return;
+        hasScannedRef.current = true;
+        onScanSuccess(text);
+        // Detener la cámara automáticamente tras el primer escaneo válido
+        if (globalScannerInstance?.isScanning) {
+          globalScannerInstance.stop().catch(() => {});
+        }
+      },
       () => {}
     ).catch(() => {}).finally(() => {
       isScannerInitiating = false;

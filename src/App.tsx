@@ -1,10 +1,10 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
-import Stock from './components/Stock'; 
+import Stock from './components/Stock';
 import Warehouse from './components/Warehouse';
 import Resumen from './components/Resumen';
 import Login from './components/Login';
-import  AddUser  from "./components/AddUser";
+import AddUser from "./components/AddUser";
 import Camiones from './components/Camiones';
 import CargaCamion from './components/CargaCamion';
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -62,7 +62,7 @@ function App() {
                         <h3 className="font-medium text-purple-900 dark:text-purple-100">Gestión de Zonas y Subzonas</h3>
                         <p className="text-sm text-purple-700 dark:text-purple-300">Crea y administra las zonas y subzonas del almacén</p>
                       </div>
-                      <button 
+                      <button
                         onClick={() => setShowZoneManager(true)}
                         className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2"
                       >
@@ -74,8 +74,8 @@ function App() {
                         <h3 className="font-medium text-blue-900 dark:text-blue-100">Editor de Mapas</h3>
                         <p className="text-sm text-blue-700 dark:text-blue-300">Crea y edita diseños de almacenamiento personalizados</p>
                       </div>
-                      <a 
-                        href="/canvas-test" 
+                      <a
+                        href="/canvas-test"
                         className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2"
                       >
                         Abrir Editor

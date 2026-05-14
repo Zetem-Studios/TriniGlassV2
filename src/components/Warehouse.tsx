@@ -1,8 +1,8 @@
 // Warehouse.tsx - Implementación dinámica sin hardcode
 import { useState, useEffect } from "react";
-import { 
-  Search, ChevronDown, X, Package, 
-  Layers, Zap, Box, Check, Maximize2
+import {
+  Search, Plus, ChevronDown, Check, X, Package, 
+  Layers, Maximize2, View, Zap, DoorOpen, Box
 } from "lucide-react";
 import { db } from "../firebase";
 import { collection, getDocs, writeBatch, doc, getDoc } from "firebase/firestore";
@@ -211,20 +211,6 @@ const getZones = async (): Promise<ZoneConfig[]> => {
   }
 };
 
-// Función para obtener reglas de asignación de Firebase (ya no se usa)
-// const getAssignmentRules = async (): Promise<any[]> => {
-//   try {
-//     const rulesCollection = collection(db, "assignment_rules");
-//     const snapshot = await getDocs(rulesCollection);
-//     return snapshot.docs.map(doc => ({
-//       id: doc.id,
-//       ...doc.data()
-//     }));
-//   } catch (error) {
-//     console.error("Error cargando reglas de asignación:", error);
-//     return [];
-//   }
-// };
 
 // Función para mapear productos a bloques (posicionamiento ahora viene de BD)
 const mapProductoToBlock = async (producto: Producto, _rules: any[], index: number): Promise<Block> => {
@@ -468,85 +454,6 @@ export default function Warehouse() {
 
   // MODO TEST/ENTREGA: Cambiar a false para modo entrega (cargar todos los datos)
   const TEST_MODE = false; // true = modo test (solo 200 lecturas), false = modo entrega (todos los datos)
-
-  // Cargar productos desde Firebase
-  useEffect(() => {
-    const fetchProductos = async () => {
-      try {
-        setLoading(true);
-        
-        const productosCollection = collection(db, "productos");
-        const snapshot = await getDocs(productosCollection);
-        
-        
-        if (snapshot.size === 0) {
-          setError("La colección 'productos' está vacía");
-          setBlocks([]);
-          setLoading(false);
-          return;
-        }
-
-        // MODO TEST: Limitar a 200 documentos para ahorrar lecturas de Firebase
-        const docsToProcess = TEST_MODE ? snapshot.docs.slice(0, 200) : snapshot.docs;
-        if (TEST_MODE) {
-        }
-        
-        // Convertir productos a bloques (cada producto es un bloque individual)
-        const nuevosBlocks: Block[] = [];
-        
-        docsToProcess.forEach((doc, index) => {
-          const data = doc.data() as any;
-          const producto = { ...data, id: doc.id };
-          
-          // Depurar campos zona y subzona
-          if (index < 10) { // Mostrar más productos para ver la variación
-            // Código de depuración eliminado
-          }
-          
-          const block = {
-            ...mapProductoToBlockSimple(producto, index),
-            posicion: data.posicion ?? null
-          };
-          nuevosBlocks.push(block);
-        });
-        
-        // Contar agrupaciones para estadísticas (sin Map)
-        let agrupacionesContadas = 0;
-        const clavesProcesadas: string[] = [];
-        
-        docsToProcess.forEach(doc => {
-          const data = doc.data() as any;
-          const claveAgrupacion = generarClaveAgrupacion(data);
-          
-          if (!clavesProcesadas.includes(claveAgrupacion)) {
-            const mismaClave = docsToProcess.filter(d => 
-              generarClaveAgrupacion(d.data()) === claveAgrupacion
-            );
-            
-            if (mismaClave.length > 1) {
-              agrupacionesContadas++;
-            }
-            
-            clavesProcesadas.push(claveAgrupacion);
-          }
-        });
-        
-        
-        setBlocks(nuevosBlocks);
-        setError(null);
-      } catch (err) {
-        console.error("❌ Error cargando productos:", err);
-        console.error("   Tipo de error:", (err as Error).name);
-        console.error("   Mensaje:", (err as Error).message);
-        setError(`Error: ${(err as Error).message}`);
-        setBlocks([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchProductos();
-  }, []);
 
   // Función para cargar el mapa activo desde Firebase
   const loadActiveMapFromFirebase = () => {
