@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { db } from './firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
+
+const ESTADOS_FUERA_DE_ALMACEN = new Set(['Entregado', 'En tránsito']);
 
 interface ZoneOccupancy {
   zoneId: string;
@@ -42,14 +44,18 @@ export function useWarehouseStats() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+    setLoading(true);
+    setError(null);
 
-        const productosRef = collection(db, 'productos');
-        const snapshot = await getDocs(productosRef);
-        const productos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const productosRef = collection(db, 'productos');
+    const unsub = onSnapshot(
+      productosRef,
+      snapshot => {
+        const productosTodos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const productos = productosTodos.filter(p => {
+          const estado = String((p as Record<string, unknown>).estado_pedido ?? '');
+          return !ESTADOS_FUERA_DE_ALMACEN.has(estado);
+        });
 
         // Conteo por zonas
         const zoneCounts: Record<string, number> = {};
@@ -124,13 +130,17 @@ export function useWarehouseStats() {
         });
 
         const totalOcupados = productos.length;
-        const totalLibres = Math.max(0, TOTAL_CAPACITY - totalOcupados);
+        const capacidadEfectiva = Math.max(TOTAL_CAPACITY, totalOcupados);
+        const totalLibres = Math.max(0, capacidadEfectiva - totalOcupados);
 
         setStats({
-          totalPalets: TOTAL_CAPACITY,
+          totalPalets: capacidadEfectiva,
           paletsLibres: totalLibres,
           paletsOcupados: totalOcupados,
-          ocupacionPorcentaje: Math.min(100, Math.round((totalOcupados / TOTAL_CAPACITY) * 100)),
+          ocupacionPorcentaje:
+            capacidadEfectiva > 0
+              ? Math.min(100, Math.round((totalOcupados / capacidadEfectiva) * 100))
+              : 0,
           zonas,
           prioridadAlta,
           prioridadMedia,
@@ -140,15 +150,16 @@ export function useWarehouseStats() {
           pesoTotalKg: Math.round(pesoTotalKg),
           diasPromedioAlmacen: productosConFecha > 0 ? Math.round(totalDias / productosConFecha) : 0,
         });
-      } catch (err) {
+        setLoading(false);
+      },
+      err => {
         console.error('Error fetching warehouse stats:', err);
         setError('Error al cargar estadísticas del almacén');
-      } finally {
         setLoading(false);
       }
-    };
+    );
 
-    fetchStats();
+    return () => unsub();
   }, []);
 
   return { stats, loading, error };

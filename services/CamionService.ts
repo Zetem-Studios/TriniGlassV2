@@ -13,14 +13,14 @@ import { db } from "../src/firebase";
 export type EstadoCamion =
   | "disponible"
   | "en_ruta"
-  | "mantenimiento"
-  | "fuera_de_servicio";
+  | "no_disponible"
+  | "mantenimiento";
 
 export const ESTADOS_CAMION: { value: EstadoCamion; label: string }[] = [
   { value: "disponible", label: "Disponible" },
   { value: "en_ruta", label: "En ruta" },
+  { value: "no_disponible", label: "No disponible" },
   { value: "mantenimiento", label: "En mantenimiento" },
-  { value: "fuera_de_servicio", label: "Fuera de servicio" },
 ];
 
 export const TIPOS_CAMION = [
@@ -64,6 +64,20 @@ export const validateCamion = (data: Camion): string | null => {
   return null;
 };
 
+const ESTADOS_VALIDOS: ReadonlySet<EstadoCamion> = new Set([
+  "disponible",
+  "en_ruta",
+  "no_disponible",
+  "mantenimiento",
+]);
+
+const normalizeEstado = (raw: unknown): EstadoCamion => {
+  if (typeof raw === "string" && ESTADOS_VALIDOS.has(raw as EstadoCamion)) {
+    return raw as EstadoCamion;
+  }
+  return "disponible";
+};
+
 export const getCamiones = async (): Promise<Camion[]> => {
   const q = query(collection(db, COLLECTION), orderBy("matricula"));
   const snapshot = await getDocs(q);
@@ -75,7 +89,7 @@ export const getCamiones = async (): Promise<Camion[]> => {
       conductor: data.conductor ?? "",
       capacidadPeso: Number(data.capacidadPeso ?? 0),
       capacidadVolumen: Number(data.capacidadVolumen ?? 0),
-      estado: (data.estado as EstadoCamion) ?? "disponible",
+      estado: normalizeEstado(data.estado),
     };
   });
 };
@@ -111,4 +125,19 @@ export const saveCamion = async (
 export const deleteCamion = async (matricula: string): Promise<void> => {
   const id = normalizeMatricula(matricula);
   await deleteDoc(doc(db, COLLECTION, id));
+};
+
+export const updateEstadoCamion = async (
+  matricula: string,
+  estado: EstadoCamion
+): Promise<void> => {
+  const id = normalizeMatricula(matricula);
+  await setDoc(
+    doc(db, COLLECTION, id),
+    {
+      estado,
+      actualizadoEn: serverTimestamp(),
+    },
+    { merge: true }
+  );
 };

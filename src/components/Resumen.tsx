@@ -6,6 +6,11 @@ import {
   AlertTriangle,
   Weight,
   Layers,
+  Truck,
+  Route,
+  PackageCheck,
+  Gauge as GaugeIcon,
+  Timer,
 } from 'lucide-react';
 import {
   BarChart,
@@ -22,11 +27,13 @@ import {
 } from 'recharts';
 import KpiCard from './KpiCard';
 import { useWarehouseStats } from '../useWarehouseStats';
+import { useFleetStats } from '../useFleetStats';
 
 const CHART_COLORS = ['#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 export default function Resumen() {
   const { stats, loading, error } = useWarehouseStats();
+  const { stats: fleet, loading: fleetLoading, error: fleetError } = useFleetStats();
 
   if (error) {
     return (
@@ -309,6 +316,174 @@ export default function Resumen() {
           ) : (
             <div className="h-[250px] flex items-center justify-center text-slate-500 dark:text-slate-400">
               No hay datos disponibles
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Sección Flota */}
+      <div className="pt-2">
+        <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-1">
+          <Truck className="w-5 h-5 text-blue-500" />
+          Gestión de flota
+        </h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          Camiones, rutas y entregas en vivo
+        </p>
+      </div>
+
+      {fleetError && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 text-red-700 dark:text-red-400">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5" />
+            <span>{fleetError}</span>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard
+          title="Camiones disponibles"
+          value={fleet?.camionesDisponibles ?? '-'}
+          subtitle={`de ${fleet?.totalCamiones ?? '-'} en flota`}
+          icon={<Truck className="w-5 h-5" />}
+          color="green"
+          loading={fleetLoading}
+        />
+        <KpiCard
+          title="En ruta"
+          value={fleet?.camionesEnRuta ?? '-'}
+          subtitle={`${fleet?.rutasEnCurso ?? 0} ruta${fleet?.rutasEnCurso === 1 ? '' : 's'} en curso`}
+          icon={<Route className="w-5 h-5" />}
+          color="blue"
+          loading={fleetLoading}
+        />
+        <KpiCard
+          title="No disponibles"
+          value={fleet?.camionesNoDisponibles ?? '-'}
+          subtitle={`${fleet?.camionesMantenimiento ?? 0} en mantenimiento`}
+          icon={<AlertTriangle className="w-5 h-5" />}
+          color="red"
+          loading={fleetLoading}
+        />
+        <KpiCard
+          title="Palets en carga"
+          value={fleet?.paletsEnCarga ?? '-'}
+          subtitle="cargados pendientes de salida"
+          icon={<Package className="w-5 h-5" />}
+          color="amber"
+          loading={fleetLoading}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard
+          title="Entregados hoy"
+          value={fleet?.paletsEntregadosHoy ?? '-'}
+          subtitle={`${fleet?.paletsEntregadosUltimos7Dias ?? 0} en los últimos 7 días`}
+          icon={<PackageCheck className="w-5 h-5" />}
+          color="cyan"
+          loading={fleetLoading}
+        />
+        <KpiCard
+          title="Rutas finalizadas"
+          value={fleet?.rutasFinalizadasUltimos7Dias ?? '-'}
+          subtitle={`últimos 7 días · ${fleet?.rutasFinalizadasTotal ?? 0} total`}
+          icon={<Route className="w-5 h-5" />}
+          color="purple"
+          loading={fleetLoading}
+        />
+        <KpiCard
+          title="Duración media de ruta"
+          value={
+            fleet
+              ? fleet.duracionMediaMinutos > 0
+                ? `${fleet.duracionMediaMinutos} min`
+                : '-'
+              : '-'
+          }
+          subtitle="rutas finalizadas"
+          icon={<Timer className="w-5 h-5" />}
+          color="amber"
+          loading={fleetLoading}
+        />
+        <KpiCard
+          title="Utilización media"
+          value={
+            fleet && fleet.utilizacionMediaPesoPct > 0
+              ? `${fleet.utilizacionMediaPesoPct}%`
+              : '-'
+          }
+          subtitle="peso medio sobre capacidad"
+          icon={<GaugeIcon className="w-5 h-5" />}
+          color="blue"
+          loading={fleetLoading}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Entregas por día (últimos 7 días) */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+            Entregas por día (últimos 7 días)
+          </h3>
+          {fleetLoading ? (
+            <div className="h-65 animate-pulse bg-slate-100 dark:bg-slate-700 rounded-xl" />
+          ) : fleet && fleet.entregasPorDia.some(d => d.entregas > 0) ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={fleet.entregasPorDia} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-slate-200 dark:stroke-slate-700" />
+                <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={{ stroke: '#e2e8f0' }} />
+                <YAxis allowDecimals={false} tick={{ fill: '#64748b', fontSize: 12 }} axisLine={{ stroke: '#e2e8f0' }} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#1e293b',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: '#fff',
+                  }}
+                />
+                <Bar dataKey="entregas" name="Palets entregados" fill="#06b6d4" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-65 flex items-center justify-center text-slate-500 dark:text-slate-400">
+              Sin entregas en los últimos 7 días
+            </div>
+          )}
+        </div>
+
+        {/* Top camiones por entregas */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+            Camiones con más entregas
+          </h3>
+          {fleetLoading ? (
+            <div className="h-65 animate-pulse bg-slate-100 dark:bg-slate-700 rounded-xl" />
+          ) : fleet && fleet.topCamiones.length > 0 ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart
+                data={fleet.topCamiones}
+                layout="vertical"
+                margin={{ top: 10, right: 10, left: 20, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" className="stroke-slate-200 dark:stroke-slate-700" />
+                <XAxis type="number" allowDecimals={false} tick={{ fill: '#64748b', fontSize: 12 }} axisLine={{ stroke: '#e2e8f0' }} />
+                <YAxis dataKey="matricula" type="category" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={{ stroke: '#e2e8f0' }} width={80} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#1e293b',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: '#fff',
+                  }}
+                />
+                <Bar dataKey="entregas" name="Palets entregados" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-65 flex items-center justify-center text-slate-500 dark:text-slate-400">
+              Aún no hay entregas registradas
             </div>
           )}
         </div>

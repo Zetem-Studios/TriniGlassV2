@@ -4,10 +4,12 @@ import {
   onSnapshot,
   query,
   orderBy,
-  limit,
   runTransaction,
   serverTimestamp,
   updateDoc,
+  writeBatch,
+  getDoc,
+  where,
 } from "firebase/firestore";
 import { db } from "../src/firebase";
 
@@ -44,16 +46,19 @@ export interface CargaCamion {
 const CARGAS = "cargas";
 const PRODUCTOS = "productos";
 
-const PALETS_QUERY_LIMIT = 300;
-
-const ESTADOS_VISIBLES = new Set([
+const ESTADOS_VISIBLES_LIST = [
   "Pendiente",
   "Para verificar",
   "Codificada",
   "Producción",
   "Producida",
   "Listo para carga",
-]);
+] as const;
+
+const ESTADOS_VISIBLES = new Set<string>(ESTADOS_VISIBLES_LIST);
+
+export const ESTADO_ENTREGADO = "Entregado";
+export const ESTADO_EN_TRANSITO = "En tránsito";
 
 export const computeVolumeM3 = (altura?: number, longitud?: number): number => {
   const h = Number(altura) || 0;
@@ -63,45 +68,74 @@ export const computeVolumeM3 = (altura?: number, longitud?: number): number => {
   return Math.max(0.05, Number(m3.toFixed(3)));
 };
 
+const mapDocToPalet = (
+  id: string,
+  data: Record<string, unknown>
+): PaletPendiente => {
+  const altura = Number((data.altura as number) ?? 0);
+  const longitud = Number((data.longitud as number) ?? 0);
+  const pesoKg =
+    Number((data.peso_total_kg as number) ?? 0) ||
+    Number((data.peso_pieza_kg as number) ?? 0);
+  return {
+    docId: id,
+    codigoBarra: String(data.codigo_barra ?? id),
+    cliente: String(
+      data.apellido_cliente ?? data.nombre_abreviado ?? "Sin cliente"
+    ),
+    descripcion: String(
+      data.descripcion_producido_longitud ?? data.estado_linea_pdd ?? ""
+    ),
+    altura,
+    longitud,
+    pesoKg: Number.isFinite(pesoKg) ? pesoKg : 0,
+    volumenM3: computeVolumeM3(altura, longitud),
+    estado: String(data.estado_pedido ?? "Pendiente"),
+    numeroLineaPedido: data.numero_linea_pedido
+      ? String(data.numero_linea_pedido)
+      : undefined,
+    subzona: data.subzona ? String(data.subzona) : undefined,
+  };
+};
+
 export const subscribeToPalets = (
   cb: (palets: PaletPendiente[]) => void
 ): (() => void) => {
-  const q = query(
+  const filteredQuery = query(
     collection(db, PRODUCTOS),
-    orderBy("fecha_linea_pedido", "desc"),
-    limit(PALETS_QUERY_LIMIT)
+    where("estado_pedido", "in", [...ESTADOS_VISIBLES_LIST])
   );
-  return onSnapshot(q, (snap) => {
-    const list: PaletPendiente[] = snap.docs.map((d) => {
-      const data = d.data() as Record<string, unknown>;
-      const altura = Number((data.altura as number) ?? 0);
-      const longitud = Number((data.longitud as number) ?? 0);
-      const pesoKg =
-        Number((data.peso_total_kg as number) ?? 0) ||
-        Number((data.peso_pieza_kg as number) ?? 0);
-      return {
-        docId: d.id,
-        codigoBarra: String(data.codigo_barra ?? d.id),
-        cliente: String(
-          data.apellido_cliente ?? data.nombre_abreviado ?? "Sin cliente"
-        ),
-        descripcion: String(
-          data.descripcion_producido_longitud ?? data.estado_linea_pdd ?? ""
-        ),
-        altura,
-        longitud,
-        pesoKg: Number.isFinite(pesoKg) ? pesoKg : 0,
-        volumenM3: computeVolumeM3(altura, longitud),
-        estado: String(data.estado_pedido ?? "Pendiente"),
-        numeroLineaPedido: data.numero_linea_pedido
-          ? String(data.numero_linea_pedido)
-          : undefined,
-        subzona: data.subzona ? String(data.subzona) : undefined,
-      };
-    });
-    const visibles = list.filter((p) => ESTADOS_VISIBLES.has(p.estado));
-    cb(visibles.length ? visibles : list);
-  });
+
+  return onSnapshot(
+    filteredQuery,
+    (snap) => {
+      const list = snap.docs.map((d) =>
+        mapDocToPalet(d.id, d.data() as Record<string, unknown>)
+      );
+      cb(list);
+    },
+    (err) => {
+      console.warn(
+        "[subscribeToPalets] consulta filtrada falló, usando fallback:",
+        err
+      );
+      const fallbackQuery = query(
+        collection(db, PRODUCTOS),
+        orderBy("fecha_linea_pedido", "desc")
+      );
+      onSnapshot(fallbackQuery, (snap) => {
+        const list = snap.docs.map((d) =>
+          mapDocToPalet(d.id, d.data() as Record<string, unknown>)
+        );
+        const visibles = list.filter((p) => ESTADOS_VISIBLES.has(p.estado));
+        cb(
+          visibles.length
+            ? visibles
+            : list.filter((p) => p.estado !== ESTADO_ENTREGADO)
+        );
+      });
+    }
+  );
 };
 
 export const subscribeToCargas = (
@@ -201,6 +235,27 @@ export const removePaletFromCamion = async (
   });
 };
 
+export const vaciarCamion = async (matricula: string): Promise<number> => {
+  const ref = doc(db, CARGAS, matricula);
+  let removed = 0;
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) return;
+    const current: PaletAsignado[] = (snap.data().palets as PaletAsignado[]) ?? [];
+    removed = current.length;
+    tx.set(
+      ref,
+      {
+        matricula,
+        palets: [],
+        actualizadoEn: serverTimestamp(),
+      },
+      { merge: true }
+    );
+  });
+  return removed;
+};
+
 export interface ValidacionResultado {
   excedePeso: boolean;
   excedeVolumen: boolean;
@@ -236,4 +291,251 @@ export const verificarPalet = async (docId: string): Promise<void> => {
     estado_pedido: "Verificado",
     fechaUltimaRevision: serverTimestamp(),
   });
+};
+
+const CAMIONES = "camiones";
+const PALETS_ENTREGADOS = "palets_entregados";
+const RUTAS = "rutas";
+
+export type RutaEstado = "en_curso" | "finalizada";
+
+export interface Parada {
+  cliente: string;
+  paletsIds: string[];
+  totalPalets: number;
+  orden: number;
+  entregado: boolean;
+}
+
+export interface Ruta {
+  id: string;
+  matricula: string;
+  conductor: string;
+  tipo: string;
+  estado: RutaEstado;
+  origen: string;
+  paradas: Parada[];
+  totalPalets: number;
+  totalEntregados?: number;
+  pesoTotalKg: number;
+  volumenTotalM3: number;
+  iniciadoPor: string;
+  finalizadoPor?: string;
+  paletsCargados: PaletAsignado[];
+  paletsEntregados?: PaletAsignado[];
+}
+
+export interface IniciarRutaParams {
+  matricula: string;
+  conductor: string;
+  tipo: string;
+  email: string;
+  origen: string;
+  paradas: Parada[];
+}
+
+export const computeParadasFromPalets = (
+  palets: PaletAsignado[],
+  ordenPrevio: string[] = []
+): Parada[] => {
+  const map = new Map<string, string[]>();
+  palets.forEach((p) => {
+    const key = p.cliente?.trim() || "Sin cliente";
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(p.docId);
+  });
+
+  const clientes = Array.from(map.keys());
+  const ordenadosPrevios = ordenPrevio.filter((c) => map.has(c));
+  const nuevos = clientes.filter((c) => !ordenadosPrevios.includes(c));
+  const ordenFinal = [...ordenadosPrevios, ...nuevos];
+
+  return ordenFinal.map((cliente, idx) => {
+    const paletsIds = map.get(cliente) ?? [];
+    return {
+      cliente,
+      paletsIds,
+      totalPalets: paletsIds.length,
+      orden: idx + 1,
+      entregado: false,
+    };
+  });
+};
+
+export const iniciarRuta = async ({
+  matricula,
+  conductor,
+  tipo,
+  email,
+  origen,
+  paradas,
+}: IniciarRutaParams): Promise<string> => {
+  const cargaRef = doc(db, CARGAS, matricula);
+  const camionRef = doc(db, CAMIONES, matricula);
+  const rutaRef = doc(collection(db, RUTAS));
+
+  await runTransaction(db, async (tx) => {
+    const cargaSnap = await tx.get(cargaRef);
+    const palets: PaletAsignado[] = cargaSnap.exists()
+      ? ((cargaSnap.data().palets as PaletAsignado[]) ?? [])
+      : [];
+
+    if (palets.length === 0) {
+      throw new Error("El camión no tiene palets cargados.");
+    }
+
+    const docIdsCarga = new Set(palets.map((p) => p.docId));
+    const paradasConsistentes = paradas.every((p) =>
+      p.paletsIds.every((id) => docIdsCarga.has(id))
+    );
+    if (!paradasConsistentes) {
+      throw new Error(
+        "Las paradas no coinciden con los palets cargados. Vuelve a abrir la página."
+      );
+    }
+
+    const pesoTotal = palets.reduce((a, p) => a + (p.pesoKg ?? 0), 0);
+    const volumenTotal = palets.reduce((a, p) => a + (p.volumenM3 ?? 0), 0);
+
+    const paradasNormalizadas: Parada[] = paradas.map((p, idx) => ({
+      cliente: p.cliente,
+      paletsIds: p.paletsIds,
+      totalPalets: p.paletsIds.length,
+      orden: idx + 1,
+      entregado: false,
+    }));
+
+    tx.set(rutaRef, {
+      matricula,
+      conductor: conductor || "",
+      tipo: tipo || "",
+      estado: "en_curso" as RutaEstado,
+      origen: origen?.trim() || "",
+      paradas: paradasNormalizadas,
+      totalParadas: paradasNormalizadas.length,
+      totalPalets: palets.length,
+      pesoTotalKg: Number(pesoTotal.toFixed(2)),
+      volumenTotalM3: Number(volumenTotal.toFixed(3)),
+      iniciadoPor: email || "anónimo",
+      paletsCargados: palets,
+      fechaInicio: serverTimestamp(),
+    });
+
+    tx.set(
+      camionRef,
+      {
+        estado: "en_ruta",
+        rutaActivaId: rutaRef.id,
+        actualizadoEn: serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    const paradaPorPalet = new Map<string, number>();
+    paradasNormalizadas.forEach((parada) => {
+      parada.paletsIds.forEach((id) => paradaPorPalet.set(id, parada.orden));
+    });
+
+    palets.forEach((p) => {
+      tx.update(doc(db, PRODUCTOS, p.docId), {
+        estado_pedido: ESTADO_EN_TRANSITO,
+        rutaId: rutaRef.id,
+        paradaOrden: paradaPorPalet.get(p.docId) ?? null,
+        enTransitoDesdeIso: new Date().toISOString(),
+      });
+    });
+  });
+
+  return rutaRef.id;
+};
+
+export interface FinalizarRutaResultado {
+  paletsEliminados: number;
+  rutaId: string | null;
+}
+
+export const finalizarRuta = async (
+  matricula: string,
+  email: string = "anónimo"
+): Promise<FinalizarRutaResultado> => {
+  const cargaRef = doc(db, CARGAS, matricula);
+  const camionRef = doc(db, CAMIONES, matricula);
+
+  const [cargaSnap, camionSnap] = await Promise.all([
+    getDoc(cargaRef),
+    getDoc(camionRef),
+  ]);
+
+  const palets: PaletAsignado[] = cargaSnap.exists()
+    ? ((cargaSnap.data().palets as PaletAsignado[]) ?? [])
+    : [];
+
+  const rutaActivaId = camionSnap.exists()
+    ? ((camionSnap.data().rutaActivaId as string | undefined) ?? null)
+    : null;
+
+  const pesoEntregado = palets.reduce((a, p) => a + (p.pesoKg ?? 0), 0);
+  const volumenEntregado = palets.reduce((a, p) => a + (p.volumenM3 ?? 0), 0);
+
+  const batch = writeBatch(db);
+
+  palets.forEach((p) => {
+    batch.update(doc(db, PRODUCTOS, p.docId), {
+      estado_pedido: ESTADO_ENTREGADO,
+      entregadoEn: serverTimestamp(),
+      entregadoPorMatricula: matricula,
+      rutaId: rutaActivaId ?? null,
+    });
+
+    batch.set(doc(db, PALETS_ENTREGADOS, p.docId), {
+      docId: p.docId,
+      codigoBarra: p.codigoBarra,
+      cliente: p.cliente,
+      descripcion: p.descripcion,
+      pesoKg: p.pesoKg,
+      volumenM3: p.volumenM3,
+      asignadoPor: p.asignadoPor,
+      asignadoEnIso: p.asignadoEnIso,
+      matricula,
+      estado: ESTADO_ENTREGADO,
+      entregadoEn: serverTimestamp(),
+      rutaId: rutaActivaId ?? null,
+    });
+  });
+
+  if (rutaActivaId) {
+    batch.update(doc(db, RUTAS, rutaActivaId), {
+      estado: "finalizada" as RutaEstado,
+      paletsEntregados: palets,
+      totalEntregados: palets.length,
+      pesoEntregadoKg: Number(pesoEntregado.toFixed(2)),
+      volumenEntregadoM3: Number(volumenEntregado.toFixed(3)),
+      finalizadoPor: email,
+      fechaFin: serverTimestamp(),
+    });
+  }
+
+  batch.set(
+    cargaRef,
+    {
+      matricula,
+      palets: [],
+      actualizadoEn: serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  batch.set(
+    camionRef,
+    {
+      estado: "no_disponible",
+      rutaActivaId: null,
+      actualizadoEn: serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  await batch.commit();
+
+  return { paletsEliminados: palets.length, rutaId: rutaActivaId };
 };
