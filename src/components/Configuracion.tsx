@@ -1,5 +1,7 @@
-import { ShieldCheck, Map, ChevronRight, Settings } from "lucide-react";
+import { ShieldCheck, Map, ChevronRight, Settings, Layers } from "lucide-react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { ZoneManager } from "./ZoneManager";
 
 const opciones = [
   {
@@ -9,6 +11,15 @@ const opciones = [
     titulo: "Gestión de usuarios",
     descripcion: "Consulta todos los usuarios y cambia sus roles entre operario, encargado y admin.",
     destino: "/configuracion/usuarios",
+    externo: false,
+  },
+  {
+    icon: Layers,
+    iconBg: "bg-purple-600/20",
+    iconColor: "text-purple-400",
+    titulo: "Gestión de zonas y subzonas",
+    descripcion: "Crea y administra las zonas y subzonas del almacén.",
+    destino: "zone-manager",
     externo: false,
   },
   {
@@ -24,6 +35,11 @@ const opciones = [
 
 export default function Configuracion() {
   const navigate = useNavigate();
+  const [showZoneManager, setShowZoneManager] = useState(false);
+
+  if (showZoneManager) {
+    return <ZoneManager onClose={() => setShowZoneManager(false)} />;
+  }
 
   return (
     <div className="max-w-2xl mx-auto mt-8 p-4">
@@ -41,7 +57,13 @@ export default function Configuracion() {
         {opciones.map(op => (
           <button
             key={op.destino}
-            onClick={() => navigate(op.destino)}
+            onClick={() => {
+              if (op.destino === "zone-manager") {
+                setShowZoneManager(true);
+                return;
+              }
+              navigate(op.destino);
+            }}
             className="w-full flex items-center gap-5 p-6 bg-slate-900/50 border border-slate-800 rounded-2xl hover:border-slate-600 hover:bg-slate-800/50 transition-all text-left group"
           >
             <div className={`${op.iconBg} p-4 rounded-xl shrink-0`}>
