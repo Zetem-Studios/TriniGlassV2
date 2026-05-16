@@ -12,37 +12,13 @@ interface KpiCardProps {
   loading?: boolean;
 }
 
-const colorClasses = {
-  blue: {
-    bg: 'bg-blue-50 dark:bg-blue-900/20',
-    icon: 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400',
-    trend: 'text-blue-600 dark:text-blue-400',
-  },
-  green: {
-    bg: 'bg-emerald-50 dark:bg-emerald-900/20',
-    icon: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400',
-    trend: 'text-emerald-600 dark:text-emerald-400',
-  },
-  amber: {
-    bg: 'bg-amber-50 dark:bg-amber-900/20',
-    icon: 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400',
-    trend: 'text-amber-600 dark:text-amber-400',
-  },
-  red: {
-    bg: 'bg-red-50 dark:bg-red-900/20',
-    icon: 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400',
-    trend: 'text-red-600 dark:text-red-400',
-  },
-  purple: {
-    bg: 'bg-purple-50 dark:bg-purple-900/20',
-    icon: 'bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400',
-    trend: 'text-purple-600 dark:text-purple-400',
-  },
-  cyan: {
-    bg: 'bg-cyan-50 dark:bg-cyan-900/20',
-    icon: 'bg-cyan-100 dark:bg-cyan-900/40 text-cyan-600 dark:text-cyan-400',
-    trend: 'text-cyan-600 dark:text-cyan-400',
-  },
+const iconColorClasses = {
+  blue: 'bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400',
+  green: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400',
+  amber: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400',
+  red: 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400',
+  purple: 'bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400',
+  cyan: 'bg-cyan-50 text-cyan-600 dark:bg-cyan-500/10 dark:text-cyan-400',
 };
 
 export default function KpiCard({
@@ -55,7 +31,7 @@ export default function KpiCard({
   color = 'blue',
   loading = false,
 }: KpiCardProps) {
-  const colors = colorClasses[color];
+  const iconClass = iconColorClasses[color];
 
   const TrendIcon = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : Minus;
   const trendColorClass =
@@ -67,33 +43,31 @@ export default function KpiCard({
 
   if (loading) {
     return (
-      <div className={`rounded-2xl p-5 ${colors.bg} animate-pulse`}>
+      <div className="rounded-xl p-4 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 animate-pulse">
         <div className="flex items-center justify-between mb-4">
-          <div className="h-4 w-24 bg-slate-200 dark:bg-slate-700 rounded" />
-          <div className="h-10 w-10 bg-slate-200 dark:bg-slate-700 rounded-xl" />
+          <div className="h-3.5 w-24 bg-slate-200 dark:bg-slate-800 rounded" />
+          <div className="h-9 w-9 bg-slate-200 dark:bg-slate-800 rounded-lg" />
         </div>
-        <div className="h-8 w-20 bg-slate-200 dark:bg-slate-700 rounded mb-2" />
-        <div className="h-3 w-32 bg-slate-200 dark:bg-slate-700 rounded" />
+        <div className="h-7 w-20 bg-slate-200 dark:bg-slate-800 rounded mb-1.5" />
+        <div className="h-3 w-32 bg-slate-200 dark:bg-slate-800 rounded" />
       </div>
     );
   }
 
   return (
-    <div
-      className={`rounded-2xl p-5 ${colors.bg} transition-all duration-200 hover:scale-[1.02] hover:shadow-lg cursor-default`}
-    >
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
+    <div className="rounded-xl p-4 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 transition-shadow duration-150 hover:shadow-sm">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
           {title}
         </span>
-        <div className={`p-2.5 rounded-xl ${colors.icon}`}>
+        <div className={`p-2 rounded-lg ${iconClass}`}>
           {icon}
         </div>
       </div>
 
-      <div className="flex items-end justify-between">
-        <div>
-          <p className="text-3xl font-bold text-slate-900 dark:text-white mb-1">
+      <div className="flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-2xl font-semibold text-slate-900 dark:text-white tracking-tight mb-0.5">
             {value}
           </p>
           {subtitle && (
@@ -104,8 +78,8 @@ export default function KpiCard({
         </div>
 
         {trend && trendValue && (
-          <div className={`flex items-center gap-1 text-sm font-medium ${trendColorClass}`}>
-            <TrendIcon className="w-4 h-4" />
+          <div className={`flex items-center gap-1 text-xs font-medium ${trendColorClass} shrink-0`}>
+            <TrendIcon className="w-3.5 h-3.5" />
             <span>{trendValue}</span>
           </div>
         )}

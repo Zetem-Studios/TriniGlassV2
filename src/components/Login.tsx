@@ -4,20 +4,18 @@ import { Mail, Lock, Box } from 'lucide-react';
 import { loginUser } from "../../services/UserService";
 
 const Login = () => {
-  // 1. Estados para capturar los datos
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  // 2. Función que maneja el envío del formulario
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
       await loginUser(email, password);
-      navigate("/"); // Si todo va bien, vamos al panel principal
+      navigate("/");
     } catch (error: unknown) {
       console.error("Error en login:", error);
       const errorMessage = error instanceof Error ? error.message : "Error desconocido";
@@ -28,31 +26,28 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-100">
-        
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
+      <div className="bg-white dark:bg-slate-900 p-8 rounded-xl shadow-sm w-full max-w-sm border border-slate-200/80 dark:border-slate-800/80">
+
         <div className="flex flex-col items-center mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="bg-slate-900 text-white p-2.5 rounded-xl">
-              <Box className="w-8 h-8" strokeWidth={1.5} />
+          <div className="flex items-center gap-2.5 mb-1">
+            <div className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 p-2 rounded-lg">
+              <Box className="w-5 h-5" strokeWidth={1.75} />
             </div>
-            <div className="flex flex-col">
-              <h1 className="text-3xl font-bold text-slate-900 leading-none">TriniGlass</h1>
-              <p className="text-xs font-semibold text-slate-500 tracking-wider mt-1 uppercase">Almacén & Flota</p>
-            </div>
+            <h1 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-white">TriniGlass</h1>
           </div>
-          <h2 className="text-xl font-semibold text-slate-900 mt-6">Acceso al sistema</h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Almacén & Flota</p>
+          <h2 className="text-base font-medium text-slate-700 dark:text-slate-300 mt-6">Acceso al sistema</h2>
         </div>
 
-        {/* 3. Conectamos el handleSubmit al form */}
-        <form className="space-y-5" onSubmit={handleLogin}>
+        <form className="space-y-4" onSubmit={handleLogin}>
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-slate-700 block">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">
               Correo electrónico
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Mail className="h-5 w-5 text-slate-400" strokeWidth={1.5} />
+                <Mail className="h-4 w-4 text-slate-400" strokeWidth={1.75} />
               </div>
               <input
                 type="email"
@@ -61,18 +56,18 @@ const Login = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="tu.usuario@triniglass.com"
-                className="w-full h-11 pl-10 pr-3 py-2 bg-white border border-slate-300 rounded-lg text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:bg-slate-50"
+                className="w-full h-10 pl-9 pr-3 py-2 bg-white dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800/80 rounded-lg text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors disabled:bg-slate-50 dark:disabled:bg-slate-900"
               />
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-slate-700 block">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">
               Contraseña
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Lock className="h-5 w-5 text-slate-400" strokeWidth={1.5} />
+                <Lock className="h-4 w-4 text-slate-400" strokeWidth={1.75} />
               </div>
               <input
                 type="password"
@@ -81,7 +76,7 @@ const Login = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••••"
-                className="w-full h-11 pl-10 pr-3 py-2 bg-white border border-slate-300 rounded-lg text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:bg-slate-50"
+                className="w-full h-10 pl-9 pr-3 py-2 bg-white dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800/80 rounded-lg text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors disabled:bg-slate-50 dark:disabled:bg-slate-900"
               />
             </div>
           </div>
@@ -91,9 +86,9 @@ const Login = () => {
               <input
                 id="remember_me"
                 type="checkbox"
-                className="h-4 w-4 bg-white border-slate-300 rounded text-blue-600 focus:ring-blue-500"
+                className="h-4 w-4 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 rounded text-brand-600 focus:ring-brand-500"
               />
-              <label htmlFor="remember_me" className="ml-2 block text-sm text-slate-700">
+              <label htmlFor="remember_me" className="ml-2 block text-sm text-slate-600 dark:text-slate-400">
                 Recordar sesión
               </label>
             </div>
@@ -102,13 +97,13 @@ const Login = () => {
           <button
             type="submit"
             disabled={loading}
-            className={`w-full h-12 mt-2 text-white rounded-lg font-semibold shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-              loading 
-              ? "bg-slate-400 cursor-not-allowed" 
-              : "bg-slate-900 hover:bg-slate-800 focus:ring-slate-900"
+            className={`w-full h-10 mt-2 text-white rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-900 ${
+              loading
+              ? "bg-slate-400 dark:bg-slate-700 cursor-not-allowed"
+              : "bg-slate-900 dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 focus:ring-slate-900 dark:focus:ring-white"
             }`}
           >
-            {loading ? "Iniciando sesión..." : "Iniciar sesión"}
+            {loading ? "Iniciando sesión…" : "Iniciar sesión"}
           </button>
         </form>
       </div>

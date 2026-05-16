@@ -63,7 +63,7 @@ const Zone: React.FC<ZoneProps> = ({ zoneId, zoneName, subzones, blocks, selecte
 
   return (
     <div className="flex flex-col gap-1 text-[10px] relative overflow-hidden">
-      <h2 className="font-black text-slate-400 dark:text-slate-500 uppercase text-[10px] tracking-wider text-center">
+      <h2 className="font-semibold text-slate-400 dark:text-slate-500 uppercase text-[10px] tracking-wider text-center">
         {zoneName}
       </h2>
       <div className="relative min-h-[280px] bg-white dark:bg-slate-900/30 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm p-1" style={{paddingTop: '2.5rem', paddingRight: '2.5rem', paddingBottom: '2.5rem', paddingLeft: '2.5rem'}}>
@@ -91,7 +91,7 @@ const Zone: React.FC<ZoneProps> = ({ zoneId, zoneName, subzones, blocks, selecte
 
             // Determinar color según el pallet más antiguo de la subzona
             const subzoneBlocks = blocks.filter(b => b.area === subzoneName && b.occupied);
-            let colorClass = "bg-blue-400 dark:bg-blue-600 border-blue-700 dark:border-blue-900";
+            let colorClass = "bg-brand-400 dark:bg-brand-600 border-brand-700 dark:border-brand-900";
             if (subzoneBlocks.length > 0) {
               // Buscar el pallet con más días en storage
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -103,7 +103,7 @@ const Zone: React.FC<ZoneProps> = ({ zoneId, zoneName, subzones, blocks, selecte
               } else if ((oldest.daysInStorage as number) > 10) {
                 colorClass = "bg-yellow-300 dark:bg-yellow-600 border-yellow-500 dark:border-yellow-900";
               } else {
-                colorClass = "bg-blue-400 dark:bg-blue-600 border-blue-700 dark:border-blue-900";
+                colorClass = "bg-brand-400 dark:bg-brand-600 border-brand-700 dark:border-brand-900";
               }
             }
 
@@ -128,7 +128,7 @@ const Zone: React.FC<ZoneProps> = ({ zoneId, zoneName, subzones, blocks, selecte
               const hasEmpty = subzoneBlocks.some(b => !b.occupied);
               return (
                 <div key={subzoneName} className="flex-1 min-w-[200px]">
-                  <div className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1 uppercase text-center">{subzoneName}</div>
+                  <div className="font-bold text-xs text-brand-700 dark:text-brand-300 mb-1 uppercase text-center">{subzoneName}</div>
                   <div
                     className="grid gap-y-2 gap-x-px"
                     style={{

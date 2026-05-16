@@ -10,7 +10,7 @@ export const ZoneManagerSimple: React.FC<ZoneManagerSimpleProps> = ({ onClose })
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-4 flex justify-between items-center">
+        <div className="bg-gradient-to-r from-brand-600 to-purple-600 text-white px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <Layers size={24} />
             <h2 className="text-xl font-semibold">Gestión de Zonas y Subzonas</h2>

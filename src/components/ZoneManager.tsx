@@ -513,7 +513,7 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({ onClose }) => {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white rounded-lg p-8 flex items-center gap-3">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
           <span>Cargando zonas...</span>
         </div>
       </div>
@@ -524,7 +524,7 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({ onClose }) => {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-6xl h-[95vh] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-4 flex justify-between items-center">
+        <div className="bg-gradient-to-r from-brand-600 to-purple-600 text-white px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <Layers size={24} />
             <h2 className="text-xl font-semibold">Gestión de Zonas y Subzonas</h2>
@@ -570,7 +570,7 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({ onClose }) => {
                   </h3>
                   <button
                     onClick={handleCreateZona}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+                    className="bg-brand-600 text-white px-4 py-2 rounded-md hover:bg-brand-700 transition-colors flex items-center gap-2"
                   >
                     <Plus size={16} />
                     Nueva Zona
@@ -586,7 +586,7 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({ onClose }) => {
                       <p className="text-gray-500 dark:text-gray-400 mb-4">Comienza creando tu primera zona para organizar el almacén</p>
                       <button
                         onClick={handleCreateZona}
-                        className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 mx-auto"
+                        className="bg-brand-600 hover:bg-brand-500 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 mx-auto"
                       >
                         <Plus size={20} />
                         Crear Primera Zona
@@ -600,7 +600,7 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({ onClose }) => {
                           <div className="flex items-center gap-2 mb-2">
                             <h4 className="font-semibold text-gray-800 dark:text-white">{zona.nombre}</h4>
                             <span className={`px-2 py-1 text-xs rounded-full ${
-                              zona.tipo === 'produccion' ? 'bg-blue-100 text-blue-800' :
+                              zona.tipo === 'produccion' ? 'bg-brand-100 text-brand-800' :
                               zona.tipo === 'almacenamiento' ? 'bg-green-100 text-green-800' :
                               'bg-orange-100 text-orange-800'
                             }`}>
@@ -624,7 +624,7 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({ onClose }) => {
                         <div className="flex gap-2 ml-4">
                           <button
                             onClick={() => handleEditZona(zona)}
-                            className="bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 transition-colors"
+                            className="bg-brand-600 text-white p-2 rounded-md hover:bg-brand-700 transition-colors"
                             title="Editar zona"
                           >
                             <Edit2 size={16} />
@@ -677,7 +677,7 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({ onClose }) => {
                                   <div className="flex gap-1">
                                     <button
                                       onClick={() => handleEditSubzona(subzona)}
-                                      className="bg-blue-500 text-white p-1 rounded hover:bg-blue-600 transition-colors"
+                                      className="bg-brand-500 text-white p-1 rounded hover:bg-brand-600 transition-colors"
                                       title="Editar subzona"
                                     >
                                       <Edit2 size={14} />

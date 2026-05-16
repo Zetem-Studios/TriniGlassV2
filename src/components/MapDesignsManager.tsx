@@ -149,11 +149,11 @@ export const MapDesignsManager: React.FC<MapDesignsManagerProps> = ({ onLoadDesi
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[80vh] overflow-hidden">
         {/* Header */}
-        <div className="bg-blue-600 text-white px-6 py-4 flex justify-between items-center">
+        <div className="bg-brand-600 text-white px-6 py-4 flex justify-between items-center">
           <h2 className="text-xl font-semibold">Gestión de Diseños de Mapa</h2>
           <button
             onClick={onClose}
-            className="text-white hover:bg-blue-700 rounded-full p-1 transition-colors"
+            className="text-white hover:bg-brand-700 rounded-full p-1 transition-colors"
           >
             <X size={20} />
           </button>
@@ -182,7 +182,7 @@ export const MapDesignsManager: React.FC<MapDesignsManagerProps> = ({ onLoadDesi
               {!saveMode && (
                 <button
                   onClick={() => setSaveMode(true)}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+                  className="bg-brand-600 text-white px-4 py-2 rounded-md hover:bg-brand-700 transition-colors flex items-center gap-2"
                 >
                   <Save size={16} />
                   Nuevo Diseño
@@ -201,7 +201,7 @@ export const MapDesignsManager: React.FC<MapDesignsManagerProps> = ({ onLoadDesi
                       type="text"
                       value={editingName}
                       onChange={(e) => setEditingName(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black dark:text-black bg-white dark:bg-white"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 text-black dark:text-black bg-white dark:bg-white"
                       placeholder="Ej: Diseño Principal"
                       maxLength={50}
                     />
@@ -213,7 +213,7 @@ export const MapDesignsManager: React.FC<MapDesignsManagerProps> = ({ onLoadDesi
                     <textarea
                       value={editingDescription}
                       onChange={(e) => setEditingDescription(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black dark:text-black bg-white dark:bg-white"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 text-black dark:text-black bg-white dark:bg-white"
                       placeholder="Describe brevemente este diseño..."
                       rows={3}
                       maxLength={200}
@@ -246,7 +246,7 @@ export const MapDesignsManager: React.FC<MapDesignsManagerProps> = ({ onLoadDesi
             
             {loading ? (
               <div className="text-center py-8 text-gray-500">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600 mx-auto mb-2"></div>
                 Cargando diseños...
               </div>
             ) : error ? (
@@ -281,7 +281,7 @@ export const MapDesignsManager: React.FC<MapDesignsManagerProps> = ({ onLoadDesi
                       <div className="flex gap-2 ml-4">
                         <button
                           onClick={() => handleLoadDesign(design)}
-                          className="bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 transition-colors"
+                          className="bg-brand-600 text-white p-2 rounded-md hover:bg-brand-700 transition-colors"
                           title="Cargar diseño"
                         >
                           <FolderOpen size={16} />

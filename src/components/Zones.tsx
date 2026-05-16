@@ -28,7 +28,7 @@ const Zones: React.FC<ZonesProps> = ({ zones, blocks, selectedZone, selectedBloc
   return (
     <div className="flex flex-row flex-nowrap gap-1 justify-start items-start w-full overflow-hidden">
       {zones.map(zone => (
-        <div key={zone.id} className={`flex-shrink-0 w-[16.5%] min-w-[150px] max-h-[320px] overflow-hidden relative ${!preview && zone.id === selectedZone ? 'ring-2 ring-cyan-500 rounded-3xl p-1' : !preview ? 'opacity-90' : ''}`}>
+        <div key={zone.id} className={`flex-shrink-0 w-[16.5%] min-w-[150px] max-h-[320px] overflow-hidden relative ${!preview && zone.id === selectedZone ? 'ring-2 ring-cyan-500 rounded-xl p-1' : !preview ? 'opacity-90' : ''}`}>
           <Zone
             zoneId={zone.id}
             zoneName={zone.name}

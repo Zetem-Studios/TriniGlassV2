@@ -13,9 +13,9 @@ interface BlockCardProps {
 }
 
 export default function BlockCard({ block, isSelected, onClick }: BlockCardProps) {
-  // Determinar colores basados en días en storage
+  // Códigos de color por antigüedad (importante para operario en planta — se mantienen saturados)
   let colors = "bg-slate-100 dark:bg-slate-800/40 border-slate-300 dark:border-slate-700 text-slate-400";
-  
+
   if (block.occupied) {
     if (block.daysInStorage > 30) {
       colors = "bg-red-100 dark:bg-red-500/20 border-red-400 dark:border-red-500 text-red-600 dark:text-red-400";
@@ -24,31 +24,31 @@ export default function BlockCard({ block, isSelected, onClick }: BlockCardProps
     } else if (block.daysInStorage > 10) {
       colors = "bg-yellow-100 dark:bg-yellow-500/20 border-yellow-400 dark:border-yellow-500 text-yellow-700 dark:text-yellow-500";
     } else {
-      colors = "bg-blue-100 dark:bg-blue-500/20 border-blue-400 dark:border-blue-500 text-blue-600 dark:text-blue-400";
+      colors = "bg-brand-100 dark:bg-brand-500/20 border-brand-400 dark:border-brand-500 text-brand-600 dark:text-brand-400";
     }
   }
 
-  const selectedClasses = isSelected 
-    ? 'ring-4 ring-cyan-500 scale-110 z-10' 
-    : 'hover:scale-105';
+  const selectedClasses = isSelected
+    ? 'ring-2 ring-brand-500 ring-offset-1 dark:ring-offset-slate-900 z-10'
+    : '';
 
   return (
     <button
       onClick={onClick}
-      className={`rounded-lg border-2 transition-all flex flex-col items-center justify-center gap-1 shadow-sm shrink-0 ${colors} ${selectedClasses} min-w-[40px] min-h-[35px] w-full h-full`}
+      className={`rounded-md border transition-all duration-150 flex flex-col items-center justify-center gap-1 shadow-sm shrink-0 ${colors} ${selectedClasses} min-w-[40px] min-h-[35px] w-full h-full`}
     >
       {block.occupied ? (
         <>
-          <span className="text-[13px] font-black tracking-tighter uppercase leading-tight break-all text-center">{block.codigo_barra ? block.codigo_barra : 'Sin código'}</span>
-          <Box size={22} strokeWidth={2.5} />
+          <span className="text-[13px] font-semibold tracking-tight uppercase leading-tight break-all text-center">{block.codigo_barra ? block.codigo_barra : 'Sin código'}</span>
+          <Box size={22} strokeWidth={2} />
           {block.daysInStorage > 0 && (
-            <span className="text-[12px] font-bold">
+            <span className="text-[12px] font-medium">
               {block.daysInStorage}d
             </span>
           )}
         </>
       ) : (
-        <span className="text-[11px] font-bold tracking-tight uppercase opacity-50">Vacío</span>
+        <span className="text-[11px] font-medium tracking-tight uppercase opacity-50">Vacío</span>
       )}
     </button>
   );
