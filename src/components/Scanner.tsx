@@ -8,6 +8,11 @@ import {
 } from "lucide-react";
 import { db } from "../firebase";
 import { collection, getDocs, query, where } from "firebase/firestore";
+import {
+  INITIAL_ZONES,
+  mapProductoToBlock as mapProductoToRecommendationBlock,
+  recommendPalletLocation
+} from "../domain/warehouseRecommendation";
 
 // Tipos para los estados
 type ResultType = "success" | "waiting" | "error" | "notfound" | null;
@@ -18,11 +23,18 @@ type PaletData = {
   docId: string;
   prioridad: string;
   ubicacion: string;
+  ubicacionSugerida: string | null;
+  sugerenciaSaturacion: boolean;
   tipoVidrio: string;
   camionRuta: string;
   medidas: string;
   diasStock: number;
   nombreAbreviado?: string;
+};
+
+type FoundPalet = {
+  [key: string]: any;
+  rawProducto: any;
 };
 
 type LookupDebug = {
@@ -183,6 +195,42 @@ export default function MobileScanner() {
   const [verifiedDocIds, setVerifiedDocIds] = useState<string[]>([]);
   const [verifyError, setVerifyError] = useState<string | null>(null);
 
+  const getLocationRecommendation = async (rawProducto: any, docId: string) => {
+    const snapshot = await getDocs(collection(db, "productos"));
+    const occupiedBlocks = snapshot.docs
+      .filter((doc) => doc.id !== docId)
+      .map((doc, index) => mapProductoToRecommendationBlock({ ...doc.data(), id: doc.id }, index));
+
+    return recommendPalletLocation(rawProducto, INITIAL_ZONES, occupiedBlocks);
+  };
+
+  const mapFoundPaletToData = async (palet: FoundPalet, fallbackCode: string): Promise<PaletData> => {
+    let recommendation = {
+      locationId: null as string | null,
+      isSaturation: false,
+    };
+
+    try {
+      recommendation = await getLocationRecommendation(palet.rawProducto, palet.id);
+    } catch (error) {
+      console.error("Error calculando recomendacion tras escaneo:", error);
+    }
+
+    return {
+      id: palet.codigo_barra || palet.id || fallbackCode,
+      docId: palet.id,
+      prioridad: palet.priority || "Normal",
+      ubicacion: palet.area || palet.zoneId || "---",
+      ubicacionSugerida: recommendation.locationId,
+      sugerenciaSaturacion: recommendation.isSaturation,
+      tipoVidrio: palet.type || "---",
+      camionRuta: palet.empresa || "Ruta por asignar",
+      medidas: palet.dimensions || "---",
+      diasStock: palet.daysInStorage || 0,
+      nombreAbreviado: palet.nombre_abreviado || palet.client || "---"
+    };
+  };
+
   const handleVerificar = async (docId: string) => {
     setVerifyingDocId(docId);
     setVerifyError(null);
@@ -223,25 +271,18 @@ export default function MobileScanner() {
       const cleanedQuery = searchQuery.replace(/\s+/g, "").toUpperCase();
       const q = query(productosCol, where("codigo_barra", ">=", cleanedQuery), where("codigo_barra", "<=", cleanedQuery + '\uf8ff'));
       const snapshot = await getDocs(q);
-      let found: any[] = [];
+      let found: FoundPalet[] = [];
       if (!snapshot.empty) {
         const exactMatches = snapshot.docs
-          .map(doc => mapProductoToBlock(doc.data(), 0, doc.id))
+          .map(doc => {
+            const rawProducto = { ...doc.data(), id: doc.id };
+            return { ...mapProductoToBlock(rawProducto, 0, doc.id), rawProducto };
+          })
           .filter(f => (f.codigo_barra || '').replace(/\s+/g, '').toUpperCase() === cleanedQuery);
         found = exactMatches;
       }
       if (found.length > 0) {
-        setPalets(found.map(f => ({
-          id: f.codigo_barra || f.id || cleanedQuery,
-          docId: f.id,
-          prioridad: f.priority || "Normal",
-          ubicacion: f.area || f.zoneId || "---",
-          tipoVidrio: f.type || "---",
-          camionRuta: f.empresa || "Ruta por asignar",
-          medidas: f.dimensions || "---",
-          diasStock: f.daysInStorage || 0,
-          nombreAbreviado: f.nombre_abreviado || f.client || "---"
-        })));
+        setPalets(await Promise.all(found.map(f => mapFoundPaletToData(f, cleanedQuery))));
         setResult("success");
       } else {
         setPalets([]);
@@ -259,7 +300,7 @@ export default function MobileScanner() {
 
   // Nuevo: callback para QRScanner
   // Para depuración: guardar el resultado de búsqueda
-  const [_, setLookupDebug] = useState<LookupDebug>(null);
+  const [, setLookupDebug] = useState<LookupDebug>(null);
 
   const onScanSuccess = async (decodedText: string) => {
     setLastScan(decodedText);
@@ -282,7 +323,7 @@ export default function MobileScanner() {
       // Buscar todos los productos cuyo codigo_barra normalizado coincida
       const q = query(productosCol, where("codigo_barra", ">=", cleanedScan), where("codigo_barra", "<=", cleanedScan + '\uf8ff'));
       const snapshot = await getDocs(q);
-      let found: any[] = [];
+      let found: FoundPalet[] = [];
       //let tried = 0;
       let debugInfo: any = {
         query: decodedText,
@@ -301,7 +342,10 @@ export default function MobileScanner() {
       if (!snapshot.empty) {
         // Buscar todas las coincidencias exactas normalizadas (filtrado estricto)
         const exactMatches = snapshot.docs
-          .map(doc => mapProductoToBlock(doc.data(), 0, doc.id))
+          .map(doc => {
+            const rawProducto = { ...doc.data(), id: doc.id };
+            return { ...mapProductoToBlock(rawProducto, 0, doc.id), rawProducto };
+          })
           .filter(f => (f.codigo_barra || '').replace(/\s+/g, '').toUpperCase() === cleanedScan);
         found = exactMatches;
         debugInfo.tried = snapshot.docs.length;
@@ -322,17 +366,7 @@ export default function MobileScanner() {
       setLookupDebug(debugInfo);
       // ...se eliminó el window.alert de depuración...
       if (found.length > 0) {
-        setPalets(found.map(f => ({
-          id: f.codigo_barra || f.id || cleanedScan,
-          docId: f.id,
-          prioridad: f.priority || "Normal",
-          ubicacion: f.area || f.zoneId || "---",
-          tipoVidrio: f.type || "---",
-          camionRuta: f.empresa || "Ruta por asignar",
-          medidas: f.dimensions || "---",
-          diasStock: f.daysInStorage || 0,
-          nombreAbreviado: f.nombre_abreviado || f.client || "---"
-        })));
+        setPalets(await Promise.all(found.map(f => mapFoundPaletToData(f, cleanedScan))));
         setResult("success");
       } else {
         setPalets([]);
@@ -479,6 +513,11 @@ export default function MobileScanner() {
                             <span className="text-xs font-bold text-slate-400 uppercase">{palet.nombreAbreviado || '---'}</span>
                             <span className="text-xs font-bold text-emerald-400 uppercase">{palet.prioridad || '---'}</span>
                             <span className="text-xs font-bold text-purple-400 uppercase">{palet.ubicacion || '---'}</span>
+                            {palet.ubicacionSugerida && (
+                              <span className="text-xs font-bold text-amber-300 uppercase">
+                                Sugerida: {palet.ubicacionSugerida}
+                              </span>
+                            )}
                           </div>
                         </div>
                         <div className="ml-2">
@@ -504,6 +543,20 @@ export default function MobileScanner() {
                               <p className="text-base md:text-lg font-bold leading-tight break-words">
                                 {palet.ubicacion || "---"}
                               </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4 p-4 rounded-2xl border shadow-sm bg-amber-500/10 border-amber-500/20">
+                            <Navigation size={20} className="text-amber-300" />
+                            <div className="flex-1">
+                              <p className="text-[9px] font-black text-amber-300 uppercase mb-1">Ubicacion Sugerida</p>
+                              <p className="text-base md:text-lg font-bold leading-tight break-words text-amber-50">
+                                {palet.ubicacionSugerida || "---"}
+                              </p>
+                              {palet.sugerenciaSaturacion && (
+                                <p className="text-[10px] font-bold text-amber-200 mt-1 uppercase">
+                                  Zona llena: sugerencia por saturacion
+                                </p>
+                              )}
                             </div>
                           </div>
                           <div className="flex items-center gap-4 p-4 bg-cyan-500/10 border border-cyan-500/20 rounded-2xl shadow-sm">
