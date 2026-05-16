@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Users, ShieldCheck, Loader2, ChevronLeft } from "lucide-react";
+import { Users, ShieldCheck, Loader2, ChevronLeft, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { listUsers, setUserRole } from "../../services/UserService";
+import { listUsers, setUserRole, deleteUser } from "../../services/UserService";
 import type { UserProfile, Rol } from "../../services/UserService";
 import { useAuth } from "../context/useAuth";
 
@@ -18,12 +18,15 @@ const ROL_BADGE: Record<Rol, string> = {
 };
 
 export default function GestionUsuarios() {
-  const { user } = useAuth();
+  const { user, rol: rolActual } = useAuth();
   const navigate = useNavigate();
   const [usuarios, setUsuarios] = useState<UserProfile[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [changingUid, setChangingUid] = useState<string | null>(null);
+  const [deletingUid, setDeletingUid] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const esAdmin = rolActual === "admin";
 
   useEffect(() => {
     listUsers()
@@ -31,6 +34,27 @@ export default function GestionUsuarios() {
       .catch(() => setError("No se pudo cargar la lista de usuarios."))
       .finally(() => setLoadingList(false));
   }, []);
+
+  const handleDeleteUser = async (uid: string) => {
+    const usuario = usuarios.find(u => u.uid === uid);
+    if (!usuario) return;
+
+    const confirmar = window.confirm(
+      `¿Eliminar al usuario "${usuario.email}"? Esta acción no se puede deshacer.`
+    );
+    if (!confirmar) return;
+
+    setDeletingUid(uid);
+    setError(null);
+    try {
+      await deleteUser(uid);
+      setUsuarios(prev => prev.filter(u => u.uid !== uid));
+    } catch {
+      setError(`No se pudo eliminar a ${usuario.email}.`);
+    } finally {
+      setDeletingUid(null);
+    }
+  };
 
   const handleRolChange = async (uid: string, nuevoRol: Rol) => {
     const usuario = usuarios.find(u => u.uid === uid);
@@ -100,12 +124,14 @@ export default function GestionUsuarios() {
                   <th className="pb-3 font-medium px-4">Rol actual</th>
                   <th className="pb-3 font-medium px-4">Cambiar rol</th>
                   <th className="pb-3 font-medium px-4">Alta</th>
+                  {esAdmin && <th className="pb-3 font-medium px-4">Acciones</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {usuarios.map(u => {
                   const esMismoUsuario = u.uid === user?.uid;
                   const cambiando = changingUid === u.uid;
+                  const eliminando = deletingUid === u.uid;
 
                   return (
                     <tr key={u.uid} className="text-slate-300">
@@ -146,6 +172,27 @@ export default function GestionUsuarios() {
                           ? u.creadoEn.toLocaleDateString("es-ES")
                           : "—"}
                       </td>
+                      {esAdmin && (
+                        <td className="py-4 px-4">
+                          {esMismoUsuario ? (
+                            <span className="text-xs text-slate-600 italic">—</span>
+                          ) : (
+                            <button
+                              onClick={() => handleDeleteUser(u.uid)}
+                              disabled={eliminando || cambiando}
+                              title="Eliminar usuario"
+                              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-red-900/30 text-red-300 border border-red-800/40 hover:bg-red-900/50 hover:text-red-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {eliminando ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                              <span>Eliminar</span>
+                            </button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
