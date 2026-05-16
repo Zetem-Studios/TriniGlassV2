@@ -4,10 +4,15 @@ import { verificarPalet } from "../../services/CargaCamionService";
 
 import {
   CheckCircle2, AlertCircle, Smartphone, User, Clock, Truck, Search, Loader2,
-  ChevronLeft, Navigation, Box, Maximize2, ArrowRightLeft
+  ChevronLeft, Navigation, Box, Maximize2, ArrowRightLeft, LogOut
 } from "lucide-react";
-import { db } from "../firebase";
+import { auth, db } from "../firebase";
+import { signOut } from "firebase/auth";
 import { collection, getDocs, query, where } from "firebase/firestore";
+
+type MobileScannerProps = {
+  showLogout?: boolean;
+};
 
 // Tipos para los estados
 type ResultType = "success" | "waiting" | "error" | "notfound" | null;
@@ -40,7 +45,7 @@ type LookupDebug = {
   normalizedMatch?: boolean;
 } | null;
 
-export default function MobileScanner() {
+export default function MobileScanner({ showLogout = false }: MobileScannerProps = {}) {
       // Copiado de Warehouse.tsx
       const parseFechaLineaPedido = (fecha: any) => {
         if (!fecha) return null;
@@ -370,7 +375,18 @@ export default function MobileScanner() {
         }`}>
           <div className="flex justify-between items-center mb-6 text-left">
             <h1 className="text-2xl font-black italic uppercase leading-none tracking-tighter">Triniglass <span className="opacity-60 font-light not-italic">Móvil</span></h1>
-            <Smartphone size={20} className="opacity-40" />
+            <div className="flex items-center gap-3">
+              <Smartphone size={20} className="opacity-40" />
+              {showLogout && (
+                <button
+                  onClick={() => signOut(auth).catch((err) => console.error("Error al cerrar sesión", err))}
+                  aria-label="Cerrar sesión"
+                  className="p-2 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 transition-all"
+                >
+                  <LogOut size={18} />
+                </button>
+              )}
+            </div>
           </div>
           <div className="flex bg-black/20 p-1 rounded-2xl backdrop-blur-md">
             <button onClick={() => { setActiveTab("scan"); setShowDetails(false); }} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === "scan" ? "bg-white text-blue-600 shadow-lg" : "text-white/60"}`}>Escanear</button>
