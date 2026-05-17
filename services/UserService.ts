@@ -3,7 +3,7 @@ import {
   signInWithEmailAndPassword,
   signOut
 } from "firebase/auth";
-import { doc, setDoc, serverTimestamp, collection, getDocs, updateDoc } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp, collection, getDocs, updateDoc, deleteDoc } from "firebase/firestore";
 import { auth, db } from "../src/firebase";
 
 export type Rol = "operario" | "encargado" | "admin";
@@ -50,6 +50,12 @@ export const listUsers = async (): Promise<UserProfile[]> => {
 // Cambiar el rol de un usuario
 export const setUserRole = async (uid: string, rol: Rol): Promise<void> => {
   await updateDoc(doc(db, "usuarios", uid), { rol });
+};
+
+// Eliminar el perfil de un usuario en Firestore.
+// Nota: la cuenta en Firebase Auth permanece — borrarla requiere Admin SDK (Cloud Function).
+export const deleteUser = async (uid: string): Promise<void> => {
+  await deleteDoc(doc(db, "usuarios", uid));
 };
 
 // Iniciar sesión
