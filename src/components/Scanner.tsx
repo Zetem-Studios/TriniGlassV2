@@ -7,7 +7,15 @@ import {
   ChevronLeft, Navigation, Box, Maximize2, ArrowRightLeft
 } from "lucide-react";
 import { db } from "../firebase";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, doc, getDocs, query, updateDoc, where } from "firebase/firestore";
+import {
+  buildLocationId,
+  INITIAL_ZONES,
+  mapProductoToBlock as mapProductoToRecommendationBlock,
+  recommendPalletLocation,
+  type WarehouseBlock,
+  type WarehouseZone
+} from "../domain/warehouseRecommendation";
 
 // Tipos para los estados
 type ResultType = "success" | "waiting" | "error" | "notfound" | null;
@@ -18,11 +26,19 @@ type PaletData = {
   docId: string;
   prioridad: string;
   ubicacion: string;
+  ubicacionSugerida: string | null;
+  sugerenciaSaturacion: boolean;
+  ubicacionYaAsignada: boolean;
   tipoVidrio: string;
   camionRuta: string;
   medidas: string;
   diasStock: number;
   nombreAbreviado?: string;
+};
+
+type FoundPalet = {
+  [key: string]: any;
+  rawProducto: any;
 };
 
 type LookupDebug = {
@@ -182,6 +198,174 @@ export default function MobileScanner() {
   const [verifyingDocId, setVerifyingDocId] = useState<string | null>(null);
   const [verifiedDocIds, setVerifiedDocIds] = useState<string[]>([]);
   const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [acceptingLocationDocId, setAcceptingLocationDocId] = useState<string | null>(null);
+  const [acceptedLocationDocIds, setAcceptedLocationDocIds] = useState<string[]>([]);
+  const [acceptLocationError, setAcceptLocationError] = useState<string | null>(null);
+
+  const normalizeZoneId = (value: unknown) => String(value ?? "").trim().toLowerCase();
+
+  const DEFAULT_SUBZONE_CAPACITIES: Record<string, number> = {
+    "cms:D": 13,
+  };
+
+  const getDefaultSubzoneCapacity = (zoneId: string, subzone: string) =>
+    DEFAULT_SUBZONE_CAPACITIES[`${zoneId}:${subzone}`] ?? null;
+
+  const getZoneDisplayName = (zoneId: string) =>
+    INITIAL_ZONES.find((zone) => zone.id === zoneId)?.name ?? zoneId;
+
+  const buildPositionCode = (zoneId: string, subzone: string, index: number, capacity: number) => {
+    const cardsPerRow = Math.ceil(capacity / 2);
+    const row = index < cardsPerRow ? 1 : 2;
+    const column = index < cardsPerRow ? index + 1 : index - cardsPerRow + 1;
+    return `${zoneId.substring(0, 3).toUpperCase()}${subzone.substring(0, 3).toUpperCase()}${row}${column}`;
+  };
+
+  const buildRecommendationZonesFromFirestore = async (): Promise<WarehouseZone[]> => {
+    const subzonasSnapshot = await getDocs(collection(db, "subzonas"));
+    const zonesById = new Map<string, WarehouseZone>();
+
+    subzonasSnapshot.docs.forEach((subzonaDoc) => {
+      const subzona = subzonaDoc.data();
+      const zoneId = normalizeZoneId(subzona.zonaId);
+      const subzoneName = String(subzona.nombre ?? "").trim();
+      if (!zoneId || !subzoneName) return;
+
+      const capacityValue = Number(subzona.capacidadMaxima);
+      const capacity =
+        Number.isFinite(capacityValue) && capacityValue > 0
+          ? capacityValue
+          : getDefaultSubzoneCapacity(zoneId, subzoneName) ?? 1;
+      const positions = Array.from({ length: capacity }, (_, index) =>
+        buildPositionCode(zoneId, subzoneName, index, capacity)
+      );
+
+      const currentZone = zonesById.get(zoneId) ?? {
+        id: zoneId,
+        name: getZoneDisplayName(zoneId),
+        areas: [],
+        subzones: {},
+        layout: "horizontal" as const,
+      };
+
+      zonesById.set(zoneId, {
+        ...currentZone,
+        areas: currentZone.areas.includes(subzoneName)
+          ? currentZone.areas
+          : [...currentZone.areas, subzoneName],
+        subzones: {
+          ...currentZone.subzones,
+          [subzoneName]: positions,
+        },
+      });
+    });
+
+    const order = new Map(INITIAL_ZONES.map((zone, index) => [zone.id, index]));
+    return [...zonesById.values()].sort(
+      (a, b) => (order.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (order.get(b.id) ?? Number.MAX_SAFE_INTEGER)
+    );
+  };
+
+  const mapProductoToOccupiedRecommendationBlock = (producto: any, index: number, docId: string): WarehouseBlock => {
+    const block = mapProductoToRecommendationBlock(producto, index);
+    const zoneId = normalizeZoneId(producto.zona);
+    const area = String(producto.subzona ?? "").trim();
+    const position = typeof producto.posicion === "string" && producto.posicion.trim() !== ""
+      ? producto.posicion.trim()
+      : undefined;
+
+    return {
+      ...block,
+      id: docId,
+      zoneId,
+      area,
+      position,
+      locationId: position && zoneId && area ? buildLocationId(zoneId, area, position) : undefined,
+      nombreAbreviado: producto.nombre_abreviado ?? producto.nombreAbreviado ?? block.nombreAbreviado,
+      numeroCliente: producto.numero_cliente ?? producto.numeroCliente ?? block.numeroCliente,
+    };
+  };
+
+  const hasStoredWarehouseLocation = (producto: any) =>
+    Boolean(normalizeZoneId(producto.zona) && String(producto.subzona ?? "").trim());
+
+  const getStoredWarehouseLocation = (producto: any) => {
+    const zona = normalizeZoneId(producto.zona);
+    const subzona = String(producto.subzona ?? "").trim();
+    const posicion = typeof producto.posicion === "string" && producto.posicion.trim() !== ""
+      ? producto.posicion.trim()
+      : "";
+
+    if (!zona || !subzona || !posicion) return null;
+    return {
+      zona,
+      subzona,
+      posicion,
+      locationId: buildLocationId(zona, subzona, posicion),
+    };
+  };
+
+  const parseSuggestedLocation = (locationId: string | null) => {
+    if (!locationId) return null;
+    const [zoneId, subzona, ...positionParts] = locationId.split("-");
+    const posicion = positionParts.join("-");
+    if (!zoneId || !subzona || !posicion) return null;
+    return { zona: zoneId, subzona, posicion };
+  };
+
+  const getLocationRecommendation = async (rawProducto: any, docId: string) => {
+    const storedLocation = getStoredWarehouseLocation(rawProducto);
+    if (storedLocation) {
+      return {
+        locationId: storedLocation.locationId,
+        isSaturation: false,
+        zoneId: storedLocation.zona,
+      };
+    }
+
+    const [productsSnapshot, firestoreZones] = await Promise.all([
+      getDocs(collection(db, "productos")),
+      buildRecommendationZonesFromFirestore(),
+    ]);
+    const zonesForRecommendation = firestoreZones.length > 0 ? firestoreZones : INITIAL_ZONES;
+    const occupiedBlocks = productsSnapshot.docs
+      .filter((doc) => doc.id !== docId)
+      .filter((doc) => hasStoredWarehouseLocation(doc.data()))
+      .map((doc, index) =>
+        mapProductoToOccupiedRecommendationBlock({ ...doc.data(), id: doc.id }, index, doc.id)
+      );
+
+    return recommendPalletLocation(rawProducto, zonesForRecommendation, occupiedBlocks);
+  };
+
+  const mapFoundPaletToData = async (palet: FoundPalet, fallbackCode: string): Promise<PaletData> => {
+    const storedLocation = getStoredWarehouseLocation(palet.rawProducto);
+    let recommendation = {
+      locationId: null as string | null,
+      isSaturation: false,
+    };
+
+    try {
+      recommendation = await getLocationRecommendation(palet.rawProducto, palet.id);
+    } catch (error) {
+      console.error("Error calculando recomendacion tras escaneo:", error);
+    }
+
+    return {
+      id: palet.codigo_barra || palet.id || fallbackCode,
+      docId: palet.id,
+      prioridad: palet.priority || "Normal",
+      ubicacion: storedLocation?.subzona || palet.area || palet.zoneId || "---",
+      ubicacionSugerida: recommendation.locationId,
+      sugerenciaSaturacion: recommendation.isSaturation,
+      ubicacionYaAsignada: Boolean(storedLocation),
+      tipoVidrio: palet.type || "---",
+      camionRuta: palet.empresa || "Ruta por asignar",
+      medidas: palet.dimensions || "---",
+      diasStock: palet.daysInStorage || 0,
+      nombreAbreviado: palet.nombre_abreviado || palet.client || "---"
+    };
+  };
 
   const handleVerificar = async (docId: string) => {
     setVerifyingDocId(docId);
@@ -193,6 +377,41 @@ export default function MobileScanner() {
       setVerifyError("Error al verificar. Inténtalo de nuevo.");
     } finally {
       setVerifyingDocId(null);
+    }
+  };
+
+  const handleAcceptSuggestedLocation = async (palet: PaletData) => {
+    const suggestedLocation = parseSuggestedLocation(palet.ubicacionSugerida);
+    if (!suggestedLocation) {
+      setAcceptLocationError("No hay ubicacion sugerida valida para aceptar.");
+      return;
+    }
+
+    setAcceptingLocationDocId(palet.docId);
+    setAcceptLocationError(null);
+
+    try {
+      await updateDoc(doc(db, "productos", palet.docId), suggestedLocation);
+      setAcceptedLocationDocIds((prev) =>
+        prev.includes(palet.docId) ? prev : [...prev, palet.docId]
+      );
+      setPalets((currentPalets) =>
+        currentPalets.map((currentPalet) =>
+          currentPalet.docId === palet.docId
+            ? {
+                ...currentPalet,
+                ubicacion: suggestedLocation.subzona,
+                ubicacionSugerida: palet.ubicacionSugerida,
+                sugerenciaSaturacion: false,
+                ubicacionYaAsignada: true,
+              }
+            : currentPalet
+        )
+      );
+    } catch {
+      setAcceptLocationError("Error al aceptar la ubicacion sugerida.");
+    } finally {
+      setAcceptingLocationDocId(null);
     }
   };
 
@@ -217,31 +436,26 @@ export default function MobileScanner() {
     setResult(null);
     setPalets([]);
     setExpandedIdx(null);
+    setAcceptedLocationDocIds([]);
+    setAcceptLocationError(null);
     setLastScan(searchQuery); // Para mostrar el texto buscado si no se encuentra
     try {
       const productosCol = collection(db, "productos");
       const cleanedQuery = searchQuery.replace(/\s+/g, "").toUpperCase();
       const q = query(productosCol, where("codigo_barra", ">=", cleanedQuery), where("codigo_barra", "<=", cleanedQuery + '\uf8ff'));
       const snapshot = await getDocs(q);
-      let found: any[] = [];
+      let found: FoundPalet[] = [];
       if (!snapshot.empty) {
         const exactMatches = snapshot.docs
-          .map(doc => mapProductoToBlock(doc.data(), 0, doc.id))
+          .map(doc => {
+            const rawProducto = { ...doc.data(), id: doc.id };
+            return { ...mapProductoToBlock(rawProducto, 0, doc.id), rawProducto };
+          })
           .filter(f => (f.codigo_barra || '').replace(/\s+/g, '').toUpperCase() === cleanedQuery);
         found = exactMatches;
       }
       if (found.length > 0) {
-        setPalets(found.map(f => ({
-          id: f.codigo_barra || f.id || cleanedQuery,
-          docId: f.id,
-          prioridad: f.priority || "Normal",
-          ubicacion: f.area || f.zoneId || "---",
-          tipoVidrio: f.type || "---",
-          camionRuta: f.empresa || "Ruta por asignar",
-          medidas: f.dimensions || "---",
-          diasStock: f.daysInStorage || 0,
-          nombreAbreviado: f.nombre_abreviado || f.client || "---"
-        })));
+        setPalets(await Promise.all(found.map(f => mapFoundPaletToData(f, cleanedQuery))));
         setResult("success");
       } else {
         setPalets([]);
@@ -259,7 +473,7 @@ export default function MobileScanner() {
 
   // Nuevo: callback para QRScanner
   // Para depuración: guardar el resultado de búsqueda
-  const [_, setLookupDebug] = useState<LookupDebug>(null);
+  const [, setLookupDebug] = useState<LookupDebug>(null);
 
   const onScanSuccess = async (decodedText: string) => {
     setLastScan(decodedText);
@@ -267,6 +481,8 @@ export default function MobileScanner() {
     setScanning(true);
     setResult(null);
     setPalets([]);
+    setAcceptedLocationDocIds([]);
+    setAcceptLocationError(null);
     // Funciones utilitarias para debug
     function toHex(str: string) {
       return Array.from(str).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' ');
@@ -282,7 +498,7 @@ export default function MobileScanner() {
       // Buscar todos los productos cuyo codigo_barra normalizado coincida
       const q = query(productosCol, where("codigo_barra", ">=", cleanedScan), where("codigo_barra", "<=", cleanedScan + '\uf8ff'));
       const snapshot = await getDocs(q);
-      let found: any[] = [];
+      let found: FoundPalet[] = [];
       //let tried = 0;
       let debugInfo: any = {
         query: decodedText,
@@ -301,7 +517,10 @@ export default function MobileScanner() {
       if (!snapshot.empty) {
         // Buscar todas las coincidencias exactas normalizadas (filtrado estricto)
         const exactMatches = snapshot.docs
-          .map(doc => mapProductoToBlock(doc.data(), 0, doc.id))
+          .map(doc => {
+            const rawProducto = { ...doc.data(), id: doc.id };
+            return { ...mapProductoToBlock(rawProducto, 0, doc.id), rawProducto };
+          })
           .filter(f => (f.codigo_barra || '').replace(/\s+/g, '').toUpperCase() === cleanedScan);
         found = exactMatches;
         debugInfo.tried = snapshot.docs.length;
@@ -322,17 +541,7 @@ export default function MobileScanner() {
       setLookupDebug(debugInfo);
       // ...se eliminó el window.alert de depuración...
       if (found.length > 0) {
-        setPalets(found.map(f => ({
-          id: f.codigo_barra || f.id || cleanedScan,
-          docId: f.id,
-          prioridad: f.priority || "Normal",
-          ubicacion: f.area || f.zoneId || "---",
-          tipoVidrio: f.type || "---",
-          camionRuta: f.empresa || "Ruta por asignar",
-          medidas: f.dimensions || "---",
-          diasStock: f.daysInStorage || 0,
-          nombreAbreviado: f.nombre_abreviado || f.client || "---"
-        })));
+        setPalets(await Promise.all(found.map(f => mapFoundPaletToData(f, cleanedScan))));
         setResult("success");
       } else {
         setPalets([]);
@@ -450,7 +659,7 @@ export default function MobileScanner() {
               <>
                 <div className="mb-4 max-w-3xl mx-auto flex flex-col gap-2">
                   <button
-                    onClick={() => { setShowDetails(false); setResult(null); setPalets([]); setLastScan(null); setActiveTab('scan'); setVerifiedDocIds([]); setVerifyError(null); setExpandedIdx(null); }}
+                    onClick={() => { setShowDetails(false); setResult(null); setPalets([]); setLastScan(null); setActiveTab('scan'); setVerifiedDocIds([]); setVerifyError(null); setAcceptedLocationDocIds([]); setAcceptLocationError(null); setExpandedIdx(null); }}
                     className="w-full py-4 text-[10px] font-black uppercase tracking-widest rounded-xl bg-red-600 text-white shadow-lg hover:bg-red-700 transition-all mb-2"
                   >
                     Volver a escanear
@@ -479,6 +688,11 @@ export default function MobileScanner() {
                             <span className="text-xs font-bold text-slate-400 uppercase">{palet.nombreAbreviado || '---'}</span>
                             <span className="text-xs font-bold text-emerald-400 uppercase">{palet.prioridad || '---'}</span>
                             <span className="text-xs font-bold text-purple-400 uppercase">{palet.ubicacion || '---'}</span>
+                            {palet.ubicacionSugerida && (
+                              <span className="text-xs font-bold text-amber-300 uppercase">
+                                {palet.ubicacionYaAsignada ? 'Asignada' : 'Sugerida'}: {palet.ubicacionSugerida}
+                              </span>
+                            )}
                           </div>
                         </div>
                         <div className="ml-2">
@@ -506,6 +720,44 @@ export default function MobileScanner() {
                               </p>
                             </div>
                           </div>
+                          <div className="flex items-center gap-4 p-4 rounded-2xl border shadow-sm bg-amber-500/10 border-amber-500/20">
+                            <Navigation size={20} className="text-amber-300" />
+                            <div className="flex-1">
+                              <p className="text-[9px] font-black text-amber-300 uppercase mb-1">
+                                {palet.ubicacionYaAsignada ? 'Ubicacion Actual' : 'Ubicacion Sugerida'}
+                              </p>
+                              <p className="text-base md:text-lg font-bold leading-tight break-words text-amber-50">
+                                {palet.ubicacionSugerida || "---"}
+                              </p>
+                              {palet.sugerenciaSaturacion && !palet.ubicacionYaAsignada && (
+                                <p className="text-[10px] font-bold text-amber-200 mt-1 uppercase">
+                                  Zona llena: sugerencia por saturacion
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          {palet.ubicacionSugerida && (
+                            palet.ubicacionYaAsignada || acceptedLocationDocIds.includes(palet.docId) ? (
+                              <div className="w-full py-4 rounded-2xl bg-blue-500/20 border border-blue-500/40 text-blue-300 text-center text-[10px] font-black uppercase tracking-widest">
+                                {palet.ubicacionYaAsignada ? 'Ubicacion ya asignada' : 'Ubicacion aceptada y guardada'}
+                              </div>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleAcceptSuggestedLocation(palet); }}
+                                  disabled={acceptingLocationDocId === palet.docId}
+                                  className="w-full py-4 rounded-2xl bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-blue-500 active:scale-95 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+                                >
+                                  {acceptingLocationDocId === palet.docId
+                                    ? <><ArrowRightLeft size={14} className="animate-spin" /> Guardando ubicacion...</>
+                                    : "Aceptar ubicacion sugerida"}
+                                </button>
+                                {acceptLocationError && acceptingLocationDocId === null && (
+                                  <p className="text-xs text-red-400 text-center font-bold">{acceptLocationError}</p>
+                                )}
+                              </>
+                            )
+                          )}
                           <div className="flex items-center gap-4 p-4 bg-cyan-500/10 border border-cyan-500/20 rounded-2xl shadow-sm">
                             <Box size={20} className="text-cyan-400" />
                             <div className="flex-1">
