@@ -9,10 +9,11 @@ interface BlockCardProps {
     occupied: boolean;
   };
   isSelected: boolean;
+  isRecommended?: boolean;
   onClick: () => void;
 }
 
-export default function BlockCard({ block, isSelected, onClick }: BlockCardProps) {
+export default function BlockCard({ block, isSelected, isRecommended = false, onClick }: BlockCardProps) {
   // Determinar colores basados en días en storage
   let colors = "bg-slate-100 dark:bg-slate-800/40 border-slate-300 dark:border-slate-700 text-slate-400";
   
@@ -31,11 +32,14 @@ export default function BlockCard({ block, isSelected, onClick }: BlockCardProps
   const selectedClasses = isSelected 
     ? 'ring-4 ring-cyan-500 scale-110 z-10' 
     : 'hover:scale-105';
+  const recommendedClasses = isRecommended
+    ? 'animate-pulse ring-4 ring-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.8)]'
+    : '';
 
   return (
     <button
       onClick={onClick}
-      className={`rounded-lg border-2 transition-all flex flex-col items-center justify-center gap-1 shadow-sm shrink-0 ${colors} ${selectedClasses} min-w-[40px] min-h-[35px] w-full h-full`}
+      className={`rounded-lg border-2 transition-all flex flex-col items-center justify-center gap-1 shadow-sm shrink-0 ${colors} ${selectedClasses} ${recommendedClasses} min-w-[40px] min-h-[35px] w-full h-full`}
     >
       {block.occupied ? (
         <>
