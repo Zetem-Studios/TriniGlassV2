@@ -14,9 +14,30 @@ import Configuracion from "./components/Configuracion";
 import GestionUsuarios from "./components/GestionUsuarios";
 import MobileScanner from "./components/Scanner";
 import CanvasGridTest from "./components/CanvasGridTest";
+import { useIsMobilePhone } from "./hooks/useIsMobilePhone";
 
 
 function App() {
+  const isMobilePhone = useIsMobilePhone();
+
+  if (isMobilePhone) {
+    return (
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route
+            path="*"
+            element={
+              <ProtectedRoute>
+                <MobileScanner showLogout />
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </BrowserRouter>
+    );
+  }
+
   return (
     <BrowserRouter>
       <Routes>
