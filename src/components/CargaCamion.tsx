@@ -18,6 +18,7 @@ import {
   Flag,
   ArrowUp,
   ArrowDown,
+  Zap,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -34,6 +35,10 @@ import {
   type Parada,
 } from "../../services/CargaCamionService";
 import { getCamiones, type Camion } from "../../services/CamionService";
+import {
+  calcularCargaAutomatica,
+  CAPACITY_LIMIT,
+} from "../../services/CargaAutomaticaService";
 import { useAuth } from "../context/useAuth";
 
 const formatNumber = (n: number, decimals = 0) =>
@@ -206,6 +211,8 @@ export default function CargaCamion() {
   const [loadingPalets, setLoadingPalets] = useState(true);
   const [loadingCargas, setLoadingCargas] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [cargandoAuto, setCargandoAuto] = useState(false);
+  const [progresoAuto, setProgresoAuto] = useState<{ actual: number; total: number } | null>(null);
   const [vaciando, setVaciando] = useState(false);
   const [confirmVaciar, setConfirmVaciar] = useState(false);
   const [iniciandoRuta, setIniciandoRuta] = useState(false);
@@ -217,6 +224,7 @@ export default function CargaCamion() {
   const [ordenClientes, setOrdenClientes] = useState<string[]>([]);
 
   const infoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelAutoRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -389,6 +397,93 @@ export default function CargaCamion() {
     }
   };
 
+  const handleCargaAutomatica = async () => {
+    if (!canEditarCarga || cargandoAuto) return;
+    setError("");
+    cancelAutoRef.current = false;
+    setCargandoAuto(true);
+    try {
+      const resultado = calcularCargaAutomatica(
+        pendientes,
+        selectedCamion!,
+        cargaActual
+      );
+      if (resultado.seleccionados.length === 0) {
+        setError(
+          `No hay palets que quepan dentro del límite del ${
+            Math.round(CAPACITY_LIMIT * 100)
+          }% de capacidad (${selectedCamion!.capacidadPeso} kg / ${selectedCamion!.capacidadVolumen} m³).`
+        );
+        return;
+      }
+
+      // Fijar orden de paradas ANTES del bucle, para que sea correcto
+      // aunque se cancele a mitad
+      setOrdenClientes(
+        resultado.seleccionados
+          .map((p) => p.cliente)
+          .filter((c, i, a) => a.indexOf(c) === i)
+      );
+
+      const total = resultado.seleccionados.length;
+      let asignados = 0;
+      setProgresoAuto({ actual: 0, total });
+
+      for (const palet of resultado.seleccionados) {
+        if (cancelAutoRef.current) break;
+        await assignPaletToCamion({
+          matricula: selectedCamion!.matricula,
+          palet: {
+            docId: palet.docId,
+            codigoBarra: palet.codigoBarra,
+            cliente: palet.cliente,
+            descripcion: palet.descripcion,
+            pesoKg: palet.pesoKg,
+            volumenM3: palet.volumenM3,
+          },
+          capacidad: {
+            peso: selectedCamion!.capacidadPeso,
+            volumen: selectedCamion!.capacidadVolumen,
+          },
+          email: user?.email ?? "anónimo",
+        });
+        asignados++;
+        setProgresoAuto({ actual: asignados, total });
+      }
+
+      const cancelado = cancelAutoRef.current;
+      const omitidosMsg =
+        resultado.omitidos > 0
+          ? ` (${resultado.omitidos} omitido${resultado.omitidos !== 1 ? "s" : ""} por límite)`
+          : "";
+      if (cancelado) {
+        showInfo(
+          `Cancelado: ${asignados} de ${total} palets asignados${omitidosMsg}`
+        );
+      } else {
+        showInfo(
+          `Carga automática: ${asignados} palets · ${
+            resultado.pesoTotal.toFixed(0)
+          } kg (${resultado.porcentajePeso.toFixed(0)}%) · ${
+            resultado.volumenTotal.toFixed(1)
+          } m³ (${resultado.porcentajeVolumen.toFixed(0)}%)${omitidosMsg}`
+        );
+      }
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : "Error en la carga automática"
+      );
+    } finally {
+      setCargandoAuto(false);
+      setProgresoAuto(null);
+      cancelAutoRef.current = false;
+    }
+  };
+
+  const handleCancelarAuto = () => {
+    cancelAutoRef.current = true;
+  };
+
   const handleRemove = async (docId: string, codigo: string) => {
     if (!canEditarCarga || !selectedCamion) {
       if (isCamionEnRuta) {
@@ -532,6 +627,32 @@ export default function CargaCamion() {
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              onClick={handleCargaAutomatica}
+              disabled={!canEditarCarga || cargandoAuto || pendientes.length === 0}
+              title={`Rellena el camión automáticamente hasta el ${Math.round(CAPACITY_LIMIT * 100)}% de capacidad, priorizando los palets más urgentes y agrupando por cliente.`}
+              className="flex items-center gap-2 px-4 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black rounded-2xl text-xs uppercase tracking-wider shadow-md active:scale-95 transition-all"
+            >
+              {cargandoAuto ? (
+                <Loader2 size={15} className="animate-spin" />
+              ) : (
+                <Zap size={15} />
+              )}
+              {cargandoAuto && progresoAuto
+                ? `Asignando ${progresoAuto.actual} / ${progresoAuto.total}…`
+                : cargandoAuto
+                  ? "Calculando…"
+                  : "Carga automática"}
+            </button>
+            {cargandoAuto && (
+              <button
+                onClick={handleCancelarAuto}
+                title="Detener la carga automática"
+                className="flex items-center gap-1.5 px-3 py-2.5 bg-red-600 hover:bg-red-500 text-white font-black rounded-2xl text-xs uppercase tracking-wider shadow-md active:scale-95 transition-all"
+              >
+                <X size={14} /> Detener
+              </button>
+            )}
             <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
               Camión
             </label>
