@@ -293,11 +293,162 @@ export const verificarPalet = async (docId: string): Promise<void> => {
   });
 };
 
+export interface EntregarPaletParams {
+  paletDocId: string;
+  email?: string;
+}
+
+export interface EntregarPaletResultado {
+  matricula: string;
+  rutaId: string;
+  paletsRestantes: number;
+}
+
+export const entregarPaletEnRuta = async ({
+  paletDocId,
+  email = "anónimo",
+}: EntregarPaletParams): Promise<EntregarPaletResultado> => {
+  const productoRef = doc(db, PRODUCTOS, paletDocId);
+  const productoSnap = await getDoc(productoRef);
+  if (!productoSnap.exists()) {
+    throw new Error("El palet no existe en la base de datos.");
+  }
+
+  const productoData = productoSnap.data();
+  if (productoData.estado_pedido !== ESTADO_EN_TRANSITO) {
+    throw new Error("Este palet no está en tránsito.");
+  }
+
+  const rutaId = (productoData.rutaId as string | undefined) ?? null;
+  if (!rutaId) {
+    throw new Error("Este palet no tiene una ruta activa asociada.");
+  }
+
+  const rutaRef = doc(db, RUTAS, rutaId);
+  const rutaSnap = await getDoc(rutaRef);
+  if (!rutaSnap.exists()) {
+    throw new Error("No se encontró la ruta asociada al palet.");
+  }
+
+  const matricula = (rutaSnap.data().matricula as string | undefined) ?? null;
+  if (!matricula) {
+    throw new Error("La ruta no tiene un camión asignado.");
+  }
+
+  const cargaRef = doc(db, CARGAS, matricula);
+  const entregadoRef = doc(db, PALETS_ENTREGADOS, paletDocId);
+
+  let paletsRestantes = 0;
+
+  await runTransaction(db, async (tx) => {
+    const cargaSnap = await tx.get(cargaRef);
+    const rutaTxSnap = await tx.get(rutaRef);
+
+    if (!cargaSnap.exists()) {
+      throw new Error("El camión no tiene una carga registrada.");
+    }
+
+    const current: PaletAsignado[] =
+      (cargaSnap.data().palets as PaletAsignado[]) ?? [];
+    const paletEntregado = current.find((p) => p.docId === paletDocId);
+
+    if (!paletEntregado) {
+      throw new Error("Este palet no está cargado en el camión.");
+    }
+
+    const restantes = current.filter((p) => p.docId !== paletDocId);
+    paletsRestantes = restantes.length;
+
+    tx.set(
+      cargaRef,
+      {
+        matricula,
+        palets: restantes,
+        actualizadoEn: serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    tx.update(productoRef, {
+      estado_pedido: ESTADO_ENTREGADO,
+      entregadoEn: serverTimestamp(),
+      entregadoPorMatricula: matricula,
+      rutaId,
+      zona: null,
+      subzona: null,
+      posicion: null,
+    });
+
+    tx.set(entregadoRef, {
+      docId: paletEntregado.docId,
+      codigoBarra: paletEntregado.codigoBarra,
+      cliente: paletEntregado.cliente,
+      descripcion: paletEntregado.descripcion,
+      pesoKg: paletEntregado.pesoKg,
+      volumenM3: paletEntregado.volumenM3,
+      asignadoPor: paletEntregado.asignadoPor,
+      asignadoEnIso: paletEntregado.asignadoEnIso,
+      matricula,
+      estado: ESTADO_ENTREGADO,
+      entregadoEn: serverTimestamp(),
+      entregadoPor: email,
+      rutaId,
+    });
+
+    if (rutaTxSnap.exists()) {
+      const rutaTxData = rutaTxSnap.data();
+      const paletsEntregadosActuales: PaletAsignado[] =
+        (rutaTxData.paletsEntregados as PaletAsignado[]) ?? [];
+      const paradasActuales: Parada[] =
+        (rutaTxData.paradas as Parada[]) ?? [];
+
+      const yaEntregado = paletsEntregadosActuales.some(
+        (p) => p.docId === paletDocId
+      );
+      const nuevosPaletsEntregados = yaEntregado
+        ? paletsEntregadosActuales
+        : [...paletsEntregadosActuales, paletEntregado];
+
+      const docIdsEntregados = new Set(
+        nuevosPaletsEntregados.map((p) => p.docId)
+      );
+
+      const nuevasParadas = paradasActuales.map((parada) => {
+        if (parada.entregado) return parada;
+        const todosEntregados = parada.paletsIds.every((id) =>
+          docIdsEntregados.has(id)
+        );
+        return todosEntregados ? { ...parada, entregado: true } : parada;
+      });
+
+      const pesoEntregado = nuevosPaletsEntregados.reduce(
+        (a, p) => a + (p.pesoKg ?? 0),
+        0
+      );
+      const volumenEntregado = nuevosPaletsEntregados.reduce(
+        (a, p) => a + (p.volumenM3 ?? 0),
+        0
+      );
+
+      tx.update(rutaRef, {
+        paletsEntregados: nuevosPaletsEntregados,
+        totalEntregados: nuevosPaletsEntregados.length,
+        paradas: nuevasParadas,
+        pesoEntregadoKg: Number(pesoEntregado.toFixed(2)),
+        volumenEntregadoM3: Number(volumenEntregado.toFixed(3)),
+        actualizadoEn: serverTimestamp(),
+      });
+    }
+  });
+
+  return { matricula, rutaId, paletsRestantes };
+};
+
 const CAMIONES = "camiones";
 const PALETS_ENTREGADOS = "palets_entregados";
 const RUTAS = "rutas";
 
-export type RutaEstado = "en_curso" | "finalizada";
+export type RutaEstado = "en_curso" | "finalizada" | "cancelada";
 
 export interface Parada {
   cliente: string;
@@ -538,4 +689,73 @@ export const finalizarRuta = async (
   await batch.commit();
 
   return { paletsEliminados: palets.length, rutaId: rutaActivaId };
+};
+
+export interface CancelarRutaResultado {
+  rutaId: string | null;
+  paletsRevertidos: number;
+}
+
+export const cancelarRuta = async (
+  matricula: string,
+  email: string = "anónimo"
+): Promise<CancelarRutaResultado> => {
+  const cargaRef = doc(db, CARGAS, matricula);
+  const camionRef = doc(db, CAMIONES, matricula);
+
+  const [cargaSnap, camionSnap] = await Promise.all([
+    getDoc(cargaRef),
+    getDoc(camionRef),
+  ]);
+
+  const palets: PaletAsignado[] = cargaSnap.exists()
+    ? ((cargaSnap.data().palets as PaletAsignado[]) ?? [])
+    : [];
+
+  const rutaActivaId = camionSnap.exists()
+    ? ((camionSnap.data().rutaActivaId as string | undefined) ?? null)
+    : null;
+
+  const batch = writeBatch(db);
+
+  palets.forEach((p) => {
+    batch.update(doc(db, PRODUCTOS, p.docId), {
+      estado_pedido: "Listo para carga",
+      rutaId: null,
+      paradaOrden: null,
+      enTransitoDesdeIso: null,
+    });
+  });
+
+  if (rutaActivaId) {
+    batch.update(doc(db, RUTAS, rutaActivaId), {
+      estado: "cancelada" as RutaEstado,
+      canceladoPor: email,
+      fechaCancelacion: serverTimestamp(),
+    });
+  }
+
+  batch.set(
+    cargaRef,
+    {
+      matricula,
+      palets: [],
+      actualizadoEn: serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  batch.set(
+    camionRef,
+    {
+      estado: "disponible",
+      rutaActivaId: null,
+      actualizadoEn: serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  await batch.commit();
+
+  return { paletsRevertidos: palets.length, rutaId: rutaActivaId };
 };
