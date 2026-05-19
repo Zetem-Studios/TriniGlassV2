@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Trash2, Edit, Save, X, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
+import { collection, getDocs, limit, query } from 'firebase/firestore';
 import type { ReglaAsignacion } from '../utils/RuleEngine';
 import { useRules } from '../hooks/useRules';
+import { db } from '../firebase';
 
 const RuleEditor = () => {
   const { 
@@ -23,6 +25,16 @@ const RuleEditor = () => {
   const [editingRule, setEditingRule] = useState<ReglaAsignacion | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [applicationMode, setLocalApplicationMode] = useState<'all' | 'new_only' | 'both'>(getApplicationMode());
+  const [isApplyingAllRules, setIsApplyingAllRules] = useState(false);
+  const [isApplyingNewRules, setIsApplyingNewRules] = useState(false);
+  const [productFields, setProductFields] = useState<string[]>([]);
+  const [productFieldTypes, setProductFieldTypes] = useState<Record<string, string>>({});
+  const conditionFieldOptions = Array.from(
+    new Set([
+      ...productFields,
+      ...rules.flatMap(rule => rule.condiciones.map(condition => condition.campo).filter(Boolean))
+    ])
+  ).sort((a, b) => a.localeCompare(b));
 
   // Formulario para nueva regla
   const [newRule, setNewRule] = useState<Partial<ReglaAsignacion>>({
@@ -30,7 +42,7 @@ const RuleEditor = () => {
     prioridad: rules.length + 1,
     activa: true,
     condiciones: [{
-      campo: 'nombre_abreviado',
+      campo: '',
       operador: 'contiene',
       valor: ''
     }],
@@ -38,6 +50,193 @@ const RuleEditor = () => {
       zona: 'expediciones',
       subzona: 'H'
     }
+  });
+
+  const createEmptyCondition = (): ReglaAsignacion['condiciones'][number] => ({
+    campo: conditionFieldOptions[0] || '',
+    operador: 'contiene',
+    valor: ''
+  });
+
+  const getFieldType = (field: string): 'number' | 'string' | 'date' => {
+    const type = productFieldTypes[field];
+    if (type === 'number') return 'number';
+    if (type === 'date') return 'date';
+    return 'string';
+  };
+
+  const getOperatorOptions = (field: string): { value: ReglaAsignacion['condiciones'][number]['operador']; label: string }[] => {
+    const fieldType = getFieldType(field);
+
+    if (fieldType === 'number') {
+      return [
+        { value: 'igual', label: '=' },
+        { value: 'menor', label: '<' },
+        { value: 'mayor', label: '>' },
+        { value: 'menor_igual', label: '=<' },
+        { value: 'mayor_igual', label: '=>' },
+        { value: 'entre', label: 'Rango' }
+      ];
+    }
+
+    if (fieldType === 'date') {
+      return [
+        { value: 'fecha_antes', label: 'Antes de' },
+        { value: 'fecha_despues', label: 'Después de' },
+        { value: 'fecha_entre', label: 'Entre' }
+      ];
+    }
+
+    return [
+      { value: 'igual', label: 'Igual a' },
+      { value: 'contiene', label: 'Contiene la cadena' }
+    ];
+  };
+
+  const getValidOperator = (
+    field: string,
+    operator: ReglaAsignacion['condiciones'][number]['operador']
+  ): ReglaAsignacion['condiciones'][number]['operador'] => {
+    const options = getOperatorOptions(field);
+    return options.some(option => option.value === operator) ? operator : options[0].value;
+  };
+
+  const getRangeValues = (value: ReglaAsignacion['condiciones'][number]['valor']) => {
+    const [from = '', to = ''] = Array.isArray(value)
+      ? value.map(item => String(item))
+      : String(value || '').split(';');
+
+    return { from, to };
+  };
+
+  const updateRangeValue = (
+    currentValue: ReglaAsignacion['condiciones'][number]['valor'],
+    side: 'from' | 'to',
+    value: string
+  ) => {
+    const rangeValues = getRangeValues(currentValue);
+    const nextRangeValues = {
+      ...rangeValues,
+      [side]: value
+    };
+
+    return `${nextRangeValues.from};${nextRangeValues.to}`;
+  };
+
+  useEffect(() => {
+    const loadProductFields = async () => {
+      try {
+        const productosQuery = query(collection(db, 'productos'), limit(25));
+        const snapshot = await getDocs(productosQuery);
+        const fields = Array.from(
+          new Set(snapshot.docs.flatMap(docSnap => Object.keys(docSnap.data())))
+        ).sort((a, b) => a.localeCompare(b));
+        const fieldTypes = snapshot.docs.reduce<Record<string, string>>((types, docSnap) => {
+          Object.entries(docSnap.data()).forEach(([field, value]) => {
+            if (!types[field] && value !== null && value !== undefined) {
+              types[field] = typeof value === 'object' && typeof (value as any).toDate === 'function'
+                ? 'date'
+                : typeof value;
+            }
+          });
+
+          return types;
+        }, {});
+
+        setProductFields(fields);
+        setProductFieldTypes(fieldTypes);
+      } catch (error) {
+        console.error('Error cargando atributos de productos:', error);
+      }
+    };
+
+    loadProductFields();
+  }, []);
+
+  useEffect(() => {
+    if (Object.keys(productFieldTypes).length === 0) return;
+
+    setNewRule(currentRule => ({
+      ...currentRule,
+      condiciones: currentRule.condiciones?.map(condition => ({
+        ...condition,
+        operador: getValidOperator(condition.campo, condition.operador)
+      }))
+    }));
+
+    setEditingRule(currentRule => currentRule
+      ? {
+          ...currentRule,
+          condiciones: currentRule.condiciones.map(condition => ({
+            ...condition,
+            operador: getValidOperator(condition.campo, condition.operador)
+          }))
+        }
+      : currentRule
+    );
+  }, [productFieldTypes]);
+
+  const updateNewRuleCondition = (index: number, field: keyof ReglaAsignacion['condiciones'][number], value: string) => {
+    const condiciones = [...(newRule.condiciones && newRule.condiciones.length > 0 ? newRule.condiciones : [createEmptyCondition()])];
+    const nextCondition = {
+      ...condiciones[index],
+      [field]: field === 'operador' ? value as ReglaAsignacion['condiciones'][number]['operador'] : value
+    };
+    condiciones[index] = {
+      ...nextCondition,
+      operador: getValidOperator(nextCondition.campo, nextCondition.operador)
+    };
+    setNewRule({ ...newRule, condiciones });
+  };
+
+  const addNewRuleCondition = () => {
+    setNewRule({
+      ...newRule,
+      condiciones: [...(newRule.condiciones || []), createEmptyCondition()]
+    });
+  };
+
+  const removeNewRuleCondition = (index: number) => {
+    const condiciones = (newRule.condiciones || []).filter((_, conditionIndex) => conditionIndex !== index);
+    setNewRule({ ...newRule, condiciones: condiciones.length > 0 ? condiciones : [createEmptyCondition()] });
+  };
+
+  const updateEditingRuleCondition = (index: number, field: keyof ReglaAsignacion['condiciones'][number], value: string) => {
+    if (!editingRule) return;
+    const condiciones = [...(editingRule.condiciones && editingRule.condiciones.length > 0 ? editingRule.condiciones : [createEmptyCondition()])];
+    const nextCondition = {
+      ...condiciones[index],
+      [field]: field === 'operador' ? value as ReglaAsignacion['condiciones'][number]['operador'] : value
+    };
+    condiciones[index] = {
+      ...nextCondition,
+      operador: getValidOperator(nextCondition.campo, nextCondition.operador)
+    };
+    setEditingRule({ ...editingRule, condiciones });
+  };
+
+  const addEditingRuleCondition = () => {
+    if (!editingRule) return;
+    setEditingRule({
+      ...editingRule,
+      condiciones: [...(editingRule.condiciones || []), createEmptyCondition()]
+    });
+  };
+
+  const removeEditingRuleCondition = (index: number) => {
+    if (!editingRule) return;
+    const condiciones = (editingRule.condiciones || []).filter((_, conditionIndex) => conditionIndex !== index);
+    setEditingRule({ ...editingRule, condiciones: condiciones.length > 0 ? condiciones : [createEmptyCondition()] });
+  };
+
+  const normalizeRuleDecimalValues = (rule: ReglaAsignacion): ReglaAsignacion => ({
+    ...rule,
+    condiciones: rule.condiciones.map(condition => ({
+      ...condition,
+      valor: typeof condition.valor === 'string' && /^\s*-?\d+,\d+\s*$/.test(condition.valor)
+        ? condition.valor.trim().replace(',', '.')
+        : condition.valor
+    }))
   });
 
   // Mover regla hacia arriba o abajo
@@ -66,13 +265,13 @@ const RuleEditor = () => {
         return;
       }
       
-      await saveRule(newRule as ReglaAsignacion);
+      await saveRule(normalizeRuleDecimalValues(newRule as ReglaAsignacion));
       setNewRule({
         nombre: '',
         prioridad: rules.length + 2,
         activa: true,
         condiciones: [{
-          campo: 'nombre_abreviado',
+          campo: conditionFieldOptions[0] || '',
           operador: 'contiene',
           valor: ''
         }],
@@ -92,7 +291,7 @@ const RuleEditor = () => {
     if (!editingRule) return;
     
     try {
-      await updateRule(editingRule.id, editingRule);
+      await updateRule(editingRule.id, normalizeRuleDecimalValues(editingRule));
       setEditingRule(null);
     } catch (err) {
       alert('Error al actualizar la regla');
@@ -110,14 +309,42 @@ const RuleEditor = () => {
     }
   };
 
-  // Restaurar reglas por defecto
+  // Restaurar posicionamiento de productos
   const handleRestoreDefaults = async () => {
-    if (!confirm('¿Estás seguro de restaurar las reglas por defecto? Se eliminarán todas las reglas actuales.')) return;
+    if (!confirm('¿Estás seguro de limpiar el posicionamiento de todos los productos? Las reglas no se eliminarán.')) return;
     
     try {
       await restoreDefaults();
     } catch (err) {
-      alert('Error al restaurar las reglas por defecto');
+      alert('Error al limpiar el posicionamiento de los productos');
+    }
+  };
+
+  const handleApplyRulesToAll = async () => {
+    if (isApplyingAllRules) return;
+
+    setIsApplyingAllRules(true);
+    try {
+      const result = await applyRulesToAll();
+      alert(`✅ ${result.message}`);
+    } catch (error) {
+      alert(`❌ Error: ${(error as Error).message}`);
+    } finally {
+      setIsApplyingAllRules(false);
+    }
+  };
+
+  const handleApplyRulesToNew = () => {
+    if (isApplyingNewRules) return;
+
+    setIsApplyingNewRules(true);
+    try {
+      const result = applyRulesToNew();
+      alert(`✅ ${result.message}`);
+    } catch (error) {
+      alert(`❌ Error: ${(error as Error).message}`);
+    } finally {
+      setIsApplyingNewRules(false);
     }
   };
 
@@ -150,7 +377,7 @@ const RuleEditor = () => {
               className="flex items-center gap-2 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
             >
               <RotateCcw size={16} />
-              Restaurar por Defecto
+              Restaurar posicionamiento
             </button>
             <button
               onClick={() => setIsCreating(true)}
@@ -206,7 +433,7 @@ const RuleEditor = () => {
                 >
                   <option value="">Selecciona una subzona</option>
                   {newRule.acciones?.zona && getSubzonesForZone(newRule.acciones.zona).map((subzone: any) => (
-                    <option key={subzone.id} value={subzone.id}>
+                    <option key={subzone.id} value={subzone.name}>
                       {subzone.name}
                     </option>
                   ))}
@@ -216,49 +443,85 @@ const RuleEditor = () => {
             </div>
             
             <div>
-              <h4 className="font-medium text-black mb-1">Condición:</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                <select
-                  value={newRule.condiciones?.[0]?.campo}
-                  onChange={(e) => setNewRule({
-                    ...newRule, 
-                    condiciones: [{...newRule.condiciones![0], campo: e.target.value}]
-                  })}
-                  className="px-3 py-2 border rounded text-black"
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="font-medium text-black">Condiciones:</h4>
+                <button
+                  type="button"
+                  onClick={addNewRuleCondition}
+                  className="flex items-center gap-1 px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
                 >
-                  <option value="nombre_abreviado">Nombre Abreviado</option>
-                  <option value="peso_total_kg">Peso Total (kg)</option>
-                  <option value="vidrio_simple">Vidrio Simple</option>
-                  <option value="altura">Altura</option>
-                  <option value="longitud">Longitud</option>
-                  <option value="fecha_entrega">Fecha Entrega</option>
-                </select>
-                <select
-                  value={newRule.condiciones?.[0]?.operador}
-                  onChange={(e) => setNewRule({
-                    ...newRule, 
-                    condiciones: [{...newRule.condiciones![0], operador: e.target.value as any}]
-                  })}
-                  className="px-3 py-2 border rounded text-black"
-                >
-                  <option value="contiene">Contiene</option>
-                  <option value="igual">Igual</option>
-                  <option value="mayor">Mayor que</option>
-                  <option value="menor">Menor que</option>
-                  <option value="entre">Entre</option>
-                </select>
-                <input
-                  type="text"
-                  placeholder="Valor"
-                  value={newRule.condiciones?.[0]?.valor as string || ''}
-                  onChange={(e) => setNewRule({
-                    ...newRule, 
-                    condiciones: newRule.condiciones && newRule.condiciones.length > 0 
-                      ? [{...newRule.condiciones[0], valor: e.target.value}]
-                      : [{campo: 'nombre_abreviado', operador: 'contiene', valor: e.target.value}]
-                  })}
-                  className="px-3 py-2 border rounded text-black"
-                />
+                  <Plus size={14} />
+                  Añadir condición
+                </button>
+              </div>
+              <div className="space-y-2">
+                {(newRule.condiciones && newRule.condiciones.length > 0 ? newRule.condiciones : [createEmptyCondition()]).map((condition, conditionIndex) => (
+                  <div key={conditionIndex} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto] gap-2">
+                    <select
+                      value={condition.campo}
+                      onChange={(e) => updateNewRuleCondition(conditionIndex, 'campo', e.target.value)}
+                      className="px-3 py-2 border rounded text-black"
+                    >
+                      <option value="">Selecciona un atributo</option>
+                      {conditionFieldOptions.map(field => (
+                        <option key={field} value={field}>
+                          {field}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={condition.operador}
+                      onChange={(e) => updateNewRuleCondition(conditionIndex, 'operador', e.target.value)}
+                      className="px-3 py-2 border rounded text-black"
+                    >
+                      {getOperatorOptions(condition.campo).map(option => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    {condition.operador === 'entre' || condition.operador === 'fecha_entre' ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type={condition.operador === 'fecha_entre' ? 'date' : 'number'}
+                          placeholder="Desde"
+                          value={getRangeValues(condition.valor).from}
+                          onChange={(e) => updateNewRuleCondition(conditionIndex, 'valor', updateRangeValue(condition.valor, 'from', e.target.value))}
+                          className="px-3 py-2 border rounded text-black"
+                        />
+                        <input
+                          type={condition.operador === 'fecha_entre' ? 'date' : 'number'}
+                          placeholder="Hasta"
+                          value={getRangeValues(condition.valor).to}
+                          onChange={(e) => updateNewRuleCondition(conditionIndex, 'valor', updateRangeValue(condition.valor, 'to', e.target.value))}
+                          className="px-3 py-2 border rounded text-black"
+                        />
+                      </div>
+                    ) : (
+                      <input
+                        type={
+                          condition.operador === 'fecha_antes' || condition.operador === 'fecha_despues'
+                            ? 'date'
+                            : getFieldType(condition.campo) === 'number'
+                              ? 'number'
+                              : 'text'
+                        }
+                        placeholder="Valor"
+                        value={condition.valor as string || ''}
+                        onChange={(e) => updateNewRuleCondition(conditionIndex, 'valor', e.target.value)}
+                        className="px-3 py-2 border rounded text-black"
+                      />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => removeNewRuleCondition(conditionIndex)}
+                      className="px-3 py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                      disabled={(newRule.condiciones?.length || 1) <= 1}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
             
@@ -325,7 +588,7 @@ const RuleEditor = () => {
                       >
                         <option value="">Selecciona una subzona</option>
                         {editingRule.acciones?.zona && getSubzonesForZone(editingRule.acciones.zona).map((subzone: any) => (
-                          <option key={subzone.id} value={subzone.id}>
+                          <option key={subzone.id} value={subzone.name}>
                             {subzone.name}
                           </option>
                         ))}
@@ -334,48 +597,90 @@ const RuleEditor = () => {
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                    <h4 className="font-medium md:col-span-3 text-black mb-1">Condición:</h4>
-                    <select
-                      value={editingRule.condiciones?.[0]?.campo}
-                      onChange={(e) => setEditingRule({
-                        ...editingRule, 
-                        condiciones: [{...editingRule.condiciones![0], campo: e.target.value}]
-                      })}
-                      className="px-3 py-2 border rounded text-black"
-                    >
-                      <option value="nombre_abreviado">Nombre Abreviado</option>
-                      <option value="peso_total_kg">Peso Total (kg)</option>
-                      <option value="vidrio_simple">Vidrio Simple</option>
-                      <option value="altura">Altura</option>
-                      <option value="longitud">Longitud</option>
-                      <option value="fecha_entrega">Fecha Entrega</option>
-                    </select>
-                    <select
-                      value={editingRule.condiciones?.[0]?.operador}
-                      onChange={(e) => setEditingRule({
-                        ...editingRule, 
-                        condiciones: [{...editingRule.condiciones![0], operador: e.target.value as any}]
-                      })}
-                      className="px-3 py-2 border rounded text-black"
-                    >
-                      <option value="contiene">Contiene</option>
-                      <option value="igual">Igual</option>
-                      <option value="mayor">Mayor que</option>
-                      <option value="menor">Menor que</option>
-                      <option value="entre">Entre</option>
-                    </select>
-                    <input
-                      type="text"
-                      placeholder="Valor"
-                      value={editingRule.condiciones?.[0]?.valor as string || ''}
-                      onChange={(e) => setEditingRule({
-                        ...editingRule, 
-                        condiciones: [{...editingRule.condiciones![0], valor: e.target.value}]
-                      })}
-                      className="px-3 py-2 border rounded text-black"
-                    />
-                  </div>
+                  {!editingRule.esDefecto && (
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-medium text-black">Condiciones:</h4>
+                        <button
+                          type="button"
+                          onClick={addEditingRuleCondition}
+                          className="flex items-center gap-1 px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+                        >
+                          <Plus size={14} />
+                          Añadir condición
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        {(editingRule.condiciones && editingRule.condiciones.length > 0 ? editingRule.condiciones : [createEmptyCondition()]).map((condition, conditionIndex) => (
+                        <div key={conditionIndex} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto] gap-2">
+                          <select
+                            value={condition.campo}
+                            onChange={(e) => updateEditingRuleCondition(conditionIndex, 'campo', e.target.value)}
+                            className="px-3 py-2 border rounded text-black"
+                          >
+                            <option value="">Selecciona un atributo</option>
+                            {conditionFieldOptions.map(field => (
+                              <option key={field} value={field}>
+                                {field}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            value={condition.operador}
+                            onChange={(e) => updateEditingRuleCondition(conditionIndex, 'operador', e.target.value)}
+                            className="px-3 py-2 border rounded text-black"
+                          >
+                            {getOperatorOptions(condition.campo).map(option => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                          {condition.operador === 'entre' || condition.operador === 'fecha_entre' ? (
+                            <div className="grid grid-cols-2 gap-2">
+                              <input
+                                type={condition.operador === 'fecha_entre' ? 'date' : 'number'}
+                                placeholder="Desde"
+                                value={getRangeValues(condition.valor).from}
+                                onChange={(e) => updateEditingRuleCondition(conditionIndex, 'valor', updateRangeValue(condition.valor, 'from', e.target.value))}
+                                className="px-3 py-2 border rounded text-black"
+                              />
+                              <input
+                                type={condition.operador === 'fecha_entre' ? 'date' : 'number'}
+                                placeholder="Hasta"
+                                value={getRangeValues(condition.valor).to}
+                                onChange={(e) => updateEditingRuleCondition(conditionIndex, 'valor', updateRangeValue(condition.valor, 'to', e.target.value))}
+                                className="px-3 py-2 border rounded text-black"
+                              />
+                            </div>
+                          ) : (
+                            <input
+                              type={
+                                condition.operador === 'fecha_antes' || condition.operador === 'fecha_despues'
+                                  ? 'date'
+                                  : getFieldType(condition.campo) === 'number'
+                                    ? 'number'
+                                    : 'text'
+                              }
+                              placeholder="Valor"
+                              value={condition.valor as string || ''}
+                              onChange={(e) => updateEditingRuleCondition(conditionIndex, 'valor', e.target.value)}
+                              className="px-3 py-2 border rounded text-black"
+                            />
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeEditingRuleCondition(conditionIndex)}
+                            className="px-3 py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                            disabled={(editingRule.condiciones?.length || 1) <= 1}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   
                   <div className="flex gap-2">
                     <button
@@ -405,10 +710,26 @@ const RuleEditor = () => {
                         <span className={`px-2 py-1 text-xs rounded ${rule.activa ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                           {rule.activa ? 'Activa' : 'Inactiva'}
                         </span>
+                        {rule.esDefecto && (
+                          <span className="px-2 py-1 text-xs rounded bg-yellow-100 text-yellow-800">
+                            Por defecto
+                          </span>
+                        )}
                       </div>
                       
                       <div className="text-sm text-gray-600">
-                        <strong>Condición:</strong> {rule.condiciones[0]?.campo} {rule.condiciones[0]?.operador} "{rule.condiciones[0]?.valor}"
+                        <strong>Condiciones:</strong>
+                        <div className="mt-1 space-y-1">
+                          {rule.esDefecto ? (
+                            <div>Posicionamiento de los palets que no tienen reglas de colocación asignadas, su zona o subzona asignada ya está llena o ha sido borrada</div>
+                          ) : (
+                            rule.condiciones.map((condition, conditionIndex) => (
+                              <div key={conditionIndex}>
+                                {conditionIndex + 1}. {condition.campo} {condition.operador} "{condition.valor}"
+                              </div>
+                            ))
+                          )}
+                        </div>
                       </div>
                       <div className="text-sm text-gray-600">
                         <strong>Acción:</strong> zona: {rule.acciones.zona}, subzona: {rule.acciones.subzona}
@@ -418,14 +739,14 @@ const RuleEditor = () => {
                     <div className="flex gap-2 ml-4">
                       <button
                         onClick={() => moveRule(index, 'up')}
-                        disabled={index === 0}
+                        disabled={index === 0 || rule.esDefecto}
                         className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-30"
                       >
                         <ChevronUp size={16} />
                       </button>
                       <button
                         onClick={() => moveRule(index, 'down')}
-                        disabled={index === rules.length - 1}
+                        disabled={index === rules.length - 1 || rule.esDefecto}
                         className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-30"
                       >
                         <ChevronDown size={16} />
@@ -436,12 +757,14 @@ const RuleEditor = () => {
                       >
                         <Edit size={16} />
                       </button>
-                      <button
-                        onClick={() => handleDeleteRule(rule.id)}
-                        className="p-1 text-red-500 hover:text-red-700"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      {!rule.esDefecto && (
+                        <button
+                          onClick={() => handleDeleteRule(rule.id)}
+                          className="p-1 text-red-500 hover:text-red-700"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -514,63 +837,67 @@ const RuleEditor = () => {
           <div className="flex gap-3">
             {applicationMode === 'all' && (
               <button
-                onClick={async () => {
-                  try {
-                    const result = await applyRulesToAll();
-                    alert(`✅ ${result.message}`);
-                  } catch (error) {
-                    alert(`❌ Error: ${(error as Error).message}`);
-                  }
-                }}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-bold transition-colors"
+                onClick={handleApplyRulesToAll}
+                disabled={isApplyingAllRules}
+                className={`flex-1 px-4 py-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2 ${
+                  isApplyingAllRules
+                    ? 'bg-gray-400 cursor-not-allowed text-white'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
               >
-                Aplicar a Todos los Palets
+                {isApplyingAllRules && (
+                  <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
+                )}
+                {isApplyingAllRules ? 'Aplicando reglas...' : 'Aplicar a Todos los Palets'}
               </button>
             )}
             
             {applicationMode === 'new_only' && (
               <button
-                onClick={() => {
-                  try {
-                    const result = applyRulesToNew();
-                    alert(`✅ ${result.message}`);
-                  } catch (error) {
-                    alert(`❌ Error: ${(error as Error).message}`);
-                  }
-                }}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-bold transition-colors"
+                onClick={handleApplyRulesToNew}
+                disabled={isApplyingNewRules}
+                className={`flex-1 px-4 py-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2 ${
+                  isApplyingNewRules
+                    ? 'bg-gray-400 cursor-not-allowed text-white'
+                    : 'bg-green-600 hover:bg-green-700 text-white'
+                }`}
               >
-                Activar Modo Nuevos Palets
+                {isApplyingNewRules && (
+                  <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
+                )}
+                {isApplyingNewRules ? 'Activando...' : 'Activar Modo Nuevos Palets'}
               </button>
             )}
             
             {applicationMode === 'both' && (
               <div className="flex gap-3 flex-1">
                 <button
-                  onClick={async () => {
-                    try {
-                      const result = await applyRulesToAll();
-                      alert(`✅ ${result.message}`);
-                    } catch (error) {
-                      alert(`❌ Error: ${(error as Error).message}`);
-                    }
-                  }}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-bold transition-colors"
+                  onClick={handleApplyRulesToAll}
+                  disabled={isApplyingAllRules}
+                  className={`flex-1 px-4 py-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2 ${
+                    isApplyingAllRules
+                      ? 'bg-gray-400 cursor-not-allowed text-white'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  }`}
                 >
-                  Aplicar a Todos
+                  {isApplyingAllRules && (
+                    <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
+                  )}
+                  {isApplyingAllRules ? 'Aplicando...' : 'Aplicar a Todos'}
                 </button>
                 <button
-                  onClick={() => {
-                    try {
-                      const result = applyRulesToNew();
-                      alert(`✅ ${result.message}`);
-                    } catch (error) {
-                      alert(`❌ Error: ${(error as Error).message}`);
-                    }
-                  }}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-bold transition-colors"
+                  onClick={handleApplyRulesToNew}
+                  disabled={isApplyingNewRules}
+                  className={`flex-1 px-4 py-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2 ${
+                    isApplyingNewRules
+                      ? 'bg-gray-400 cursor-not-allowed text-white'
+                      : 'bg-green-600 hover:bg-green-700 text-white'
+                  }`}
                 >
-                  Activar para Nuevos
+                  {isApplyingNewRules && (
+                    <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
+                  )}
+                  {isApplyingNewRules ? 'Activando...' : 'Activar para Nuevos'}
                 </button>
               </div>
             )}
