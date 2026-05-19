@@ -1,5 +1,5 @@
 // Warehouse.tsx - Implementación dinámica sin hardcode
-import { useState, useEffect } from "react";
+import { useState, useEffect, type KeyboardEvent } from "react";
 import {
   Search, ChevronDown, Check, X, Package, 
   Layers, Maximize2, Zap, Box
@@ -438,6 +438,7 @@ export default function Warehouse() {
   }, []);
   
   const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState<Block[]>([]);
   const [selectedZone, setSelectedZone] = useState("");
   const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
   const [selectedPalletGroup, setSelectedPalletGroup] = useState<Block[]>([]);
@@ -835,20 +836,74 @@ export default function Warehouse() {
     }
   }, [zones, subzonas]);
 
-  useEffect(() => {
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      const foundBlock = blocks.find(b => 
-        b.id.toLowerCase() === term || 
-        (b.occupied && b.client.toLowerCase().includes(term))
-      );
+  const selectSearchResult = (block: Block) => {
+    const blockZone = getBlockZone(block);
+    const blockSubzone = getBlockSubzone(block);
+    const palletsAtPosition = blocks.filter(currentBlock =>
+      getBlockZone(currentBlock) === blockZone &&
+      getBlockSubzone(currentBlock) === blockSubzone &&
+      currentBlock.posicion &&
+      currentBlock.posicion === block.posicion
+    );
+    const subzoneConfig = subzonas.find(sub =>
+      sub.zonaId === blockZone &&
+      sub.nombre === blockSubzone
+    );
 
-      if (foundBlock) {
-        setSelectedZone(foundBlock.zoneId);
-        setSelectedBlock(foundBlock);
-      }
+    setSelectedZone(blockZone);
+    setSelectedBlock(block);
+    setSelectedPalletGroup(palletsAtPosition.length > 0 ? palletsAtPosition : [block]);
+    setSearchResults([]);
+
+    if (subzoneConfig?.id) {
+      setExpandedSubzones(current => new Set([...current, subzoneConfig.id]));
     }
-  }, [searchTerm, blocks]);
+  };
+
+  const handleSearch = () => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) {
+      setSearchResults([]);
+      return;
+    }
+
+    const foundBlocks = blocks.filter(b => {
+      const searchableFields = [
+        b.id,
+        b.codigo_barra,
+        b.client,
+        b.numeroCliente,
+        b.numeroLineaPedido,
+        b.estadoPedido,
+        b.empresa,
+        b.referencias,
+        b.posicion
+      ];
+
+      return searchableFields.some(value =>
+        String(value ?? "").toLowerCase().includes(term)
+      );
+    });
+
+    const uniqueFoundBlocks = foundBlocks.filter((block, index, self) => {
+      const blockKey = block.codigo_barra?.trim() || block.id;
+      return self.findIndex(currentBlock => (currentBlock.codigo_barra?.trim() || currentBlock.id) === blockKey) === index;
+    });
+
+    if (uniqueFoundBlocks.length === 1) {
+      selectSearchResult(uniqueFoundBlocks[0]);
+      return;
+    }
+
+    setSearchResults(uniqueFoundBlocks);
+  };
+
+  const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      handleSearch();
+    }
+  };
+
 
   const getSelectedPallets = (): Block[] => {
     if (selectedPalletGroup.length > 0) return selectedPalletGroup;
@@ -1559,8 +1614,44 @@ const renderSubzonesFromMap = () => {
               )}
             </div>
             <div className="relative flex-1">
-              <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <input type="text" placeholder="Buscar por ID o cliente..." className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 pl-14 pr-6 text-sm outline-none shadow-sm focus:ring-2 focus:ring-blue-500/50 placeholder:text-slate-500 dark:placeholder:text-slate-400" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+              <button type="button" onClick={handleSearch} className="absolute left-5 top-1/2 -translate-y-1/2 z-10 text-slate-400 hover:text-blue-500 transition-colors">
+                <Search size={18} />
+              </button>
+              <input type="text" placeholder="Buscar por código de barras o cliente..." className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 pl-14 pr-6 text-sm outline-none shadow-sm focus:ring-2 focus:ring-blue-500/50 placeholder:text-slate-500 dark:placeholder:text-slate-400" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setSearchResults([]); }} onKeyDown={handleSearchKeyDown} />
+              {searchResults.length > 0 && (
+                <div className="absolute left-0 right-0 mt-3 max-h-96 overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl z-50">
+                  <div className="px-5 py-3 text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">
+                    {searchResults.length} palets encontrados
+                  </div>
+                  {searchResults.map(block => (
+                    <button
+                      key={block.id}
+                      type="button"
+                      onClick={() => selectSearchResult(block)}
+                      className="w-full text-left px-5 py-4 hover:bg-blue-50 dark:hover:bg-slate-800 border-b border-slate-100 dark:border-slate-800 last:border-b-0 transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="text-sm font-black text-slate-900 dark:text-white truncate">
+                            {block.codigo_barra || block.id}
+                          </div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                            {block.client}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                            {zones.find(z => z.id === getBlockZone(block))?.name || getBlockZone(block)}
+                          </div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400">
+                            {getBlockSubzone(block)} {block.posicion ? `· ${block.posicion}` : ""}
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

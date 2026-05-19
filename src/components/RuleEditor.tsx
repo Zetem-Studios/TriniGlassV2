@@ -17,8 +17,6 @@ const RuleEditor = () => {
     applyRulesToNew,
     getApplicationMode,
     setApplicationMode,
-    migrateRules,
-    importHardcodedRules,
     zones,
     getSubzonesForZone
   } = useRules();
@@ -153,46 +151,6 @@ const RuleEditor = () => {
             >
               <RotateCcw size={16} />
               Restaurar por Defecto
-            </button>
-            <button
-              onClick={async () => {
-                if (confirm('¿Estás seguro de migrar las reglas? Esto moverá todos los datos de reglas_asignacion_v2 a reglas_asignacion y borrará la colección v2.')) {
-                  try {
-                    const result = await migrateRules();
-                    if (result.success) {
-                      alert(`✅ ${result.message}`);
-                    } else {
-                      alert(`❌ ${result.message}`);
-                    }
-                  } catch (error) {
-                    alert(`❌ Error: ${(error as Error).message}`);
-                  }
-                }
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600"
-            >
-              <RotateCcw size={16} />
-              Migrar Reglas
-            </button>
-            <button
-              onClick={async () => {
-                if (confirm('¿Estás seguro de importar las reglas hardcodeadas? Esto borrará todas las reglas existentes y añadirá las 34 reglas del sistema antiguo.')) {
-                  try {
-                    const result = await importHardcodedRules();
-                    if (result.success) {
-                      alert(`✅ ${result.message}`);
-                    } else {
-                      alert(`❌ ${result.message}`);
-                    }
-                  } catch (error) {
-                    alert(`❌ Error: ${(error as Error).message}`);
-                  }
-                }
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600"
-            >
-              <RotateCcw size={16} />
-              Importar Reglas Hardcodeadas
             </button>
             <button
               onClick={() => setIsCreating(true)}
