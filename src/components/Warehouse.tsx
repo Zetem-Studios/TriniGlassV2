@@ -302,6 +302,22 @@ const getSlotFromPosition = (posicion?: string | null): { fila: number; columna:
   };
 };
 
+const DEFAULT_SUBZONE_CAPACITIES: Record<string, number> = {
+  'cms:D': 13,
+};
+
+const getDefaultSubzoneCapacity = (zoneId: string, subzone: string) =>
+  DEFAULT_SUBZONE_CAPACITIES[`${zoneId}:${subzone}`] ?? null;
+
+const getObservedCardsPerRow = (pallets: Block[]) => {
+  const slots = pallets
+    .map((pallet) => getSlotFromPosition(pallet.posicion))
+    .filter((slot): slot is { fila: number; columna: number } => Boolean(slot));
+
+  if (slots.length === 0) return 0;
+  return Math.max(...slots.map((slot) => slot.columna));
+};
+
 const isLegacyPositionCode = (posicion?: string | null): boolean => {
   return Boolean(posicion?.match(/F\d+C\d+$/i));
 };
@@ -440,6 +456,8 @@ export default function Warehouse() {
   const [moveError, setMoveError] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [releaseLoading, setReleaseLoading] = useState(false);
+  const [releaseError, setReleaseError] = useState<string | null>(null);
   // const [assignmentRules, setAssignmentRules] = useState<any[]>([]);
 
   const { designs, loading: designsLoading, error: designsError } = useMapDesigns();
@@ -987,6 +1005,47 @@ export default function Warehouse() {
   };
 
   // Función para ordenar zonas según su posición en el mapa
+  const handleReleasePalletPosition = async () => {
+    const palletsToRelease = getSelectedPalletsExpandedByPosition();
+    if (palletsToRelease.length === 0) return;
+
+    const confirmed = window.confirm(
+      `Liberar la ubicacion de ${palletsToRelease.length} pedido${palletsToRelease.length === 1 ? '' : 's'} sin eliminarlo${palletsToRelease.length === 1 ? '' : 's'}?`
+    );
+    if (!confirmed) return;
+
+    setReleaseLoading(true);
+    setReleaseError(null);
+
+    try {
+      const batch = writeBatch(db);
+
+      palletsToRelease.forEach((pallet) => {
+        const productRef = doc(db, 'productos', pallet.id);
+        batch.update(productRef, { zona: null, subzona: null, posicion: null });
+      });
+
+      await batch.commit();
+
+      const releasedIds = new Set(palletsToRelease.map((pallet) => pallet.id));
+      setBlocks((currentBlocks) =>
+        currentBlocks.map((block) =>
+          releasedIds.has(block.id)
+            ? { ...block, zoneId: '', area: '', posicion: null }
+            : block
+        )
+      );
+      setSelectedBlock(null);
+      setSelectedPalletGroup([]);
+      setMoveMode(false);
+      setReleaseError(null);
+    } catch {
+      setReleaseError('Error al liberar el hueco');
+    } finally {
+      setReleaseLoading(false);
+    }
+  };
+
 const getZonesOrderedByPosition = () => {
   if (!selectedMapDesign || selectedMapDesign === "default") {
     return zones;
@@ -1527,8 +1586,8 @@ const renderSubzonesFromMap = () => {
                 <div className="space-y-4">
                   {zoneSubzonas.map((subZone) => {
                     // Determinar si hay límite de capacidad
-                    const tieneLimite = subZone.capacidadMaxima !== null && subZone.capacidadMaxima !== undefined;
-                    const capacidad = tieneLimite ? subZone.capacidadMaxima! : null;
+                    let tieneLimite = subZone.capacidadMaxima !== null && subZone.capacidadMaxima !== undefined;
+                    let capacidad = tieneLimite ? subZone.capacidadMaxima! : null;
                     
                     // Calcular tarjetas por fila y total
                     let tarjetasPorFila: number;
@@ -1537,7 +1596,7 @@ const renderSubzonesFromMap = () => {
                     if (tieneLimite && capacidad) {
                       // Con límite: dividir en 2 filas
                       tarjetasPorFila = Math.ceil(capacidad / 2);
-                      totalTarjetas = tarjetasPorFila * 2;
+                      totalTarjetas = capacidad;
                     } else {
                       // Sin límite: se calculará después según el número de tarjetas reales
                       tarjetasPorFila = 0;
@@ -1552,6 +1611,18 @@ const renderSubzonesFromMap = () => {
                       // Solo filtrar por nombre de subzona, no por zona
                       return blockArea === subZone.nombre;
                     });
+
+                    const capacidadFirestore = Number(subZone.capacidadMaxima);
+                    const capacidadFallback = getDefaultSubzoneCapacity(selectedZone, subZone.nombre);
+                    const capacidadObservada = getObservedCardsPerRow(paletsEnSubzona) * 2;
+                    capacidad = Number.isFinite(capacidadFirestore) && capacidadFirestore > 0
+                      ? capacidadFirestore
+                      : capacidadFallback ?? (capacidadObservada > 0 ? capacidadObservada : null);
+                    tieneLimite = capacidad !== null;
+                    if (tieneLimite && capacidad) {
+                      tarjetasPorFila = Math.ceil(capacidad / 2);
+                      totalTarjetas = capacidad;
+                    }
                     
                     // Depurar filtrado para primeras subzonas
                     if (zoneSubzonas.indexOf(subZone) < 3) {
@@ -1952,6 +2023,7 @@ const renderSubzonesFromMap = () => {
                 setMoveMode(false);
                 setMoveError(null);
                 setDeleteError(null);
+                setReleaseError(null);
               }}
               className="p-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 hover:text-red-500"
             >
@@ -1980,16 +2052,18 @@ const renderSubzonesFromMap = () => {
             </div>
 
             <div className="bg-white dark:bg-slate-800/60 rounded-2xl p-6 border border-slate-100 dark:border-slate-700 mt-2 grid grid-cols-1 gap-3 shadow-inner">
-              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-brand-700 dark:text-brand-300 mb-1">Código de barras</span><span className="text-sm font-mono break-all">{selectedBlock.codigo_barra || 'Sin código'}</span></div>
-              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-brand-700 dark:text-brand-300 mb-1">Cliente</span><span className="text-sm font-mono">{selectedBlock.client || 'Desconocido'}</span></div>
-              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-brand-700 dark:text-brand-300 mb-1">Dimensiones totales</span><span className="text-sm font-mono">{selectedPalletGroup.length > 1 ? getAggregatedDimensions(selectedPalletGroup) : selectedBlock.dimensions || 'N/A'}</span></div>
-              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-brand-700 dark:text-brand-300 mb-1">Peso total</span><span className="text-sm font-mono">{selectedPalletGroup.length > 1 ? getAggregatedWeight(selectedPalletGroup) : selectedBlock.weight || 'N/A'}</span></div>
-              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-brand-700 dark:text-brand-300 mb-1">Estado pedido</span><span className="text-sm font-mono">{selectedBlock.estadoPedido || 'N/A'}</span></div>
-              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-brand-700 dark:text-brand-300 mb-1">Referencia pedido</span><span className="text-sm font-mono">{selectedBlock.referencias || 'N/A'}</span></div>
-              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-brand-700 dark:text-brand-300 mb-1">Fecha entrega</span><span className="text-sm font-mono">{selectedBlock.lastUpdate || 'N/A'}</span></div>
-              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-brand-700 dark:text-brand-300 mb-1">Días en almacén</span><span className="text-sm font-mono">{selectedBlock.daysInStorage}d</span></div>
-              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-brand-700 dark:text-brand-300 mb-1">Zona</span><span className="text-sm font-mono">{zones.find(z => z.id === selectedBlock.zoneId)?.name || selectedBlock.zoneId || 'N/A'}</span></div>
-              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-brand-700 dark:text-brand-300 mb-1">Subzona</span><span className="text-sm font-mono">{selectedBlock.area || 'N/A'}</span></div>
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Código de barras</span><span className="text-sm font-mono break-all">{selectedBlock.codigo_barra || 'Sin código'}</span></div>
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">ID documento</span><span className="text-sm font-mono break-all">{selectedBlock.id}</span></div>
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Cliente</span><span className="text-sm font-mono">{selectedBlock.client || 'Desconocido'}</span></div>
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Dimensiones totales</span><span className="text-sm font-mono">{selectedPalletGroup.length > 1 ? getAggregatedDimensions(selectedPalletGroup) : selectedBlock.dimensions || 'N/A'}</span></div>
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Peso total</span><span className="text-sm font-mono">{selectedPalletGroup.length > 1 ? getAggregatedWeight(selectedPalletGroup) : selectedBlock.weight || 'N/A'}</span></div>
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Estado pedido</span><span className="text-sm font-mono">{selectedBlock.estadoPedido || 'N/A'}</span></div>
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Referencia pedido</span><span className="text-sm font-mono">{selectedBlock.referencias || 'N/A'}</span></div>
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Fecha entrega</span><span className="text-sm font-mono">{selectedBlock.lastUpdate || 'N/A'}</span></div>
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Días en almacén</span><span className="text-sm font-mono">{selectedBlock.daysInStorage}d</span></div>
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Zona</span><span className="text-sm font-mono">{zones.find(z => z.id === selectedBlock.zoneId)?.name || selectedBlock.zoneId || 'N/A'}</span></div>
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Subzona</span><span className="text-sm font-mono">{selectedBlock.area || 'N/A'}</span></div>
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Posicion</span><span className="text-sm font-mono">{selectedBlock.posicion || 'N/A'}</span></div>
             </div>
 
             {selectedPalletGroup.length > 1 && (
@@ -2007,33 +2081,42 @@ const renderSubzonesFromMap = () => {
               </div>
             )}
 
-            <div className="flex flex-row gap-3 mt-6 mb-2 justify-center">
+            <div className="flex flex-row flex-wrap gap-3 mt-6 mb-2 justify-center">
               <button
                 className={`bg-green-500 hover:bg-green-600 disabled:bg-green-300 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow active:scale-95 transition-all ${moveMode ? 'ring-2 ring-green-400' : ''}`}
                 onClick={() => {
                   setMoveError(null);
+                  setReleaseError(null);
                   setMoveMode((currentMode) => !currentMode);
                 }}
-                disabled={moveLoading || deleteLoading}
+                disabled={moveLoading || deleteLoading || releaseLoading}
               >
                 <Maximize2 size={16}/> {moveMode ? 'Cancelar' : 'Mover'}
               </button>
               <button
                 className="bg-yellow-400 hover:bg-yellow-500 disabled:bg-yellow-300 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow active:scale-95 transition-all"
-                disabled={moveLoading || deleteLoading}
+                disabled={moveLoading || deleteLoading || releaseLoading}
               >
                 <Package size={16}/> Despachar
               </button>
               <button
+                className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow active:scale-95 transition-all"
+                onClick={handleReleasePalletPosition}
+                disabled={moveLoading || deleteLoading || releaseLoading}
+              >
+                <Box size={16}/> {releaseLoading ? 'Liberando...' : 'Liberar hueco'}
+              </button>
+              <button
                 className="bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow active:scale-95 transition-all"
                 onClick={handleDeletePallets}
-                disabled={moveLoading || deleteLoading}
+                disabled={moveLoading || deleteLoading || releaseLoading}
               >
                 <X size={16}/> {deleteLoading ? 'Eliminando...' : 'Eliminar'}
               </button>
             </div>
 
             {deleteError && <div className="text-red-500 text-xs text-center font-bold">{deleteError}</div>}
+            {releaseError && <div className="text-red-500 text-xs text-center font-bold">{releaseError}</div>}
           </div>
         </div>
       )}

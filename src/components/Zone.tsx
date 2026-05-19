@@ -20,6 +20,7 @@ interface ZoneProps {
   selectedBlock: Block | null;
   onBlockClick: (block: Block) => void;
   onEmptySlotClick?: (zoneId: string, subzone: string, position: string) => void;
+  recommendedLocationId?: string | null;
   preview?: boolean;
   disableInteraction?: boolean;
 }

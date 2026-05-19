@@ -13,18 +13,27 @@ interface ZoneConfig {
   subzones: { [key: string]: string[] };
 }
 
-
 interface ZonesProps {
   zones: ZoneConfig[];
   blocks: Block[];
   selectedZone: string;
   selectedBlock: Block | null;
   onBlockClick: (block: Block) => void;
+  recommendedLocationId?: string | null;
   preview?: boolean;
   disableInteraction?: boolean;
 }
 
-const Zones: React.FC<ZonesProps> = ({ zones, blocks, selectedZone, selectedBlock, onBlockClick, preview = false, disableInteraction = false }) => {
+const Zones: React.FC<ZonesProps> = ({
+  zones,
+  blocks,
+  selectedZone,
+  selectedBlock,
+  onBlockClick,
+  recommendedLocationId,
+  preview = false,
+  disableInteraction = false,
+}) => {
   return (
     <div className="flex flex-row flex-nowrap gap-1 justify-start items-start w-full overflow-hidden">
       {zones.map(zone => (
@@ -36,6 +45,7 @@ const Zones: React.FC<ZonesProps> = ({ zones, blocks, selectedZone, selectedBloc
             blocks={blocks.filter(b => b.zoneId === zone.id)}
             selectedBlock={selectedBlock}
             onBlockClick={onBlockClick}
+            recommendedLocationId={recommendedLocationId}
             preview={preview}
             disableInteraction={disableInteraction}
           />

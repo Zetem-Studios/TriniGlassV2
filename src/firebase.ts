@@ -32,6 +32,8 @@ export const getZones = async () => {
         name: data.nombre ?? data.name,
         posiciones: data.posiciones as string[],
         subzones: data.subzones ?? {},
+        capacidadMaxima: data.capacidadMaxima,
+        ocupacionActual: data.ocupacionActual,
       };
     });
 };

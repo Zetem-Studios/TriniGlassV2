@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 
 interface QRScannerProps {
   onScanSuccess: (decodedText: string) => void;
@@ -42,12 +42,29 @@ const QRScanner = ({ onScanSuccess }: QRScannerProps) => {
     currentWrapper.innerHTML = ""; 
     currentWrapper.appendChild(div);
 
-    globalScannerInstance = new Html5Qrcode(uniqueId);
+    globalScannerInstance = new Html5Qrcode(uniqueId, {
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.QR_CODE,
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.CODE_93,
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.ITF,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E
+      ],
+      useBarCodeDetectorIfSupported: true,
+      verbose: false
+    });
     isScannerInitiating = true;
 
     globalScannerInstance.start(
       { facingMode: "environment" },
-      { fps: 10, qrbox: { width: 250, height: 250 } },
+      {
+        fps: 10,
+        qrbox: { width: 280, height: 180 }
+      },
       (text) => {
         if (hasScannedRef.current) return;
         hasScannedRef.current = true;
