@@ -5,9 +5,10 @@ export interface ReglaAsignacion {
   nombre: string;
   prioridad: number;
   activa: boolean;
+  esDefecto?: boolean;
   condiciones: {
     campo: string; // nombre_abreviado, peso_total_kg, vidrio_simple, etc.
-    operador: 'contiene' | 'igual' | 'mayor' | 'menor' | 'entre';
+    operador: 'contiene' | 'igual' | 'mayor' | 'mayor_igual' | 'menor' | 'menor_igual' | 'entre' | 'fecha_antes' | 'fecha_despues' | 'fecha_entre';
     valor: string | number | string | [number, number];
   }[];
   acciones: {
@@ -33,8 +34,11 @@ export class RuleEngine {
 
   // Evaluar un producto contra todas las reglas
   evaluarProducto(producto: any): ResultadoAsignacion | null {
+    const reglaDefecto = this.reglas.find(regla => regla.esDefecto && regla.activa);
+
     for (const regla of this.reglas) {
       if (!regla.activa) continue;
+      if (regla.esDefecto) continue;
 
       if (this.evaluarCondiciones(producto, regla.condiciones)) {
         return {
@@ -46,12 +50,31 @@ export class RuleEngine {
       }
     }
 
+    if (reglaDefecto) {
+      return {
+        zona: reglaDefecto.acciones.zona || 'expediciones',
+        subzona: reglaDefecto.acciones.subzona || 'H',
+        prioridad: this.convertirPrioridad(reglaDefecto.acciones.prioridad),
+        reglaAplicada: reglaDefecto.nombre
+      };
+    }
+
     return null; // No se aplicó ninguna regla
   }
 
   // Evaluar todas las condiciones de una regla (AND lógico)
   private evaluarCondiciones(producto: any, condiciones: ReglaAsignacion['condiciones']): boolean {
-    return condiciones.every(condicion => {
+    const condicionesValidas = condiciones.filter(condicion =>
+      condicion.campo &&
+      condicion.operador &&
+      condicion.valor !== '' &&
+      condicion.valor !== null &&
+      condicion.valor !== undefined
+    );
+
+    if (condicionesValidas.length === 0) return false;
+
+    return condicionesValidas.every(condicion => {
       const valorProducto = this.obtenerValorCampo(producto, condicion.campo);
       return this.evaluarCondicion(valorProducto, condicion.operador, condicion.valor);
     });
@@ -61,20 +84,60 @@ export class RuleEngine {
   private evaluarCondicion(valor: any, operador: string, valorEsperado: any): boolean {
     switch (operador) {
       case 'contiene':
-        return String(valor).toLowerCase().includes(String(valorEsperado).toLowerCase());
+        return String(valor ?? '').toLowerCase().includes(String(valorEsperado ?? '').toLowerCase());
       case 'igual':
-        return valor === valorEsperado;
+        return this.normalizarValor(valor) === this.normalizarValor(valorEsperado);
       case 'mayor':
-        return Number(valor) > Number(valorEsperado);
+        return this.normalizarNumero(valor) > this.normalizarNumero(valorEsperado);
+      case 'mayor_igual':
+        return this.normalizarNumero(valor) >= this.normalizarNumero(valorEsperado);
       case 'menor':
-        return Number(valor) < Number(valorEsperado);
-      case 'entre':
-        const [min, max] = valorEsperado as [number, number];
-        const num = Number(valor);
+        return this.normalizarNumero(valor) < this.normalizarNumero(valorEsperado);
+      case 'menor_igual':
+        return this.normalizarNumero(valor) <= this.normalizarNumero(valorEsperado);
+      case 'entre': {
+        const [min, max] = Array.isArray(valorEsperado)
+          ? valorEsperado
+          : String(valorEsperado).split(/[-;]/).map(numero => this.normalizarNumero(numero));
+        const num = this.normalizarNumero(valor);
         return num >= min && num <= max;
+      }
+      case 'fecha_antes':
+        return this.normalizarFecha(valor) < this.normalizarFecha(valorEsperado);
+      case 'fecha_despues':
+        return this.normalizarFecha(valor) > this.normalizarFecha(valorEsperado);
+      case 'fecha_entre': {
+        const [inicio, fin] = String(valorEsperado).split(/[;]/).map(fecha => this.normalizarFecha(fecha));
+        const fecha = this.normalizarFecha(valor);
+        return fecha >= inicio && fecha <= fin;
+      }
       default:
         return false;
     }
+  }
+
+  private normalizarValor(valor: any): string | number | boolean {
+    if (typeof valor === 'boolean') return valor;
+    if (typeof valor === 'number') return valor;
+
+    const valorTexto = String(valor ?? '').trim().toLowerCase();
+    if (valorTexto === 'true' || valorTexto === 'sí' || valorTexto === 'si') return true;
+    if (valorTexto === 'false' || valorTexto === 'no') return false;
+
+    const valorNumerico = this.normalizarNumero(valorTexto);
+    if (valorTexto !== '' && !Number.isNaN(valorNumerico)) return valorNumerico;
+
+    return valorTexto;
+  }
+
+  private normalizarNumero(valor: any): number {
+    return Number(String(valor ?? '').trim().replace(',', '.'));
+  }
+
+  private normalizarFecha(valor: any): number {
+    if (valor && typeof valor.toDate === 'function') return valor.toDate().getTime();
+    if (valor instanceof Date) return valor.getTime();
+    return new Date(String(valor ?? '').trim()).getTime();
   }
 
   // Obtener valor anidado de un objeto (ej: producto.cliente.nombre)
@@ -102,74 +165,19 @@ export class RuleEngine {
     return this.reglas.filter(regla => regla.activa);
   }
 
-  // Ejemplos de reglas por defecto
+  // Regla por defecto para productos sin reglas asociadas
   static getReglasPorDefecto(): ReglaAsignacion[] {
     return [
       {
-        id: '1',
-        nombre: 'Clientes REUGLAS',
-        prioridad: 1,
+        id: 'default-fallback-rule',
+        nombre: 'Regla por defecto',
+        prioridad: 0,
         activa: true,
-        condiciones: [
-          {
-            campo: 'nombre_abreviado',
-            operador: 'contiene',
-            valor: 'REUGLAS'
-          }
-        ],
+        esDefecto: true,
+        condiciones: [],
         acciones: {
           zona: 'expediciones',
           subzona: 'H'
-        }
-      },
-      {
-        id: '2',
-        nombre: 'Palets pesados (>200kg)',
-        prioridad: 2,
-        activa: true,
-        condiciones: [
-          {
-            campo: 'peso_total_kg',
-            operador: 'mayor',
-            valor: 200
-          }
-        ],
-        acciones: {
-          zona: 'cms',
-          subzona: 'D'
-        }
-      },
-      {
-        id: '3',
-        nombre: 'Vidrio simple',
-        prioridad: 3,
-        activa: true,
-        condiciones: [
-          {
-            campo: 'vidrio_simple',
-            operador: 'igual',
-            valor: 1
-          }
-        ],
-        acciones: {
-          zona: 'pulidoras',
-          subzona: 'F'
-        }
-      },
-      {
-        id: '4',
-        nombre: 'Entrega urgente (<7 días)',
-        prioridad: 4,
-        activa: true,
-        condiciones: [
-          {
-            campo: 'dias_hasta_entrega',
-            operador: 'menor',
-            valor: 7
-          }
-        ],
-        acciones: {
-          prioridad: 'alta'
         }
       }
     ];
