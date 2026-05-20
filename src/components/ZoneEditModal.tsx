@@ -110,7 +110,7 @@ export const ZoneEditModal: React.FC<ZoneEditModalProps> = ({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-4 flex justify-between items-center">
+        <div className="bg-gradient-to-r from-brand-600 to-purple-600 text-white px-6 py-4 flex justify-between items-center">
           <h2 className="text-xl font-semibold">
             {editType === 'zona' ? 'Editar Zona' : 'Editar Subzona'}
           </h2>
@@ -134,7 +134,7 @@ export const ZoneEditModal: React.FC<ZoneEditModalProps> = ({
                 type="text"
                 value={formData.nombre}
                 onChange={(e) => handleChange('nombre', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-white"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 dark:bg-slate-700 dark:text-white"
                 placeholder={editType === 'zona' ? 'Ej: Expediciones' : 'Ej: H, Mamparista'}
                 required
               />
@@ -150,7 +150,7 @@ export const ZoneEditModal: React.FC<ZoneEditModalProps> = ({
                   <select
                     value={formData.tipo}
                     onChange={(e) => handleChange('tipo', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 dark:bg-slate-700 dark:text-white"
                   >
                     <option value="produccion">Producción</option>
                     <option value="almacenamiento">Almacenamiento</option>
@@ -166,7 +166,7 @@ export const ZoneEditModal: React.FC<ZoneEditModalProps> = ({
                     type="number"
                     value={formData.capacidadMaxima || ''}
                     onChange={(e) => handleChange('capacidadMaxima', e.target.value ? parseInt(e.target.value) : null)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 dark:bg-slate-700 dark:text-white"
                     min="1"
                     placeholder="Sin límite"
                   />
@@ -179,7 +179,7 @@ export const ZoneEditModal: React.FC<ZoneEditModalProps> = ({
                   <textarea
                     value={formData.descripcion}
                     onChange={(e) => handleChange('descripcion', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 dark:bg-slate-700 dark:text-white"
                     placeholder="Describe brevemente esta zona..."
                     rows={3}
                   />
@@ -222,12 +222,12 @@ export const ZoneEditModal: React.FC<ZoneEditModalProps> = ({
                 </div>
 
                 {/* Información sobre posiciones */}
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                <div className="bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 rounded-lg p-3">
                   <div className="flex items-start gap-2">
-                    <AlertCircle size={16} className="text-blue-600 dark:text-blue-400 mt-0.5" />
+                    <AlertCircle size={16} className="text-brand-600 dark:text-brand-400 mt-0.5" />
                     <div>
-                      <h4 className="font-medium text-blue-900 dark:text-blue-100 text-sm">Posiciones</h4>
-                      <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                      <h4 className="font-medium text-brand-900 dark:text-brand-100 text-sm">Posiciones</h4>
+                      <p className="text-xs text-brand-700 dark:text-brand-300 mt-1">
                         Las posiciones se actualizan automáticamente desde el mapa cuando la zona o subzona está asignada a un área.
                       </p>
                     </div>
@@ -257,7 +257,7 @@ export const ZoneEditModal: React.FC<ZoneEditModalProps> = ({
               <select
                 value={formData.activa.toString()}
                 onChange={(e) => handleChange('activa', e.target.value === 'true')}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-white"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 dark:bg-slate-700 dark:text-white"
               >
                 <option value="true">Activa</option>
                 <option value="false">Inactiva</option>

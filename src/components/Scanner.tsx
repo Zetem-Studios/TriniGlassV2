@@ -627,10 +627,10 @@ export default function MobileScanner({ showLogout = false }: MobileScannerProps
     <div className="min-h-screen bg-[#0f172a] text-white font-sans flex flex-col overflow-hidden select-none">
       {!showMap && (
         <div className={`p-6 pt-12 pb-8 transition-colors duration-500 ${
-          showDetails ? (result === 'success' ? 'bg-emerald-600' : result === 'error' ? 'bg-red-600' : 'bg-blue-600') : 'bg-blue-600'
+          showDetails ? (result === 'success' ? 'bg-emerald-600' : result === 'error' ? 'bg-red-600' : 'bg-brand-600') : 'bg-brand-600'
         }`}>
           <div className="flex justify-between items-center mb-6 text-left">
-            <h1 className="text-2xl font-black italic uppercase leading-none tracking-tighter">Triniglass <span className="opacity-60 font-light not-italic">Móvil</span></h1>
+            <h1 className="text-2xl font-semibold italic uppercase leading-none tracking-tight">Triniglass <span className="opacity-60 font-light not-italic">Móvil</span></h1>
             <div className="flex items-center gap-3">
               <Smartphone size={20} className="opacity-40" />
               {showLogout && (
@@ -645,8 +645,8 @@ export default function MobileScanner({ showLogout = false }: MobileScannerProps
             </div>
           </div>
           <div className="flex bg-black/20 p-1 rounded-2xl backdrop-blur-md">
-            <button onClick={() => { setActiveTab("scan"); setShowDetails(false); }} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === "scan" ? "bg-white text-blue-600 shadow-lg" : "text-white/60"}`}>Escanear</button>
-            <button onClick={() => { setActiveTab("search"); setShowMap(false); }} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === "search" ? "bg-white text-blue-600 shadow-lg" : "text-white/60"}`}>Buscar</button>
+            <button onClick={() => { setActiveTab("scan"); setShowDetails(false); }} className={`flex-1 py-3 rounded-xl text-[10px] font-semibold uppercase transition-all ${activeTab === "scan" ? "bg-white text-brand-600 shadow-lg" : "text-white/60"}`}>Escanear</button>
+            <button onClick={() => { setActiveTab("search"); setShowMap(false); }} className={`flex-1 py-3 rounded-xl text-[10px] font-semibold uppercase transition-all ${activeTab === "search" ? "bg-white text-brand-600 shadow-lg" : "text-white/60"}`}>Buscar</button>
           </div>
         </div>
       )}
@@ -657,20 +657,20 @@ export default function MobileScanner({ showLogout = false }: MobileScannerProps
             <div className="flex items-center gap-4">
               <button onClick={() => setShowMap(false)} className="p-3 bg-slate-800 rounded-2xl active:scale-90 transition-all"><ChevronLeft size={24} /></button>
               <div className="text-left">
-                <h2 className="text-lg font-black uppercase leading-none mb-1">Localización</h2>
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Zona - Área</p>
+                <h2 className="text-lg font-semibold uppercase leading-none mb-1">Localización</h2>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-wide">Zona - Área</p>
               </div>
             </div>
-            <div className="flex-1 bg-slate-900/50 rounded-[2.5rem] border border-slate-800 p-8 flex flex-col items-center justify-center relative shadow-inner overflow-hidden">
+            <div className="flex-1 bg-slate-900/50 rounded-2xl border border-slate-800 p-8 flex flex-col items-center justify-center relative shadow-inner overflow-hidden">
               <div className="text-center space-y-3">
-                <div className="w-20 h-20 mx-auto bg-blue-500/10 rounded-full flex items-center justify-center border-2 border-blue-500/30">
-                  <Clock size={40} className="text-blue-500" />
+                <div className="w-20 h-20 mx-auto bg-brand-500/10 rounded-full flex items-center justify-center border-2 border-brand-500/30">
+                  <Clock size={40} className="text-brand-500" />
                 </div>
-                <h3 className="text-xl font-black uppercase text-blue-400">En Zona de Espera</h3>
+                <h3 className="text-xl font-semibold uppercase text-brand-400">En Zona de Espera</h3>
                 <p className="text-sm text-slate-400 max-w-[250px] mx-auto">Este palet está en zona de espera temporal. Ubicación asignada: <span className="font-bold text-white">---</span></p>
               </div>
             </div>
-            <button onClick={() => setShowMap(false)} className="w-full bg-blue-600 py-5 rounded-3xl font-black uppercase text-xs shadow-lg">Volver a detalles</button>
+            <button onClick={() => setShowMap(false)} className="w-full bg-brand-600 py-5 rounded-xl font-semibold uppercase text-xs shadow-lg">Volver a detalles</button>
           </div>
         )}
         {/* PESTAÑA BUSCAR */}
@@ -679,9 +679,9 @@ export default function MobileScanner({ showLogout = false }: MobileScannerProps
             <form onSubmit={handleManualSearch} className="space-y-4">
               <div className="relative">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="ID de bloque (Ej: H-105)..." className="w-full bg-slate-900 border border-slate-700 rounded-2xl py-5 pl-12 pr-4 text-sm outline-none focus:border-blue-500 transition-all text-white" />
+                <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="ID de bloque (Ej: H-105)..." className="w-full bg-slate-900 border border-slate-700 rounded-2xl py-5 pl-12 pr-4 text-sm outline-none focus:border-brand-500 transition-all text-white" />
               </div>
-              <button type="submit" className="w-full bg-blue-600 py-4 rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-3 shadow-lg">
+              <button type="submit" className="w-full bg-brand-600 py-4 rounded-2xl font-semibold uppercase text-xs flex items-center justify-center gap-3 shadow-lg">
                 {isSearching ? <Loader2 className="animate-spin" /> : "Localizar Bloque"}
               </button>
             </form>
@@ -692,20 +692,20 @@ export default function MobileScanner({ showLogout = false }: MobileScannerProps
           <div className="flex-1 flex flex-col items-center justify-center animate-in fade-in">
             {scanning ? (
               <div className="flex flex-col items-center justify-center gap-6">
-                <Loader2 className="animate-spin text-blue-400" size={64} />
-                <span className="text-blue-400 font-black text-lg uppercase tracking-widest">Buscando...</span>
+                <Loader2 className="animate-spin text-brand-400" size={64} />
+                <span className="text-brand-400 font-semibold text-lg uppercase tracking-wide">Buscando...</span>
               </div>
             ) : (
               <>
                 <QRScanner onScanSuccess={onScanSuccess} />
                 <div className="text-center space-y-4 mt-8">
-                  <h2 className="text-lg font-black uppercase tracking-tight leading-none">Enfoque el código</h2>
+                  <h2 className="text-lg font-semibold uppercase tracking-tight leading-none">Enfoque el código</h2>
                   <p className="text-slate-500 text-xs max-w-[200px] mx-auto leading-relaxed font-medium">Lectura con cámara para validar ubicación.</p>
                   {/* Botones manuales opcionales para pruebas */}
                   <div className="mt-8 grid grid-cols-3 gap-3 w-full">
-                    <button onClick={() => handleScanAction('success')} className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 py-3 rounded-xl text-[9px] font-black uppercase active:bg-emerald-500 active:text-white transition-all">Colocado</button>
-                    <button onClick={() => handleScanAction('waiting')} className="bg-blue-500/10 border border-blue-500/30 text-blue-500 py-3 rounded-xl text-[9px] font-black uppercase active:bg-blue-500 active:text-white transition-all">Espera</button>
-                    <button onClick={() => handleScanAction('error')} className="bg-red-500/10 border border-red-500/30 text-red-500 py-3 rounded-xl text-[9px] font-black uppercase active:bg-red-500 active:text-white transition-all">Error</button>
+                    <button onClick={() => handleScanAction('success')} className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 py-3 rounded-xl text-[9px] font-semibold uppercase active:bg-emerald-500 active:text-white transition-all">Colocado</button>
+                    <button onClick={() => handleScanAction('waiting')} className="bg-brand-500/10 border border-brand-500/30 text-brand-500 py-3 rounded-xl text-[9px] font-semibold uppercase active:bg-brand-500 active:text-white transition-all">Espera</button>
+                    <button onClick={() => handleScanAction('error')} className="bg-red-500/10 border border-red-500/30 text-red-500 py-3 rounded-xl text-[9px] font-semibold uppercase active:bg-red-500 active:text-white transition-all">Error</button>
                   </div>
                   {lastScan && (
                     <div className="mt-4 text-xs text-slate-400">Último QR: <span className="font-mono text-white">{lastScan}</span></div>
@@ -727,8 +727,8 @@ export default function MobileScanner({ showLogout = false }: MobileScannerProps
                   >
                     Volver a escanear
                   </button>
-                  <div className="bg-blue-900/80 border border-blue-500/30 rounded-xl px-6 py-3 text-sm font-bold text-blue-200 shadow flex items-center gap-2">
-                    <span className="text-lg font-black text-blue-300">{palets.length}</span>
+                  <div className="bg-brand-900/80 border border-brand-500/30 rounded-xl px-6 py-3 text-sm font-bold text-brand-200 shadow flex items-center gap-2">
+                    <span className="text-lg font-semibold text-brand-300">{palets.length}</span>
                     <span>resultado{palets.length === 1 ? '' : 's'} encontrado{palets.length === 1 ? '' : 's'}:</span>
                   </div>
                 </div>
@@ -737,17 +737,17 @@ export default function MobileScanner({ showLogout = false }: MobileScannerProps
                   return (
                     <div
                       key={palet.id + idx}
-                      className={`transition-all duration-300 bg-slate-900 border border-slate-800 rounded-2xl shadow-lg max-w-3xl mx-auto mb-4 cursor-pointer ${expanded ? 'ring-2 ring-blue-400' : 'hover:border-blue-500/40'}`}
+                      className={`transition-all duration-300 bg-slate-900 border border-slate-800 rounded-2xl shadow-lg max-w-3xl mx-auto mb-4 cursor-pointer ${expanded ? 'ring-2 ring-brand-400' : 'hover:border-brand-500/40'}`}
                       onClick={() => setExpandedIdx(expanded ? null : idx)}
                     >
                       {/* Vista resumida */}
                       <div className="flex items-center gap-4 p-5">
-                        <div className="flex flex-col items-center justify-center w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-400/30">
-                          <CheckCircle2 size={24} className="text-blue-400" />
+                        <div className="flex flex-col items-center justify-center w-12 h-12 rounded-xl bg-brand-500/10 border border-brand-400/30">
+                          <CheckCircle2 size={24} className="text-brand-400" />
                         </div>
                         <div className="flex-1">
                           <div className="flex flex-wrap gap-2 items-center">
-                            <span className="font-black text-blue-400 text-base md:text-lg uppercase tracking-tight leading-none">{palet.id}</span>
+                            <span className="font-semibold text-brand-400 text-base md:text-lg uppercase tracking-tight leading-none">{palet.id}</span>
                             <span className="text-xs font-bold text-slate-400 uppercase">{palet.nombreAbreviado || '---'}</span>
                             <span className="text-xs font-bold text-emerald-400 uppercase">{palet.prioridad || '---'}</span>
                             <span className="text-xs font-bold text-purple-400 uppercase">{palet.ubicacion || '---'}</span>
@@ -760,7 +760,7 @@ export default function MobileScanner({ showLogout = false }: MobileScannerProps
                         </div>
                         <div className="ml-2">
                           <span
-                            className={`inline-block w-6 h-6 rounded-full flex items-center justify-center transition-all select-none ${expanded ? 'bg-blue-500 text-white' : 'bg-slate-800 text-blue-400'}`}
+                            className={`inline-block w-6 h-6 rounded-full flex items-center justify-center transition-all select-none ${expanded ? 'bg-brand-500 text-white' : 'bg-slate-800 text-brand-400'}`}
                             style={{ lineHeight: '1', fontSize: '1.35rem', fontWeight: 700, textAlign: 'center', verticalAlign: 'middle', paddingTop: '1px' }}
                           >
                             {expanded ? '-' : '+'}
@@ -772,12 +772,12 @@ export default function MobileScanner({ showLogout = false }: MobileScannerProps
                         <div className="p-5 pt-0 space-y-3 text-left animate-in fade-in slide-in-from-top">
                           <div className="flex items-center gap-4 p-4 bg-slate-800/40 rounded-2xl border border-white/5 shadow-sm">
                             <User size={20} className="text-slate-500" />
-                            <div className="flex-1"><p className="text-[9px] font-black text-slate-500 uppercase mb-1">Nombre abreviado</p><p className="text-sm font-bold leading-tight">{palet.nombreAbreviado || "---"}</p></div>
+                            <div className="flex-1"><p className="text-[9px] font-semibold text-slate-500 uppercase mb-1">Nombre abreviado</p><p className="text-sm font-bold leading-tight">{palet.nombreAbreviado || "---"}</p></div>
                           </div>
                           <div className={`flex items-center gap-4 p-4 rounded-2xl border shadow-sm bg-purple-500/10 border-purple-500/20`}>
                             <Navigation size={20} className="text-purple-400" />
                             <div className="flex-1">
-                              <p className="text-[9px] font-black uppercase mb-1" style={{ color: '#c084fc' }}>Ubicación Asignada</p>
+                              <p className="text-[9px] font-semibold uppercase mb-1" style={{ color: '#c084fc' }}>Ubicación Asignada</p>
                               <p className="text-base md:text-lg font-bold leading-tight break-words">
                                 {palet.ubicacion || "---"}
                               </p>
@@ -824,7 +824,7 @@ export default function MobileScanner({ showLogout = false }: MobileScannerProps
                           <div className="flex items-center gap-4 p-4 bg-cyan-500/10 border border-cyan-500/20 rounded-2xl shadow-sm">
                             <Box size={20} className="text-cyan-400" />
                             <div className="flex-1">
-                              <p className="text-[9px] font-black text-cyan-400 uppercase mb-1">Tipo de Vidrio</p>
+                              <p className="text-[9px] font-semibold text-cyan-400 uppercase mb-1">Tipo de Vidrio</p>
                               <p className="text-base md:text-lg font-bold leading-tight break-words">
                                 {palet.tipoVidrio || "---"}
                               </p>
@@ -833,7 +833,7 @@ export default function MobileScanner({ showLogout = false }: MobileScannerProps
                           <div className="flex items-center gap-4 p-4 bg-orange-500/10 border border-orange-500/20 rounded-2xl shadow-sm">
                             <Truck size={20} className="text-orange-400" />
                             <div className="flex-1">
-                              <p className="text-[9px] font-black text-orange-400 uppercase mb-1">Camión / Ruta</p>
+                              <p className="text-[9px] font-semibold text-orange-400 uppercase mb-1">Camión / Ruta</p>
                               <p className="text-base md:text-lg font-bold leading-tight break-words">
                                 {palet.camionRuta || "Ruta por asignar"}
                               </p>
@@ -842,15 +842,15 @@ export default function MobileScanner({ showLogout = false }: MobileScannerProps
                           <div className="grid grid-cols-2 gap-3">
                             <div className="p-4 bg-slate-800/40 rounded-2xl border border-white/5 text-center">
                               <Maximize2 size={16} className="text-slate-500 mx-auto mb-1" />
-                              <p className="text-[8px] font-black text-slate-500 uppercase mb-1 leading-none">Medidas</p>
+                              <p className="text-[8px] font-semibold text-slate-500 uppercase mb-1 leading-none">Medidas</p>
                               <p className="text-sm md:text-base font-bold leading-none break-words">
                                 {palet.medidas || "---"}
                               </p>
                             </div>
-                            <div className="p-4 rounded-2xl border border-white/5 text-center bg-blue-500 border-blue-400">
+                            <div className="p-4 rounded-2xl border border-white/5 text-center bg-brand-500 border-brand-400">
                               <Clock size={16} className="text-white mx-auto mb-1 opacity-70" />
-                              <p className="text-[8px] font-black text-white uppercase mb-1 opacity-70 leading-none">Stock</p>
-                              <p className="text-xs font-black text-white leading-none">{palet.diasStock !== undefined ? `${palet.diasStock} Días` : "--- Días"}</p>
+                              <p className="text-[8px] font-semibold text-white uppercase mb-1 opacity-70 leading-none">Stock</p>
+                              <p className="text-xs font-semibold text-white leading-none">{palet.diasStock !== undefined ? `${palet.diasStock} Días` : "--- Días"}</p>
                             </div>
                           </div>
                           {/* Acción principal según el estado del palet */}
@@ -891,7 +891,7 @@ export default function MobileScanner({ showLogout = false }: MobileScannerProps
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleVerificar(palet.docId); }}
                                 disabled={verifyingDocId === palet.docId}
-                                className="w-full py-4 rounded-2xl bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-emerald-500 active:scale-95 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+                                className="w-full py-4 rounded-2xl bg-emerald-600 text-white text-[10px] font-semibold uppercase tracking-wide shadow-lg hover:bg-emerald-500 active:scale-95 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
                               >
                                 {verifyingDocId === palet.docId
                                   ? <><ArrowRightLeft size={14} className="animate-spin" /> Verificando...</>
@@ -914,8 +914,8 @@ export default function MobileScanner({ showLogout = false }: MobileScannerProps
                   <AlertCircle size={24} />
                 </div>
                 <div className="flex-1 text-left">
-                  <p className="font-black uppercase text-[9px] tracking-widest opacity-60 mb-0.5 leading-none">Palet no encontrado</p>
-                  <p className="text-lg font-black uppercase tracking-tight leading-none">ID: {lastScan}</p>
+                  <p className="font-semibold uppercase text-[9px] tracking-wide opacity-60 mb-0.5 leading-none">Palet no encontrado</p>
+                  <p className="text-lg font-semibold uppercase tracking-tight leading-none">ID: {lastScan}</p>
                 </div>
               </div>
             ) : null}

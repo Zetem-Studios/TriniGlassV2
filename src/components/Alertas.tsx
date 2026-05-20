@@ -75,23 +75,23 @@ export default function Alertas() {
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* HEADER */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Alertas del Sistema</h1>
-        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Alertas del Sistema</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
           Palets con más de 30 días en almacén que requieren atención.
         </p>
       </div>
 
       {/* BANNER RESUMEN */}
       {!loading && alertas.length > 0 && (
-        <div className="flex items-center gap-4 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
-          <div className="p-2 bg-red-500/20 rounded-lg">
-            <AlertTriangle className="w-6 h-6 text-red-500" />
+        <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-500/5 border border-red-200/80 dark:border-red-500/20 rounded-xl">
+          <div className="p-2 bg-red-100 dark:bg-red-500/10 rounded-lg">
+            <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
           </div>
           <div>
-            <p className="font-semibold text-red-400">
+            <p className="font-medium text-sm text-red-700 dark:text-red-400">
               {alertas.length} palet{alertas.length !== 1 ? "s" : ""} en estado crítico
             </p>
-            <p className="text-sm text-slate-400">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               Llevan más de 30 días almacenados sin salida registrada.
             </p>
           </div>
@@ -99,40 +99,40 @@ export default function Alertas() {
       )}
 
       {/* TABLA */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800/80 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse whitespace-nowrap min-w-[700px]">
+          <table className="w-full text-left border-collapse text-sm">
             <thead>
-              <tr className="bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800">
-                <th className="p-4 font-medium text-slate-500 dark:text-slate-400">
-                  <div className="flex items-center gap-1.5"><Package size={14} /> ID / Código</div>
+              <tr className="border-b border-slate-200/80 dark:border-slate-800/80">
+                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <div className="flex items-center gap-1.5"><Package size={12} /> ID / Código</div>
                 </th>
-                <th className="p-4 font-medium text-slate-500 dark:text-slate-400">
-                  <div className="flex items-center gap-1.5"><User size={14} /> Cliente</div>
+                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <div className="flex items-center gap-1.5"><User size={12} /> Cliente</div>
                 </th>
-                <th className="p-4 font-medium text-slate-500 dark:text-slate-400">
-                  <div className="flex items-center gap-1.5"><MapPin size={14} /> Zona</div>
+                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <div className="flex items-center gap-1.5"><MapPin size={12} /> Zona</div>
                 </th>
-                <th className="p-4 font-medium text-slate-500 dark:text-slate-400">Dimensiones / Peso</th>
-                <th className="p-4 font-medium text-slate-500 dark:text-slate-400">
-                  <div className="flex items-center gap-1.5"><Clock size={14} /> Fecha entrada</div>
+                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Dimensiones / Peso</th>
+                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <div className="flex items-center gap-1.5"><Clock size={12} /> Fecha entrada</div>
                 </th>
-                <th className="p-4 font-medium text-slate-500 dark:text-slate-400 text-right">Días en almacén</th>
+                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 text-right">Días en almacén</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="p-10 text-center text-slate-500 dark:text-slate-400">
+                  <td colSpan={6} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400">
                     Cargando alertas...
                   </td>
                 </tr>
               ) : alertas.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-16 text-center">
+                  <td colSpan={6} className="px-4 py-16 text-center">
                     <div className="flex flex-col items-center gap-3">
-                      <div className="p-3 bg-emerald-100 dark:bg-emerald-900/20 rounded-full">
-                        <AlertTriangle size={24} className="text-emerald-500" />
+                      <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 rounded-full">
+                        <AlertTriangle size={20} className="text-emerald-600 dark:text-emerald-400" />
                       </div>
                       <p className="font-medium text-slate-900 dark:text-white">Sin alertas activas</p>
                       <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -145,22 +145,22 @@ export default function Alertas() {
                 alertas.map((alerta) => (
                   <tr
                     key={alerta.id}
-                    className="hover:bg-red-50/40 dark:hover:bg-red-900/10 transition-colors"
+                    className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
                   >
-                    <td className="p-4 font-medium text-slate-900 dark:text-white">{alerta.id}</td>
-                    <td className="p-4 text-slate-700 dark:text-slate-300">{alerta.client}</td>
-                    <td className="p-4">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                    <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{alerta.id}</td>
+                    <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{alerta.client}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
                         {alerta.zone}
                       </span>
                     </td>
-                    <td className="p-4 text-sm text-slate-600 dark:text-slate-400">
+                    <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
                       <div>{alerta.dimensions}</div>
-                      <div className="text-slate-400 dark:text-slate-500">{alerta.weight}</div>
+                      <div className="text-xs text-slate-400 dark:text-slate-500">{alerta.weight}</div>
                     </td>
-                    <td className="p-4 text-sm text-slate-600 dark:text-slate-400">{alerta.fechaPedido}</td>
-                    <td className="p-4 text-right">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400 border border-red-200 dark:border-red-500/30">
+                    <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400 tabular-nums">{alerta.fechaPedido}</td>
+                    <td className="px-4 py-3 text-right">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400 tabular-nums">
                         <Clock size={11} />
                         {alerta.daysInStorage} días
                       </span>
@@ -173,7 +173,7 @@ export default function Alertas() {
         </div>
 
         {!loading && alertas.length > 0 && (
-          <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 text-sm text-slate-500 dark:text-slate-400">
+          <div className="px-4 py-3 border-t border-slate-200/80 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-950/30 text-xs text-slate-500 dark:text-slate-400">
             {alertas.length} palet{alertas.length !== 1 ? "s" : ""} con prioridad alta
           </div>
         )}
