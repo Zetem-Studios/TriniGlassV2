@@ -1757,12 +1757,12 @@ const renderSubzonesFromMap = () => {
                     const clavesProcesadas: string[] = [];
                     
                     paletsEnSubzona.forEach(pallet => {
-                      const claveAgrupacion = pallet.posicion || generarClaveAgrupacion(pallet);
+                      const claveAgrupacion = generarClaveAgrupacion(pallet);
                       
                       if (!clavesProcesadas.includes(claveAgrupacion)) {
                         // Primer palet con esta clave - buscar si hay más
                         const paletsMismaClave = paletsEnSubzona.filter(p => 
-                          (p.posicion || generarClaveAgrupacion(p)) === claveAgrupacion
+                          generarClaveAgrupacion(p) === claveAgrupacion
                         );
                         
                         if (paletsMismaClave.length > 1) {
@@ -1822,6 +1822,7 @@ const renderSubzonesFromMap = () => {
                       occupied: boolean;
                       pallet?: Block;
                       allPalets?: Block[];
+                      isGrouped?: boolean;
                     }, fila: number, columna: number) => {
                       if (tarjeta.occupied && tarjeta.pallet) {
                         const cardPosition = generarCodigoUbicacion(
@@ -1836,7 +1837,7 @@ const renderSubzonesFromMap = () => {
                           block.posicion === cardPosition
                         );
                         setSelectedBlock(tarjeta.pallet);
-                        setSelectedPalletGroup(palletsAtPosition.length > 0 ? palletsAtPosition : tarjeta.allPalets || [tarjeta.pallet]);
+                        setSelectedPalletGroup(tarjeta.isGrouped && tarjeta.allPalets ? tarjeta.allPalets : (palletsAtPosition.length > 0 ? palletsAtPosition : [tarjeta.pallet]));
                       }
                     };
                     
