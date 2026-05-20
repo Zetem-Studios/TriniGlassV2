@@ -1,7 +1,12 @@
 import { useState, useEffect } from "react";
-import { AlertTriangle, Clock, MapPin, User, Package } from "lucide-react";
+import { AlertTriangle, Clock, MapPin, User, Package, PackageX, CheckCircle2, Loader2, ChevronDown } from "lucide-react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
+import {
+  obtenerAlertasUbicacion,
+  resolverAlertaUbicacion,
+  type AlertaUbicacion,
+} from "../../services/AlertasService";
 
 interface PaletAlerta {
   id: string;
@@ -23,9 +28,20 @@ const parseFecha = (fecha: unknown): Date | null => {
   return isNaN(parsed) ? null : new Date(parsed);
 };
 
+const formatIsoDate = (iso: string): string => {
+  if (!iso) return "—";
+  const parsed = Date.parse(iso);
+  return isNaN(parsed) ? "—" : new Date(parsed).toLocaleDateString("es-ES");
+};
+
 export default function Alertas() {
   const [alertas, setAlertas] = useState<PaletAlerta[]>([]);
   const [loading, setLoading] = useState(true);
+  const [alertasUbicacion, setAlertasUbicacion] = useState<AlertaUbicacion[]>([]);
+  const [loadingUbicacion, setLoadingUbicacion] = useState(true);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [section1Open, setSection1Open] = useState(false);
+  const [section2Open, setSection2Open] = useState(false);
 
   useEffect(() => {
     const fetchAlertas = async () => {
@@ -68,116 +84,259 @@ export default function Alertas() {
       }
     };
 
+    const fetchAlertasUbicacion = async () => {
+      try {
+        setAlertasUbicacion(await obtenerAlertasUbicacion());
+      } catch (err) {
+        console.error("Error cargando alertas de ubicación:", err);
+      } finally {
+        setLoadingUbicacion(false);
+      }
+    };
+
     fetchAlertas();
+    fetchAlertasUbicacion();
   }, []);
 
+  const handleResolver = async (id: string) => {
+    setResolvingId(id);
+    try {
+      await resolverAlertaUbicacion(id);
+      setAlertasUbicacion((prev) => prev.filter((a) => a.id !== id));
+    } catch (err) {
+      console.error("Error resolviendo alerta:", err);
+    } finally {
+      setResolvingId(null);
+    }
+  };
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-8 animate-in fade-in duration-300">
       {/* HEADER */}
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Alertas del Sistema</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          Palets con más de 30 días en almacén que requieren atención.
+          Palets que requieren atención: tiempo excesivo en almacén y ubicaciones incorrectas.
         </p>
       </div>
 
-      {/* BANNER RESUMEN */}
-      {!loading && alertas.length > 0 && (
-        <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-500/5 border border-red-200/80 dark:border-red-500/20 rounded-xl">
-          <div className="p-2 bg-red-100 dark:bg-red-500/10 rounded-lg">
-            <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
-          </div>
-          <div>
-            <p className="font-medium text-sm text-red-700 dark:text-red-400">
-              {alertas.length} palet{alertas.length !== 1 ? "s" : ""} en estado crítico
-            </p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Llevan más de 30 días almacenados sin salida registrada.
-            </p>
-          </div>
-        </div>
-      )}
+      {/* SECCIÓN 1 — PALETS CON MÁS DE 30 DÍAS */}
+      <section className="space-y-4">
+        <button
+          onClick={() => setSection1Open((v) => !v)}
+          className="flex items-center gap-2 w-full text-left"
+        >
+          <Clock className="w-5 h-5 text-red-500 shrink-0" />
+          <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-white">
+            Palets con más de 30 días en almacén
+          </h2>
+          {!loading && (
+            <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400">
+              {alertas.length}
+            </span>
+          )}
+          <ChevronDown className={`w-5 h-5 text-slate-400 ml-auto transition-transform ${section1Open ? "rotate-180" : ""}`} />
+        </button>
 
-      {/* TABLA */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800/80 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-slate-200/80 dark:border-slate-800/80">
-                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  <div className="flex items-center gap-1.5"><Package size={12} /> ID / Código</div>
-                </th>
-                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  <div className="flex items-center gap-1.5"><User size={12} /> Cliente</div>
-                </th>
-                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  <div className="flex items-center gap-1.5"><MapPin size={12} /> Zona</div>
-                </th>
-                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Dimensiones / Peso</th>
-                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  <div className="flex items-center gap-1.5"><Clock size={12} /> Fecha entrada</div>
-                </th>
-                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 text-right">Días en almacén</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-              {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400">
-                    Cargando alertas...
-                  </td>
-                </tr>
-              ) : alertas.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-16 text-center">
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 rounded-full">
-                        <AlertTriangle size={20} className="text-emerald-600 dark:text-emerald-400" />
-                      </div>
-                      <p className="font-medium text-slate-900 dark:text-white">Sin alertas activas</p>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">
-                        Todos los palets llevan menos de 30 días en almacén.
-                      </p>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                alertas.map((alerta) => (
-                  <tr
-                    key={alerta.id}
-                    className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
-                  >
-                    <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{alerta.id}</td>
-                    <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{alerta.client}</td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                        {alerta.zone}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
-                      <div>{alerta.dimensions}</div>
-                      <div className="text-xs text-slate-400 dark:text-slate-500">{alerta.weight}</div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400 tabular-nums">{alerta.fechaPedido}</td>
-                    <td className="px-4 py-3 text-right">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400 tabular-nums">
-                        <Clock size={11} />
-                        {alerta.daysInStorage} días
-                      </span>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
+        {section1Open && (
+        <>
+        {/* BANNER RESUMEN */}
         {!loading && alertas.length > 0 && (
-          <div className="px-4 py-3 border-t border-slate-200/80 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-950/30 text-xs text-slate-500 dark:text-slate-400">
-            {alertas.length} palet{alertas.length !== 1 ? "s" : ""} con prioridad alta
+          <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-500/5 border border-red-200/80 dark:border-red-500/20 rounded-xl">
+            <div className="p-2 bg-red-100 dark:bg-red-500/10 rounded-lg">
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+            </div>
+            <div>
+              <p className="font-medium text-sm text-red-700 dark:text-red-400">
+                {alertas.length} palet{alertas.length !== 1 ? "s" : ""} en estado crítico
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Llevan más de 30 días almacenados sin salida registrada.
+              </p>
+            </div>
           </div>
         )}
-      </div>
+
+        {/* TABLA */}
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800/80 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-slate-200/80 dark:border-slate-800/80">
+                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    <div className="flex items-center gap-1.5"><Package size={12} /> ID / Código</div>
+                  </th>
+                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    <div className="flex items-center gap-1.5"><User size={12} /> Cliente</div>
+                  </th>
+                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    <div className="flex items-center gap-1.5"><MapPin size={12} /> Zona</div>
+                  </th>
+                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Dimensiones / Peso</th>
+                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    <div className="flex items-center gap-1.5"><Clock size={12} /> Fecha entrada</div>
+                  </th>
+                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 text-right">Días en almacén</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400">
+                      Cargando alertas...
+                    </td>
+                  </tr>
+                ) : alertas.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-16 text-center">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 rounded-full">
+                          <AlertTriangle size={20} className="text-emerald-600 dark:text-emerald-400" />
+                        </div>
+                        <p className="font-medium text-slate-900 dark:text-white">Sin alertas activas</p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                          Todos los palets llevan menos de 30 días en almacén.
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  alertas.map((alerta) => (
+                    <tr
+                      key={alerta.id}
+                      className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+                    >
+                      <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{alerta.id}</td>
+                      <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{alerta.client}</td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                          {alerta.zone}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                        <div>{alerta.dimensions}</div>
+                        <div className="text-xs text-slate-400 dark:text-slate-500">{alerta.weight}</div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400 tabular-nums">{alerta.fechaPedido}</td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400 tabular-nums">
+                          <Clock size={11} />
+                          {alerta.daysInStorage} días
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {!loading && alertas.length > 0 && (
+            <div className="px-4 py-3 border-t border-slate-200/80 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-950/30 text-xs text-slate-500 dark:text-slate-400">
+              {alertas.length} palet{alertas.length !== 1 ? "s" : ""} con prioridad alta
+            </div>
+          )}
+        </div>
+        </>
+        )}
+      </section>
+
+      {/* SECCIÓN 2 — PALETS MAL COLOCADOS */}
+      <section className="space-y-4">
+        <button
+          onClick={() => setSection2Open((v) => !v)}
+          className="flex items-center gap-2 w-full text-left"
+        >
+          <PackageX className="w-5 h-5 text-amber-500 shrink-0" />
+          <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-white">
+            Palets mal colocados
+          </h2>
+          {!loadingUbicacion && (
+            <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+              {alertasUbicacion.length}
+            </span>
+          )}
+          <ChevronDown className={`w-5 h-5 text-slate-400 ml-auto transition-transform ${section2Open ? "rotate-180" : ""}`} />
+        </button>
+
+        {section2Open && (
+        <>
+        <p className="text-sm text-slate-500 dark:text-slate-400 -mt-2">
+          Alertas enviadas desde el escáner cuando un palet no está en su ubicación.
+        </p>
+
+        {/* BANNER RESUMEN */}
+        {!loadingUbicacion && alertasUbicacion.length > 0 && (
+          <div className="flex items-center gap-3 p-4 bg-amber-50 dark:bg-amber-500/5 border border-amber-200/80 dark:border-amber-500/20 rounded-xl">
+            <div className="p-2 bg-amber-100 dark:bg-amber-500/10 rounded-lg">
+              <PackageX className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div>
+              <p className="font-medium text-sm text-amber-700 dark:text-amber-400">
+                {alertasUbicacion.length} palet{alertasUbicacion.length !== 1 ? "s" : ""} fuera de su ubicación
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Pulsa «Resolver» cuando el palet se haya movido a su sitio.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {loadingUbicacion ? (
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800/80 px-4 py-10 text-center text-slate-500 dark:text-slate-400">
+            Cargando alertas de ubicación...
+          </div>
+        ) : alertasUbicacion.length === 0 ? (
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800/80 px-4 py-16">
+            <div className="flex flex-col items-center gap-3">
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 rounded-full">
+                <CheckCircle2 size={20} className="text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <p className="font-medium text-slate-900 dark:text-white">Sin palets mal colocados</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Todos los palets escaneados están en su ubicación correcta.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {alertasUbicacion.map((alerta) => (
+              <div
+                key={alerta.id}
+                className="flex items-center gap-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800/80 p-4"
+              >
+                <div className="p-2 bg-amber-100 dark:bg-amber-500/10 rounded-lg shrink-0">
+                  <PackageX className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm text-slate-900 dark:text-white truncate">
+                    {alerta.codigoBarra || alerta.paletDocId}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                    {alerta.cliente} · Ubicación esperada:{" "}
+                    <span className="font-medium text-slate-700 dark:text-slate-300">{alerta.ubicacionEsperada}</span>
+                  </p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 truncate">
+                    Reportado por {alerta.reportadoPor} · {formatIsoDate(alerta.creadaEnIso)}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleResolver(alerta.id)}
+                  disabled={resolvingId === alerta.id}
+                  className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-500 active:scale-95 disabled:opacity-60 transition-all"
+                >
+                  {resolvingId === alerta.id
+                    ? <Loader2 size={14} className="animate-spin" />
+                    : <CheckCircle2 size={14} />}
+                  Resolver
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        </>
+        )}
+      </section>
     </div>
   );
 }
