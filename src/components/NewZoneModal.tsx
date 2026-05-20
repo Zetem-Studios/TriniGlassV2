@@ -76,13 +76,13 @@ export default function NewZoneModal({ isOpen, onClose, onZoneCreated }: NewZone
 
   return (
     <div className="fixed inset-0 bg-black/50 z-[999] flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl max-w-2xl w-full border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
         
         {/* Header */}
         <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center sticky top-0 bg-white dark:bg-slate-900">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-blue-500 rounded-2xl text-white shadow-lg"><Plus size={24} /></div>
-            <h2 className="text-xl font-black uppercase italic tracking-tighter text-slate-800 dark:text-white">Nueva Zona Almacén</h2>
+            <div className="p-3 bg-brand-500 rounded-2xl text-white shadow-lg"><Plus size={24} /></div>
+            <h2 className="text-xl font-semibold uppercase italic tracking-tight text-slate-800 dark:text-white">Nueva Zona Almacén</h2>
           </div>
           <button onClick={closeModal} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 hover:text-red-500 transition-colors">
             <X size={24} strokeWidth={3} />
@@ -102,22 +102,22 @@ export default function NewZoneModal({ isOpen, onClose, onZoneCreated }: NewZone
           {/* Grid de 2 columnas */}
           <div className="grid grid-cols-2 gap-6">
             <div className="flex flex-col gap-3 col-span-1">
-              <label className="text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">Nombre de la Zona</label>
+              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Nombre de la Zona</label>
               <input
                 type="text"
                 value={nombre}
                 onChange={(e) => { setNombre(e.target.value); setModalError(""); }}
                 placeholder="Ej: Expediciones"
-                className="w-full px-5 py-4 border border-slate-200 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-semibold"
+                className="w-full px-5 py-4 border border-slate-200 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all font-semibold"
               />
             </div>
 
             <div className="flex flex-col gap-3 col-span-1">
-              <label className="text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">Tipo de Zona</label>
+              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Tipo de Zona</label>
               <select
                 value={tipo}
                 onChange={(e) => setTipo(e.target.value as "produccion" | "almacenamiento" | "expedicion")}
-                className="w-full px-5 py-4 border border-slate-200 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-semibold"
+                className="w-full px-5 py-4 border border-slate-200 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all font-semibold"
               >
                 <option value="produccion">Producción</option>
                 <option value="almacenamiento">Almacenamiento</option>
@@ -126,14 +126,14 @@ export default function NewZoneModal({ isOpen, onClose, onZoneCreated }: NewZone
             </div>
 
             <div className="flex flex-col gap-3 col-span-1">
-              <label className="text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">Capacidad Máxima</label>
+              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Capacidad Máxima</label>
               <input
                 type="number"
                 value={capacidadMaxima}
                 onChange={(e) => { setCapacidadMaxima(e.target.value); setModalError(""); }}
                 placeholder="Ej: 50"
                 min="1"
-                className="w-full px-5 py-4 border border-slate-200 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-semibold"
+                className="w-full px-5 py-4 border border-slate-200 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all font-semibold"
               />
             </div>
           </div>
@@ -141,10 +141,10 @@ export default function NewZoneModal({ isOpen, onClose, onZoneCreated }: NewZone
           {/* Posiciones */}
           <div className="flex flex-col gap-3">
             <div className="flex justify-between items-center">
-              <label className="text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">Posiciones</label>
+              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Posiciones</label>
               <button
                 onClick={() => setPosiciones([...posiciones, String.fromCharCode(65 + posiciones.length)])}
-                className="text-xs font-bold text-blue-600 hover:text-blue-500 uppercase tracking-wider flex items-center gap-1"
+                className="text-xs font-bold text-brand-600 hover:text-brand-500 uppercase tracking-wider flex items-center gap-1"
               >
                 <Plus size={14} /> Agregar
               </button>
@@ -162,7 +162,7 @@ export default function NewZoneModal({ isOpen, onClose, onZoneCreated }: NewZone
                       setModalError("");
                     }}
                     maxLength={20}
-                    className="w-24 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500/50 font-bold text-center text-sm"
+                    className="w-24 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-brand-500/50 font-bold text-center text-sm"
                   />
                   {posiciones.length > 1 && (
                     <button
@@ -179,13 +179,13 @@ export default function NewZoneModal({ isOpen, onClose, onZoneCreated }: NewZone
 
           {/* Descripción */}
           <div className="flex flex-col gap-3">
-            <label className="text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">Descripción (opcional)</label>
+            <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Descripción (opcional)</label>
             <textarea
               value={descripcion}
               onChange={(e) => setDescripcion(e.target.value)}
               placeholder="Ej: Zona de salida de material terminado..."
               rows={2}
-              className="w-full px-5 py-3 border border-slate-200 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all resize-none"
+              className="w-full px-5 py-3 border border-slate-200 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all resize-none"
             />
           </div>
         </div>
@@ -195,14 +195,14 @@ export default function NewZoneModal({ isOpen, onClose, onZoneCreated }: NewZone
           <button
             onClick={closeModal}
             disabled={isCreatingZone}
-            className="flex-1 px-6 py-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-black rounded-2xl uppercase text-sm tracking-wider transition-colors disabled:opacity-50"
+            className="flex-1 px-6 py-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-2xl uppercase text-sm tracking-wider transition-colors disabled:opacity-50"
           >
             Cancelar
           </button>
           <button
             onClick={handleAddZone}
             disabled={isCreatingZone}
-            className="flex-1 px-6 py-4 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-400 text-white font-black rounded-2xl uppercase text-sm tracking-wider shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+            className="flex-1 px-6 py-4 bg-brand-600 hover:bg-brand-500 disabled:bg-brand-400 text-white font-semibold rounded-2xl uppercase text-sm tracking-wider shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
           >
             {isCreatingZone ? (
               <>

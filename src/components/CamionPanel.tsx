@@ -121,36 +121,37 @@ export default function CamionPanel({
   const isEdit = mode === "edit";
 
   return (
-    <div className="fixed top-0 right-0 h-full w-[460px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 z-50 shadow-[-20px_0_60px_rgba(0,0,0,0.2)] animate-in slide-in-from-right duration-300 flex flex-col overflow-hidden">
-      <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900 shrink-0">
+    <div className="fixed top-0 right-0 h-full w-[440px] bg-white dark:bg-slate-900 border-l border-slate-200/80 dark:border-slate-800/80 z-50 shadow-xl animate-in slide-in-from-right duration-200 flex flex-col overflow-hidden">
+      <div className="p-6 border-b border-slate-200/80 dark:border-slate-800/80 flex justify-between items-center bg-white dark:bg-slate-900 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-blue-500 rounded-2xl text-white shadow-lg">
-            <Truck size={24} />
+          <div className="p-2 bg-brand-50 dark:bg-brand-500/10 rounded-lg text-brand-600 dark:text-brand-400">
+            <Truck size={18} />
           </div>
-          <h2 className="text-xl font-black uppercase italic tracking-tighter text-slate-800 dark:text-white leading-none">
-            {isEdit ? "Editar Camión" : "Registrar Camión"}
+          <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-white">
+            {isEdit ? "Editar camión" : "Registrar camión"}
           </h2>
         </div>
         <button
           onClick={onClose}
-          className="p-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 hover:text-red-500 transition-colors"
+          aria-label="Cerrar"
+          className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
         >
-          <X size={28} strokeWidth={3} />
+          <X size={18} />
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-8 space-y-6">
+      <div className="flex-1 overflow-y-auto p-6 space-y-5">
         {error && (
-          <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-2xl">
-            <AlertCircle size={20} className="text-red-500 flex-shrink-0 mt-0.5" />
-            <p className="text-sm font-semibold text-red-700 dark:text-red-400">
+          <div className="flex items-start gap-3 p-3 bg-red-50 dark:bg-red-500/5 border border-red-200/80 dark:border-red-500/20 rounded-lg">
+            <AlertCircle size={16} className="text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+            <p className="text-sm font-medium text-red-700 dark:text-red-400">
               {error}
             </p>
           </div>
         )}
 
         <div className="flex flex-col gap-3">
-          <label className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest flex items-center gap-2">
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
             <Hash size={14} /> Matrícula
           </label>
           <input
@@ -162,7 +163,7 @@ export default function CamionPanel({
             }
             placeholder="Ej: 1234-ABC"
             maxLength={12}
-            className="w-full px-5 py-4 border border-slate-200 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-bold tracking-wider disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full px-3 py-2 border border-slate-200/80 dark:border-slate-700/80 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-all text-sm disabled:opacity-60 disabled:cursor-not-allowed"
           />
           {isEdit && (
             <p className="text-[11px] text-slate-500 -mt-1">
@@ -172,13 +173,13 @@ export default function CamionPanel({
         </div>
 
         <div className="flex flex-col gap-3">
-          <label className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest flex items-center gap-2">
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
             <Truck size={14} /> Tipo
           </label>
           <select
             value={form.tipo}
             onChange={(e) => setForm({ ...form, tipo: e.target.value })}
-            className="w-full px-5 py-4 border border-slate-200 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-semibold"
+            className="w-full px-3 py-2 border border-slate-200/80 dark:border-slate-700/80 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-all text-sm"
           >
             {TIPOS_CAMION.map((t) => (
               <option key={t} value={t}>
@@ -189,7 +190,7 @@ export default function CamionPanel({
         </div>
 
         <div className="flex flex-col gap-3">
-          <label className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest flex items-center gap-2">
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
             <User size={14} /> Conductor
           </label>
           <input
@@ -197,13 +198,13 @@ export default function CamionPanel({
             value={form.conductor}
             onChange={(e) => setForm({ ...form, conductor: e.target.value })}
             placeholder="Nombre y apellidos"
-            className="w-full px-5 py-4 border border-slate-200 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-semibold"
+            className="w-full px-3 py-2 border border-slate-200/80 dark:border-slate-700/80 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-all text-sm"
           />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div className="flex flex-col gap-3">
-            <label className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest flex items-center gap-2">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
               <Weight size={14} /> Peso (kg)
             </label>
             <input
@@ -214,11 +215,11 @@ export default function CamionPanel({
                 setForm({ ...form, capacidadPeso: e.target.value })
               }
               placeholder="Ej: 3500"
-              className="w-full px-5 py-4 border border-slate-200 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-semibold"
+              className="w-full px-3 py-2 border border-slate-200/80 dark:border-slate-700/80 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-all text-sm"
             />
           </div>
           <div className="flex flex-col gap-3">
-            <label className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest flex items-center gap-2">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
               <Box size={14} /> Volumen (m³)
             </label>
             <input
@@ -230,13 +231,13 @@ export default function CamionPanel({
                 setForm({ ...form, capacidadVolumen: e.target.value })
               }
               placeholder="Ej: 18"
-              className="w-full px-5 py-4 border border-slate-200 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-semibold"
+              className="w-full px-3 py-2 border border-slate-200/80 dark:border-slate-700/80 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-all text-sm"
             />
           </div>
         </div>
 
-        <div className="flex flex-col gap-3">
-          <label className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest">
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
             Estado
           </label>
           <div className="grid grid-cols-2 gap-2">
@@ -247,10 +248,10 @@ export default function CamionPanel({
                   key={opt.value}
                   type="button"
                   onClick={() => setForm({ ...form, estado: opt.value })}
-                  className={`px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border ${
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors border ${
                     active
-                      ? "bg-blue-600 text-white border-blue-600 shadow-lg"
-                      : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
+                      ? "bg-brand-600 text-white border-brand-600"
+                      : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200/80 dark:border-slate-700/80 hover:bg-slate-50 dark:hover:bg-slate-700"
                   }`}
                 >
                   {opt.label}
@@ -261,21 +262,21 @@ export default function CamionPanel({
         </div>
 
         {isEdit && (
-          <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+          <div className="pt-4 border-t border-slate-200/80 dark:border-slate-800/80">
             <button
               type="button"
               onClick={handleDelete}
               disabled={deleting}
-              className={`w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all ${
+              className={`w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors ${
                 confirmDelete
-                  ? "bg-red-600 hover:bg-red-500 text-white"
-                  : "bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/50"
+                  ? "bg-red-600 hover:bg-red-700 text-white"
+                  : "bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/15"
               } disabled:opacity-50`}
             >
               {deleting ? (
-                <Loader2 size={16} className="animate-spin" />
+                <Loader2 size={14} className="animate-spin" />
               ) : (
-                <Trash2 size={16} />
+                <Trash2 size={14} />
               )}
               {confirmDelete ? "Confirmar eliminación" : "Eliminar camión"}
             </button>
@@ -283,27 +284,27 @@ export default function CamionPanel({
         )}
       </div>
 
-      <div className="p-6 border-t border-slate-100 dark:border-slate-800 flex gap-3 bg-white dark:bg-slate-900 shrink-0">
+      <div className="p-6 border-t border-slate-200/80 dark:border-slate-800/80 flex gap-3 bg-white dark:bg-slate-900 shrink-0">
         <button
           onClick={onClose}
           disabled={saving}
-          className="flex-1 px-6 py-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-black rounded-2xl uppercase text-xs tracking-wider transition-colors disabled:opacity-50"
+          className="flex-1 px-4 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium border border-slate-200/80 dark:border-slate-700/80 rounded-lg text-sm transition-colors disabled:opacity-50"
         >
           Cancelar
         </button>
         <button
           onClick={handleSubmit}
           disabled={saving}
-          className="flex-1 px-6 py-4 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-400 text-white font-black rounded-2xl uppercase text-xs tracking-wider shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+          className="flex-1 px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:bg-brand-400 text-white font-medium rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
         >
           {saving ? (
             <>
-              <Loader2 size={16} className="animate-spin" />
+              <Loader2 size={14} className="animate-spin" />
               Guardando...
             </>
           ) : (
             <>
-              <Check size={16} strokeWidth={3} />
+              <Check size={14} />
               {isEdit ? "Guardar cambios" : "Registrar"}
             </>
           )}

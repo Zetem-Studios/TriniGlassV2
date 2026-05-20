@@ -126,7 +126,7 @@ const RuleEditor = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+        <div className="animate-spin w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full"></div>
         <span className="ml-4">Cargando reglas...</span>
       </div>
     );
@@ -196,7 +196,7 @@ const RuleEditor = () => {
             </button>
             <button
               onClick={() => setIsCreating(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              className="flex items-center gap-2 px-4 py-2 bg-brand-500 text-white rounded hover:bg-brand-600"
             >
               <Plus size={16} />
               Nueva Regla
@@ -209,7 +209,7 @@ const RuleEditor = () => {
       <div className="flex-1 overflow-y-auto scrollbar-vertical-custom p-6">
         {/* Formulario de nueva regla */}
         {isCreating && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="bg-brand-50 border border-brand-200 rounded-lg p-4 mb-6">
             <h3 className="font-semibold mb-4 text-black">Nueva Regla</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
@@ -474,7 +474,7 @@ const RuleEditor = () => {
                       </button>
                       <button
                         onClick={() => setEditingRule(rule)}
-                        className="p-1 text-blue-500 hover:text-blue-700"
+                        className="p-1 text-brand-500 hover:text-brand-700"
                       >
                         <Edit size={16} />
                       </button>
@@ -513,8 +513,8 @@ const RuleEditor = () => {
                 }}
                 className={`p-3 rounded-lg border-2 transition-all ${
                   applicationMode === 'all' 
-                    ? 'bg-blue-500 border-blue-500 text-white' 
-                    : 'bg-white border-gray-300 text-gray-700 hover:border-blue-300'
+                    ? 'bg-brand-500 border-brand-500 text-white' 
+                    : 'bg-white border-gray-300 text-gray-700 hover:border-brand-300'
                 }`}
               >
                 <div className="font-bold">Todos los palets</div>
@@ -564,7 +564,7 @@ const RuleEditor = () => {
                     alert(`❌ Error: ${(error as Error).message}`);
                   }
                 }}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-bold transition-colors"
+                className="flex-1 bg-brand-600 hover:bg-brand-700 text-white px-4 py-3 rounded-lg font-bold transition-colors"
               >
                 Aplicar a Todos los Palets
               </button>
@@ -597,7 +597,7 @@ const RuleEditor = () => {
                       alert(`❌ Error: ${(error as Error).message}`);
                     }
                   }}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-bold transition-colors"
+                  className="flex-1 bg-brand-600 hover:bg-brand-700 text-white px-4 py-3 rounded-lg font-bold transition-colors"
                 >
                   Aplicar a Todos
                 </button>

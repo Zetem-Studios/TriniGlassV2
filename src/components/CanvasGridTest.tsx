@@ -526,14 +526,14 @@ const CanvasGridTest: React.FC = () => {
     // Debug: mostrar información del target
     console.log('Click en canvas - Target:', target);
     console.log('Target classes:', target.className);
-    console.log('Target closest área:', target.closest('.border-blue-600'));
+    console.log('Target closest área:', target.closest('.border-brand-600'));
     console.log('Target closest sub-área:', target.closest('.border-red-600'));
     
     // Verificar si el click fue en el canvas o en una celda del grid
     const isCanvasClick = target === e.currentTarget || target.classList.contains('border-gray-200');
     
     // Solo deseleccionar si no se hizo click en un área o sub-área
-    if (isCanvasClick && !target.closest('.border-blue-600') && !target.closest('.border-red-600')) {
+    if (isCanvasClick && !target.closest('.border-brand-600') && !target.closest('.border-red-600')) {
       console.log('Deseleccionando todo');
       setSelectedArea(null);
       setSelectedSubArea(null);
@@ -1388,13 +1388,13 @@ const CanvasGridTest: React.FC = () => {
     <div className="min-h-screen relative flex flex-col bg-slate-50 dark:bg-[#0f172a] text-slate-900 dark:text-white transition-colors duration-300 font-sans">
       
       {/* CABECERA */}
-      <div className="flex justify-between items-center bg-white dark:bg-slate-900/50 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm shrink-0 m-6">
-        <h1 className="text-xl font-black flex items-center gap-2 italic uppercase tracking-tighter text-blue-600">
+      <div className="flex justify-between items-center bg-white dark:bg-slate-900/50 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm shrink-0 m-6">
+        <h1 className="text-xl font-semibold flex items-center gap-2 italic uppercase tracking-tight text-brand-600">
           <Zap size={24} /> Triniglass <span className="text-slate-400 font-light not-italic text-sm">| Editor de Mapas</span>
         </h1>
         <button
           onClick={() => setShowDesignsManager(true)}
-          className="bg-blue-600 hover:bg-blue-500 text-white px-7 py-3.5 rounded-2xl text-sm font-black flex items-center gap-2 shadow-lg active:scale-95 transition-all"
+          className="bg-brand-600 hover:bg-brand-500 text-white px-7 py-3.5 rounded-2xl text-sm font-semibold flex items-center gap-2 shadow-lg active:scale-95 transition-all"
         >
           <Layers size={20} /> Gestión de Diseños
         </button>
@@ -1406,20 +1406,20 @@ const CanvasGridTest: React.FC = () => {
         <div className="bg-white dark:bg-slate-800/60 rounded-[3rem] border border-slate-200 dark:border-slate-800 p-8 shadow-inner">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-slate-100 dark:bg-slate-900/40 rounded-2xl p-4">
-              <div className="text-[11px] uppercase text-slate-400 dark:text-slate-500 font-black mb-2 tracking-[0.4em]">RANGO ACTUAL</div>
-              <div className="text-lg font-black text-blue-600 dark:text-blue-400">
+              <div className="text-[11px] uppercase text-slate-400 dark:text-slate-500 font-semibold mb-2 tracking-[0.4em]">RANGO ACTUAL</div>
+              <div className="text-lg font-semibold text-brand-600 dark:text-brand-400">
                 {gridBounds.startCol}{gridBounds.startRow} - {gridBounds.endCol}{gridBounds.endRow}
               </div>
             </div>
             <div className="bg-slate-100 dark:bg-slate-900/40 rounded-2xl p-4">
-              <div className="text-[11px] uppercase text-slate-400 dark:text-slate-500 font-black mb-2 tracking-[0.4em]">DIMENSIONES</div>
-              <div className="text-lg font-black text-blue-600 dark:text-blue-400">
+              <div className="text-[11px] uppercase text-slate-400 dark:text-slate-500 font-semibold mb-2 tracking-[0.4em]">DIMENSIONES</div>
+              <div className="text-lg font-semibold text-brand-600 dark:text-brand-400">
                 {canvasSize.width}x{canvasSize.height}px
               </div>
             </div>
             <div className="bg-slate-100 dark:bg-slate-900/40 rounded-2xl p-4">
-              <div className="text-[11px] uppercase text-slate-400 dark:text-slate-500 font-black mb-2 tracking-[0.4em]">CELDA HOVER</div>
-              <div className="text-lg font-black text-blue-600 dark:text-blue-400">
+              <div className="text-[11px] uppercase text-slate-400 dark:text-slate-500 font-semibold mb-2 tracking-[0.4em]">CELDA HOVER</div>
+              <div className="text-lg font-semibold text-brand-600 dark:text-brand-400">
                 {hoveredCell || 'Ninguna'}
               </div>
             </div>
@@ -1428,7 +1428,7 @@ const CanvasGridTest: React.FC = () => {
           {/* SELECTORES DE ZONA Y SUBZONA */}
           <div className="flex flex-wrap gap-4 mt-6">
             <div className="flex-1 min-w-[200px]">
-              <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Zona</label>
+              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Zona</label>
               <select 
                 value={selectedZone}
                 onChange={(e) => {
@@ -1436,7 +1436,7 @@ const CanvasGridTest: React.FC = () => {
                   setSelectedZone(zoneId);
                   setSelectedSubzone(''); // Resetear subzona al cambiar zona
                 }}
-                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500/50"
+                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-brand-500/50"
               >
                 <option value="">Selecciona una zona...</option>
                 {zonesHierarchy.map(zone => (
@@ -1449,11 +1449,11 @@ const CanvasGridTest: React.FC = () => {
             
             {selectedZone && (
               <div className="flex-1 min-w-[200px]">
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Subzona</label>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Subzona</label>
                 <select 
                   value={selectedSubzone}
                   onChange={(e) => setSelectedSubzone(e.target.value)}
-                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500/50"
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-brand-500/50"
                 >
                   <option value="">Selecciona una subzona...</option>
                   {zonesHierarchy
@@ -1470,9 +1470,9 @@ const CanvasGridTest: React.FC = () => {
             <button
               onClick={addArea}
               disabled={!selectedZone}
-              className={`bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-2xl text-sm font-black flex items-center gap-2 shadow-lg active:scale-95 transition-all ${
+              className={`bg-brand-600 hover:bg-brand-500 text-white px-6 py-3 rounded-2xl text-sm font-semibold flex items-center gap-2 shadow-lg active:scale-95 transition-all ${
                 selectedZone 
-                  ? 'bg-blue-600 hover:bg-blue-500' 
+                  ? 'bg-brand-600 hover:bg-brand-500' 
                   : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
               }`}
             >
@@ -1481,7 +1481,7 @@ const CanvasGridTest: React.FC = () => {
             <button
               onClick={addSubArea}
               disabled={!selectedArea || !selectedSubzone}
-              className={`px-6 py-3 rounded-2xl text-sm font-black flex items-center gap-2 shadow-lg active:scale-95 transition-all ${
+              className={`px-6 py-3 rounded-2xl text-sm font-semibold flex items-center gap-2 shadow-lg active:scale-95 transition-all ${
                 selectedArea && selectedSubzone
                   ? 'bg-orange-500 hover:bg-orange-600 text-white' 
                   : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
@@ -1492,7 +1492,7 @@ const CanvasGridTest: React.FC = () => {
             <button
               onClick={deleteSelectedSubArea}
               disabled={!selectedSubArea}
-              className={`px-6 py-3 rounded-2xl text-sm font-black flex items-center gap-2 shadow-lg active:scale-95 transition-all ${
+              className={`px-6 py-3 rounded-2xl text-sm font-semibold flex items-center gap-2 shadow-lg active:scale-95 transition-all ${
                 selectedSubArea 
                   ? 'bg-red-500 hover:bg-red-600 text-white' 
                   : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
@@ -1503,7 +1503,7 @@ const CanvasGridTest: React.FC = () => {
             <button
               onClick={deleteSelectedArea}
               disabled={!selectedArea}
-              className={`px-6 py-3 rounded-2xl text-sm font-black flex items-center gap-2 shadow-lg active:scale-95 transition-all ${
+              className={`px-6 py-3 rounded-2xl text-sm font-semibold flex items-center gap-2 shadow-lg active:scale-95 transition-all ${
                 selectedArea 
                   ? 'bg-red-600 hover:bg-red-500 text-white' 
                   : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
@@ -1535,7 +1535,7 @@ const CanvasGridTest: React.FC = () => {
               {gridCells.map((cell) => (
                 <div
                   key={`${cell.col}${cell.row}`}
-                  className="absolute border border-slate-200 dark:border-slate-700 flex items-center justify-center text-xs cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 hover:border-blue-400 dark:hover:border-blue-600 transition-colors"
+                  className="absolute border border-slate-200 dark:border-slate-700 flex items-center justify-center text-xs cursor-pointer hover:bg-brand-100 dark:hover:bg-brand-900/30 hover:border-brand-400 dark:hover:border-brand-600 transition-colors"
                   style={{
                     left: `${cell.x}px`,
                     top: `${cell.y}px`,
@@ -1557,8 +1557,8 @@ const CanvasGridTest: React.FC = () => {
                   key={area.id}
                   className={`absolute border-2 cursor-move hover:bg-opacity-40 transition-colors ${
                     selectedArea === area.id 
-                      ? 'bg-blue-500 bg-opacity-50 border-blue-700 dark:border-blue-500' 
-                      : 'bg-blue-500 bg-opacity-30 border-blue-600 dark:border-blue-400'
+                      ? 'bg-brand-500 bg-opacity-50 border-brand-700 dark:border-brand-500' 
+                      : 'bg-brand-500 bg-opacity-30 border-brand-600 dark:border-brand-400'
                   }`}
                   style={{
                     left: `${area.x}px`,
@@ -1571,14 +1571,14 @@ const CanvasGridTest: React.FC = () => {
                 >
                   {/* Nombre del área o input de edición */}
                   {editingArea === area.id ? (
-                    <div className="absolute inset-0 flex items-center justify-center bg-blue-500 bg-opacity-90 dark:bg-blue-600/90">
+                    <div className="absolute inset-0 flex items-center justify-center bg-brand-500 bg-opacity-90 dark:bg-brand-600/90">
                       <input
                         type="text"
                         value={tempName}
                         onChange={handleNameChange}
                         onKeyDown={handleKeyDown}
                         onBlur={handleNameSave}
-                        className="px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-blue-700 dark:border-blue-500 rounded-xl text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/50"
+                        className="px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-brand-700 dark:border-brand-500 rounded-xl text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500/50"
                         placeholder="Nombre del área"
                         autoFocus
                       />
@@ -1662,22 +1662,22 @@ const CanvasGridTest: React.FC = () => {
                 
                   {/* Handles de redimensionamiento en las esquinas */}
                   <div 
-                    className="absolute w-2 h-2 bg-blue-800 dark:bg-blue-600 -top-1 -left-1 cursor-nw-resize"
+                    className="absolute w-2 h-2 bg-brand-800 dark:bg-brand-600 -top-1 -left-1 cursor-nw-resize"
                     title="Redimensionar esquina superior izquierda"
                     onMouseDown={(e) => handleResizeMouseDown(e, area.id, 'nw')}
                   />
                   <div 
-                    className="absolute w-2 h-2 bg-blue-800 dark:bg-blue-600 -top-1 -right-1 cursor-ne-resize"
+                    className="absolute w-2 h-2 bg-brand-800 dark:bg-brand-600 -top-1 -right-1 cursor-ne-resize"
                     title="Redimensionar esquina superior derecha"
                     onMouseDown={(e) => handleResizeMouseDown(e, area.id, 'ne')}
                   />
                   <div 
-                    className="absolute w-2 h-2 bg-blue-800 dark:bg-blue-600 -bottom-1 -left-1 cursor-sw-resize"
+                    className="absolute w-2 h-2 bg-brand-800 dark:bg-brand-600 -bottom-1 -left-1 cursor-sw-resize"
                     title="Redimensionar esquina inferior izquierda"
                     onMouseDown={(e) => handleResizeMouseDown(e, area.id, 'sw')}
                   />
                   <div 
-                    className="absolute w-2 h-2 bg-blue-800 dark:bg-blue-600 -bottom-1 -right-1 cursor-se-resize"
+                    className="absolute w-2 h-2 bg-brand-800 dark:bg-brand-600 -bottom-1 -right-1 cursor-se-resize"
                     title="Redimensionar esquina inferior derecha"
                     onMouseDown={(e) => handleResizeMouseDown(e, area.id, 'se')}
                   />
@@ -1688,11 +1688,11 @@ const CanvasGridTest: React.FC = () => {
         </div>
         
         {/* PANEL DE INFORMACIÓN */}
-        <div className="bg-blue-100 dark:bg-blue-900/30 border border-blue-400 dark:border-blue-700 px-6 py-4 rounded-2xl m-6">
-          <p className="font-bold text-blue-700 dark:text-blue-200 mb-2">
+        <div className="bg-brand-100 dark:bg-brand-900/30 border border-brand-400 dark:border-brand-700 px-6 py-4 rounded-2xl m-6">
+          <p className="font-bold text-brand-700 dark:text-brand-200 mb-2">
             📋 Guía Rápida del Editor
           </p>
-          <details className="text-sm text-blue-600 dark:text-blue-300 cursor-pointer">
+          <details className="text-sm text-brand-600 dark:text-brand-300 cursor-pointer">
             <summary>Ver instrucciones de uso</summary>
             <div className="mt-3 space-y-2 text-xs">
               <p>• <strong>Canvas:</strong> A-Z x 1-25 (650 celdas iniciales)</p>
