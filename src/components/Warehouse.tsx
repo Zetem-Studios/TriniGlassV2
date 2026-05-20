@@ -699,7 +699,12 @@ export default function Warehouse() {
           .map((doc, index) => {
             const data = doc.data() as any;
             return { ...data, id: doc.id, docIndex: index };
-          });
+          })
+          .filter(
+            (producto) =>
+              producto.estado_pedido !== "Entregado" &&
+              producto.estado_pedido !== "En tránsito"
+          );
 
         // Procesar productos de forma secuencial para evitar problemas con Promise
         const processedBlocks: Block[] = [];

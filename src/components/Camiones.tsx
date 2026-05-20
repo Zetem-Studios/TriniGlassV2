@@ -11,6 +11,7 @@ import {
   PackagePlus,
   Flag,
   CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Camion, EstadoCamion } from "../../services/CamionService";
@@ -22,6 +23,7 @@ import {
 import {
   subscribeToCargas,
   finalizarRuta,
+  cancelarRuta,
   type CargaCamion as CargaCamionType,
 } from "../../services/CargaCamionService";
 import { useAuth } from "../context/useAuth";
@@ -62,6 +64,10 @@ export default function Camiones() {
   const [marcandoDisponible, setMarcandoDisponible] = useState<string | null>(
     null
   );
+  const [cancelandoMatricula, setCancelandoMatricula] = useState<string | null>(
+    null
+  );
+  const [confirmCancelar, setConfirmCancelar] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = subscribeToCargas(setCargas);
@@ -167,6 +173,30 @@ export default function Camiones() {
       );
     } finally {
       setFinalizandoMatricula(null);
+    }
+  };
+
+  const handleCancelarRuta = async (matricula: string) => {
+    if (confirmCancelar !== matricula) {
+      setConfirmCancelar(matricula);
+      return;
+    }
+    setCancelandoMatricula(matricula);
+    setLoadError("");
+    try {
+      await cancelarRuta(matricula, user?.email ?? "anónimo");
+      setCamiones((prev) =>
+        prev.map((c) =>
+          c.matricula === matricula ? { ...c, estado: "disponible" } : c
+        )
+      );
+      setConfirmCancelar(null);
+    } catch (e: unknown) {
+      setLoadError(
+        e instanceof Error ? e.message : "No se pudo cancelar la ruta"
+      );
+    } finally {
+      setCancelandoMatricula(null);
     }
   };
 
@@ -352,35 +382,67 @@ export default function Camiones() {
                   const enConfirmacion = confirmFinalizar === c.matricula;
 
                   if (c.estado === "en_ruta") {
+                    const cancelando = cancelandoMatricula === c.matricula;
+                    const enConfirmacionCancelar = confirmCancelar === c.matricula;
                     return (
-                      <button
-                        type="button"
-                        disabled={finalizando}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleFinalizarRuta(c.matricula);
-                        }}
-                        onBlur={() => {
-                          if (enConfirmacion && !finalizando)
-                            setConfirmFinalizar(null);
-                        }}
-                        className={`mt-4 w-full px-3 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-60 ${
-                          enConfirmacion
-                            ? "bg-red-600 hover:bg-red-700 text-white"
-                            : "bg-amber-500 hover:bg-amber-600 text-white"
-                        }`}
-                      >
-                        {finalizando ? (
-                          <Loader2 size={14} className="animate-spin" />
-                        ) : (
-                          <Flag size={14} />
-                        )}
-                        {finalizando
-                          ? "Finalizando..."
-                          : enConfirmacion
-                            ? `Confirmar (${paletsCargados} palet${paletsCargados === 1 ? "" : "s"})`
-                            : "Finalizar ruta"}
-                      </button>
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          disabled={cancelando || finalizando}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCancelarRuta(c.matricula);
+                          }}
+                          onBlur={() => {
+                            if (enConfirmacionCancelar && !cancelando)
+                              setConfirmCancelar(null);
+                          }}
+                          className={`px-3 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all disabled:opacity-60 ${
+                            enConfirmacionCancelar
+                              ? "bg-red-600 hover:bg-red-500 text-white"
+                              : "bg-slate-500 hover:bg-slate-400 text-white"
+                          }`}
+                        >
+                          {cancelando ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <XCircle size={14} />
+                          )}
+                          {cancelando
+                            ? "Cancelando..."
+                            : enConfirmacionCancelar
+                              ? "Confirmar"
+                              : "Cancelar ruta"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={finalizando || cancelando}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleFinalizarRuta(c.matricula);
+                          }}
+                          onBlur={() => {
+                            if (enConfirmacion && !finalizando)
+                              setConfirmFinalizar(null);
+                          }}
+                          className={`px-3 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all disabled:opacity-60 ${
+                            enConfirmacion
+                              ? "bg-red-600 hover:bg-red-500 text-white"
+                              : "bg-amber-500 hover:bg-amber-400 text-white"
+                          }`}
+                        >
+                          {finalizando ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Flag size={14} />
+                          )}
+                          {finalizando
+                            ? "Finalizando..."
+                            : enConfirmacion
+                              ? `Confirmar (${paletsCargados})`
+                              : "Finalizar ruta"}
+                        </button>
+                      </div>
                     );
                   }
 

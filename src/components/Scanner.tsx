@@ -1,10 +1,16 @@
 import { useState } from "react";
 import QRScanner from "./QRScanner";
-import { verificarPalet } from "../../services/CargaCamionService";
+import {
+  verificarPalet,
+  entregarPaletEnRuta,
+  ESTADO_EN_TRANSITO,
+  ESTADO_ENTREGADO,
+} from "../../services/CargaCamionService";
+import { useAuth } from "../context/useAuth";
 
 import {
   CheckCircle2, AlertCircle, Smartphone, User, Clock, Truck, Search, Loader2,
-  ChevronLeft, Navigation, Box, Maximize2, ArrowRightLeft, LogOut
+  ChevronLeft, Navigation, Box, Maximize2, ArrowRightLeft, LogOut, PackageCheck
 } from "lucide-react";
 import { auth, db } from "../firebase";
 import { signOut } from "firebase/auth";
@@ -47,6 +53,7 @@ type PaletData = {
   medidas: string;
   diasStock: number;
   nombreAbreviado?: string;
+  estadoPedido: string;
 };
 
 type FoundPalet = {
@@ -70,6 +77,7 @@ type LookupDebug = {
 } | null;
 
 export default function MobileScanner({ showLogout = false }: MobileScannerProps = {}) {
+  const { user } = useAuth();
       // Copiado de Warehouse.tsx
       const parseFechaLineaPedido = (fecha: any) => {
         if (!fecha) return null;
@@ -214,6 +222,9 @@ export default function MobileScanner({ showLogout = false }: MobileScannerProps
   const [acceptingLocationDocId, setAcceptingLocationDocId] = useState<string | null>(null);
   const [acceptedLocationDocIds, setAcceptedLocationDocIds] = useState<string[]>([]);
   const [acceptLocationError, setAcceptLocationError] = useState<string | null>(null);
+  const [deliveringDocId, setDeliveringDocId] = useState<string | null>(null);
+  const [deliveredDocIds, setDeliveredDocIds] = useState<string[]>([]);
+  const [deliverError, setDeliverError] = useState<string | null>(null);
 
   const normalizeZoneId = (value: unknown) => String(value ?? "").trim().toLowerCase();
 
@@ -376,7 +387,8 @@ export default function MobileScanner({ showLogout = false }: MobileScannerProps
       camionRuta: palet.empresa || "Ruta por asignar",
       medidas: palet.dimensions || "---",
       diasStock: palet.daysInStorage || 0,
-      nombreAbreviado: palet.nombre_abreviado || palet.client || "---"
+      nombreAbreviado: palet.nombre_abreviado || palet.client || "---",
+      estadoPedido: String(palet.estadoPedido ?? palet.rawProducto?.estado_pedido ?? "")
     };
   };
 
@@ -425,6 +437,33 @@ export default function MobileScanner({ showLogout = false }: MobileScannerProps
       setAcceptLocationError("Error al aceptar la ubicacion sugerida.");
     } finally {
       setAcceptingLocationDocId(null);
+    }
+  };
+
+  const handleEntregarPalet = async (palet: PaletData) => {
+    setDeliveringDocId(palet.docId);
+    setDeliverError(null);
+    try {
+      await entregarPaletEnRuta({
+        paletDocId: palet.docId,
+        email: user?.email ?? "anónimo",
+      });
+      setDeliveredDocIds((prev) =>
+        prev.includes(palet.docId) ? prev : [...prev, palet.docId]
+      );
+      setPalets((currentPalets) =>
+        currentPalets.map((currentPalet) =>
+          currentPalet.docId === palet.docId
+            ? { ...currentPalet, estadoPedido: ESTADO_ENTREGADO }
+            : currentPalet
+        )
+      );
+    } catch (err) {
+      setDeliverError(
+        err instanceof Error ? err.message : "Error al marcar el palet como entregado."
+      );
+    } finally {
+      setDeliveringDocId(null);
     }
   };
 
@@ -683,7 +722,7 @@ export default function MobileScanner({ showLogout = false }: MobileScannerProps
               <>
                 <div className="mb-4 max-w-3xl mx-auto flex flex-col gap-2">
                   <button
-                    onClick={() => { setShowDetails(false); setResult(null); setPalets([]); setLastScan(null); setActiveTab('scan'); setVerifiedDocIds([]); setVerifyError(null); setAcceptedLocationDocIds([]); setAcceptLocationError(null); setExpandedIdx(null); }}
+                    onClick={() => { setShowDetails(false); setResult(null); setPalets([]); setLastScan(null); setActiveTab('scan'); setVerifiedDocIds([]); setVerifyError(null); setAcceptedLocationDocIds([]); setAcceptLocationError(null); setDeliveredDocIds([]); setDeliverError(null); setExpandedIdx(null); }}
                     className="w-full py-4 text-[10px] font-black uppercase tracking-widest rounded-xl bg-red-600 text-white shadow-lg hover:bg-red-700 transition-all mb-2"
                   >
                     Volver a escanear
@@ -814,9 +853,37 @@ export default function MobileScanner({ showLogout = false }: MobileScannerProps
                               <p className="text-xs font-semibold text-white leading-none">{palet.diasStock !== undefined ? `${palet.diasStock} Días` : "--- Días"}</p>
                             </div>
                           </div>
-                          {/* Botón Confirmar Verificación */}
-                          {verifiedDocIds.includes(palet.docId) ? (
-                            <div className="w-full py-4 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-center text-[10px] font-semibold uppercase tracking-wide">
+                          {/* Acción principal según el estado del palet */}
+                          {palet.estadoPedido === ESTADO_EN_TRANSITO ? (
+                            deliveredDocIds.includes(palet.docId) ? (
+                              <div className="w-full py-4 rounded-2xl bg-orange-500/20 border border-orange-500/40 text-orange-300 text-center text-[10px] font-black uppercase tracking-widest">
+                                📦 Palet entregado y descargado del camión
+                              </div>
+                            ) : (
+                              <>
+                                <div className="w-full py-3 rounded-2xl bg-orange-500/10 border border-orange-500/30 text-orange-300 text-center text-[10px] font-black uppercase tracking-widest">
+                                  🚚 Palet en tránsito
+                                </div>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleEntregarPalet(palet); }}
+                                  disabled={deliveringDocId === palet.docId}
+                                  className="w-full py-4 rounded-2xl bg-orange-600 text-white text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-orange-500 active:scale-95 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+                                >
+                                  {deliveringDocId === palet.docId
+                                    ? <><ArrowRightLeft size={14} className="animate-spin" /> Marcando entrega...</>
+                                    : <><PackageCheck size={14} /> Marcar como entregado</>}
+                                </button>
+                                {deliverError && deliveringDocId === null && (
+                                  <p className="text-xs text-red-400 text-center font-bold">{deliverError}</p>
+                                )}
+                              </>
+                            )
+                          ) : palet.estadoPedido === ESTADO_ENTREGADO ? (
+                            <div className="w-full py-4 rounded-2xl bg-slate-500/20 border border-slate-500/40 text-slate-300 text-center text-[10px] font-black uppercase tracking-widest">
+                              ✅ Palet ya entregado
+                            </div>
+                          ) : verifiedDocIds.includes(palet.docId) ? (
+                            <div className="w-full py-4 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-center text-[10px] font-black uppercase tracking-widest">
                               ✅ Verificado correctamente
                             </div>
                           ) : (
@@ -854,14 +921,14 @@ export default function MobileScanner({ showLogout = false }: MobileScannerProps
             ) : null}
             <div className="flex flex-col gap-2 w-full">
               <button
-                onClick={() => { setShowDetails(false); setResult(null); setPalets([]); setLastScan(null); setVerifiedDocIds([]); setVerifyError(null); setExpandedIdx(null); }}
-                className="w-full py-4 text-[9px] font-semibold uppercase text-slate-600 tracking-wide active:text-white border-b border-slate-700"
+                onClick={() => { setShowDetails(false); setResult(null); setPalets([]); setLastScan(null); setVerifiedDocIds([]); setVerifyError(null); setDeliveredDocIds([]); setDeliverError(null); setExpandedIdx(null); }}
+                className="w-full py-4 text-[9px] font-black uppercase text-slate-600 tracking-widest active:text-white border-b border-slate-700"
               >
                 Nuevo Escaneo
               </button>
               <button
-                onClick={() => { setShowDetails(false); setResult(null); setPalets([]); setLastScan(null); setActiveTab('scan'); setVerifiedDocIds([]); setVerifyError(null); setExpandedIdx(null); }}
-                className="w-full py-4 text-[9px] font-semibold uppercase text-brand-500 tracking-wide active:text-white"
+                onClick={() => { setShowDetails(false); setResult(null); setPalets([]); setLastScan(null); setActiveTab('scan'); setVerifiedDocIds([]); setVerifyError(null); setDeliveredDocIds([]); setDeliverError(null); setExpandedIdx(null); }}
+                className="w-full py-4 text-[9px] font-black uppercase text-blue-500 tracking-widest active:text-white"
               >
                 Volver a escanear
               </button>
