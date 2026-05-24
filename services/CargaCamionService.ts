@@ -161,6 +161,38 @@ export interface AsignarParams {
   email: string;
 }
 
+/** Añade varios palets en una sola transacción (1 lectura + 1 escritura).
+ *  Usar para carga automática en lugar del bucle de assignPaletToCamion. */
+export const assignPaletsBatch = async ({
+  matricula,
+  palets,
+  email,
+}: {
+  matricula: string;
+  palets: Omit<PaletAsignado, "asignadoPor" | "asignadoEnIso">[];
+  email: string;
+}): Promise<void> => {
+  const ref = doc(db, CARGAS, matricula);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const current: PaletAsignado[] = snap.exists()
+      ? ((snap.data().palets as PaletAsignado[]) ?? [])
+      : [];
+
+    const yaAsignados = new Set(current.map((p) => p.docId));
+    const timestamp = new Date().toISOString();
+    const nuevos: PaletAsignado[] = palets
+      .filter((p) => !yaAsignados.has(p.docId))
+      .map((p) => ({ ...p, asignadoPor: email || "anónimo", asignadoEnIso: timestamp }));
+
+    tx.set(
+      ref,
+      { matricula, palets: [...current, ...nuevos], actualizadoEn: serverTimestamp() },
+      { merge: true }
+    );
+  });
+};
+
 export const assignPaletToCamion = async ({
   matricula,
   palet,

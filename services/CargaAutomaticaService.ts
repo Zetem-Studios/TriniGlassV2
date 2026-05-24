@@ -35,10 +35,12 @@ export interface ResultadoCargaAutomatica {
 export const calcularCargaAutomatica = (
   pendientes: PaletPendiente[],
   camion: Camion,
-  cargaActual: CargaCamion | undefined
+  cargaActual: CargaCamion | undefined,
+  limitePeso = CAPACITY_LIMIT,
+  limiteVolumen = CAPACITY_LIMIT,
 ): ResultadoCargaAutomatica => {
-  const pesoMaximo = camion.capacidadPeso * CAPACITY_LIMIT;
-  const volumenMaximo = camion.capacidadVolumen * CAPACITY_LIMIT;
+  const pesoMaximo = camion.capacidadPeso * limitePeso;
+  const volumenMaximo = camion.capacidadVolumen * limiteVolumen;
 
   // Peso y volumen ya cargados en el camión
   const pesoBase = cargaActual?.palets.reduce((a, p) => a + (p.pesoKg ?? 0), 0) ?? 0;
