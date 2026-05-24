@@ -606,11 +606,6 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({ onClose }) => {
                             }`}>
                               {zona.tipo}
                             </span>
-                            <span className={`px-2 py-1 text-xs rounded-full ${
-                              zona.activa ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                            }`}>
-                              {zona.activa ? 'Activa' : 'Inactiva'}
-                            </span>
                           </div>
                           {zona.descripcion && (
                             <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{zona.descripcion}</p>
@@ -663,11 +658,6 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({ onClose }) => {
                                         className="w-4 h-4 rounded-full border border-gray-300"
                                         style={{ backgroundColor: '#6B7280' }} // Color gris oscuro fijo
                                       ></div>
-                                      <span className={`px-2 py-1 text-xs rounded-full ${
-                                        subzona.activa ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                                      }`}>
-                                        {subzona.activa ? 'Activa' : 'Inactiva'}
-                                      </span>
                                     </div>
                                     <div className="text-xs text-gray-500 dark:text-gray-400">
                                       <p>Posiciones: {subzona.posiciones.length > 0 ? subzona.posiciones.join(', ') : 'Sin asignar'}</p>

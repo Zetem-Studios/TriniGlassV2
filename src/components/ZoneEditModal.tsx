@@ -228,41 +228,13 @@ export const ZoneEditModal: React.FC<ZoneEditModalProps> = ({
                     <div>
                       <h4 className="font-medium text-brand-900 dark:text-brand-100 text-sm">Posiciones</h4>
                       <p className="text-xs text-brand-700 dark:text-brand-300 mt-1">
-                        Las posiciones se actualizan automáticamente desde el mapa cuando la zona o subzona está asignada a un área.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Información sobre color */}
-                <div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-800 rounded-lg p-3">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle size={16} className="text-gray-600 dark:text-gray-400 mt-0.5" />
-                    <div>
-                      <h4 className="font-medium text-gray-900 dark:text-gray-100 text-sm">Color</h4>
-                      <p className="text-xs text-gray-700 dark:text-gray-300 mt-1">
-                        Las subzonas tienen un color gris oscuro fijo.
+                        Las posiciones se actualizan automáticamente en la pantalla de representación del almacén
                       </p>
                     </div>
                   </div>
                 </div>
               </>
             )}
-
-            {/* Estado */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Estado
-              </label>
-              <select
-                value={formData.activa.toString()}
-                onChange={(e) => handleChange('activa', e.target.value === 'true')}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 dark:bg-slate-700 dark:text-white"
-              >
-                <option value="true">Activa</option>
-                <option value="false">Inactiva</option>
-              </select>
-            </div>
 
             {/* Botones */}
             <div className="flex gap-3 pt-4">

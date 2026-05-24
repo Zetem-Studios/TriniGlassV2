@@ -82,9 +82,12 @@ export const useRules = () => {
       const data = subzonaDoc.data();
       const subzoneName = data.nombre || data.name || subzonaDoc.id;
       const isDefaultSubzone = data.zonaId === zoneId && (subzoneName === selectedSubzoneName || subzonaDoc.id === selectedSubzoneName);
+      
       batch.update(subzonaDoc.ref, {
-        default: isDefaultSubzone
+        default: isDefaultSubzone,
+        capacidadMaxima: isDefaultSubzone ? null : data.capacidadMaxima
       });
+      
       if (isDefaultSubzone) {
         console.log('✅ Subzona marcada como default:', {
           id: subzonaDoc.id,
@@ -214,7 +217,13 @@ export const useRules = () => {
   // Restaurar posicionamiento de productos
   const restoreDefaults = async () => {
     try {
-      console.log('🔄 Limpiando posicionamiento de productos...');
+      console.log('🔄 Colocando todos los palets en la subzona por defecto...');
+      
+      const defaultRule = rules.find(rule => rule.esDefecto);
+      const defaultZone = defaultRule?.acciones.zona || 'expediciones';
+      const defaultSubzone = defaultRule?.acciones.subzona || 'H';
+      
+      console.log(`📍 Zona por defecto: ${defaultZone}, Subzona por defecto: ${defaultSubzone}`);
       
       const productosCollection = collection(db, 'productos');
       const snapshot = await getDocs(productosCollection);
@@ -222,16 +231,17 @@ export const useRules = () => {
 
       snapshot.docs.forEach((docSnap) => {
         batch.update(docSnap.ref, {
-          zona: '',
-          subzona: '',
+          zona: defaultZone,
+          subzona: defaultSubzone,
           posicion: ''
         });
       });
       
       await batch.commit();
+      console.log(`✅ ${snapshot.size} productos colocados en la subzona por defecto`);
     } catch (err) {
-      console.error('Error limpiando posicionamiento de productos:', err);
-      throw new Error('Error al limpiar el posicionamiento de productos');
+      console.error('Error colocando productos en subzona por defecto:', err);
+      throw new Error('Error al colocar productos en subzona por defecto');
     }
   };
 

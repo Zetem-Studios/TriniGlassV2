@@ -16,17 +16,12 @@ const RuleEditor = () => {
     reorderRules, 
     restoreDefaults,
     applyRulesToAll,
-    applyRulesToNew,
-    getApplicationMode,
-    setApplicationMode,
     zones,
     getSubzonesForZone
   } = useRules();
   const [editingRule, setEditingRule] = useState<ReglaAsignacion | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-  const [applicationMode, setLocalApplicationMode] = useState<'all' | 'new_only' | 'both'>(getApplicationMode());
   const [isApplyingAllRules, setIsApplyingAllRules] = useState(false);
-  const [isApplyingNewRules, setIsApplyingNewRules] = useState(false);
   const [productFields, setProductFields] = useState<string[]>([]);
   const [productFieldTypes, setProductFieldTypes] = useState<Record<string, string>>({});
   const conditionFieldOptions = Array.from(
@@ -334,19 +329,6 @@ const RuleEditor = () => {
     }
   };
 
-  const handleApplyRulesToNew = () => {
-    if (isApplyingNewRules) return;
-
-    setIsApplyingNewRules(true);
-    try {
-      const result = applyRulesToNew();
-      alert(`✅ ${result.message}`);
-    } catch (error) {
-      alert(`❌ Error: ${(error as Error).message}`);
-    } finally {
-      setIsApplyingNewRules(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -377,7 +359,7 @@ const RuleEditor = () => {
               className="flex items-center gap-2 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
             >
               <RotateCcw size={16} />
-              Restaurar posicionamiento
+              Eliminar posicionamiento
             </button>
             <button
               onClick={() => setIsCreating(true)}
@@ -719,12 +701,12 @@ const RuleEditor = () => {
                       
                       <div className="text-sm text-gray-600">
                         <strong>Condiciones:</strong>
-                        <div className="mt-1 space-y-1">
+                        <div className="mt-1 space-y-1 max-w-lg">
                           {rule.esDefecto ? (
-                            <div>Posicionamiento de los palets que no tienen reglas de colocación asignadas, su zona o subzona asignada ya está llena o ha sido borrada</div>
+                            <div className="truncate">Posicionamiento de los palets que no tienen reglas de colocación asignadas, su zona o subzona asignada ya está llena o ha sido borrada</div>
                           ) : (
                             rule.condiciones.map((condition, conditionIndex) => (
-                              <div key={conditionIndex}>
+                              <div key={conditionIndex} className="truncate">
                                 {conditionIndex + 1}. {condition.campo} {condition.operador} "{condition.valor}"
                               </div>
                             ))
@@ -784,123 +766,21 @@ const RuleEditor = () => {
         <div className="mt-8 p-6 bg-gray-50 rounded-xl border border-gray-200">
           <h3 className="text-lg font-bold mb-4 text-gray-800">Aplicación de Reglas</h3>
           
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Modo de aplicación:</label>
-            <div className="grid grid-cols-3 gap-3">
-              <button
-                onClick={() => {
-                  setLocalApplicationMode('all');
-                  setApplicationMode('all');
-                }}
-                className={`p-3 rounded-lg border-2 transition-all ${
-                  applicationMode === 'all' 
-                    ? 'bg-brand-500 border-brand-500 text-white' 
-                    : 'bg-white border-gray-300 text-gray-700 hover:border-brand-300'
-                }`}
-              >
-                <div className="font-bold">Todos los palets</div>
-                <div className="text-xs mt-1">Reposiciona todos los productos existentes</div>
-              </button>
-              
-              <button
-                onClick={() => {
-                  setLocalApplicationMode('new_only');
-                  setApplicationMode('new_only');
-                }}
-                className={`p-3 rounded-lg border-2 transition-all ${
-                  applicationMode === 'new_only' 
-                    ? 'bg-green-500 border-green-500 text-white' 
-                    : 'bg-white border-gray-300 text-gray-700 hover:border-green-300'
-                }`}
-              >
-                <div className="font-bold">Solo nuevos palets</div>
-                <div className="text-xs mt-1">Se aplica solo a productos nuevos</div>
-              </button>
-              
-              <button
-                onClick={() => {
-                  setLocalApplicationMode('both');
-                  setApplicationMode('both');
-                }}
-                className={`p-3 rounded-lg border-2 transition-all ${
-                  applicationMode === 'both' 
-                    ? 'bg-purple-500 border-purple-500 text-white' 
-                    : 'bg-white border-gray-300 text-gray-700 hover:border-purple-300'
-                }`}
-              >
-                <div className="font-bold">Ambos modos</div>
-                <div className="text-xs mt-1">Aplica a todos y mantiene para nuevos</div>
-              </button>
-            </div>
-          </div>
-          
           <div className="flex gap-3">
-            {applicationMode === 'all' && (
-              <button
-                onClick={handleApplyRulesToAll}
-                disabled={isApplyingAllRules}
-                className={`flex-1 px-4 py-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2 ${
-                  isApplyingAllRules
-                    ? 'bg-gray-400 cursor-not-allowed text-white'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
-                }`}
-              >
-                {isApplyingAllRules && (
-                  <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
-                )}
-                {isApplyingAllRules ? 'Aplicando reglas...' : 'Aplicar a Todos los Palets'}
-              </button>
-            )}
-            
-            {applicationMode === 'new_only' && (
-              <button
-                onClick={handleApplyRulesToNew}
-                disabled={isApplyingNewRules}
-                className={`flex-1 px-4 py-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2 ${
-                  isApplyingNewRules
-                    ? 'bg-gray-400 cursor-not-allowed text-white'
-                    : 'bg-green-600 hover:bg-green-700 text-white'
-                }`}
-              >
-                {isApplyingNewRules && (
-                  <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
-                )}
-                {isApplyingNewRules ? 'Activando...' : 'Activar Modo Nuevos Palets'}
-              </button>
-            )}
-            
-            {applicationMode === 'both' && (
-              <div className="flex gap-3 flex-1">
-                <button
-                  onClick={handleApplyRulesToAll}
-                  disabled={isApplyingAllRules}
-                  className={`flex-1 px-4 py-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2 ${
-                    isApplyingAllRules
-                      ? 'bg-gray-400 cursor-not-allowed text-white'
-                      : 'bg-blue-600 hover:bg-blue-700 text-white'
-                  }`}
-                >
-                  {isApplyingAllRules && (
-                    <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
-                  )}
-                  {isApplyingAllRules ? 'Aplicando...' : 'Aplicar a Todos'}
-                </button>
-                <button
-                  onClick={handleApplyRulesToNew}
-                  disabled={isApplyingNewRules}
-                  className={`flex-1 px-4 py-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2 ${
-                    isApplyingNewRules
-                      ? 'bg-gray-400 cursor-not-allowed text-white'
-                      : 'bg-green-600 hover:bg-green-700 text-white'
-                  }`}
-                >
-                  {isApplyingNewRules && (
-                    <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
-                  )}
-                  {isApplyingNewRules ? 'Activando...' : 'Activar para Nuevos'}
-                </button>
-              </div>
-            )}
+            <button
+              onClick={handleApplyRulesToAll}
+              disabled={isApplyingAllRules}
+              className={`flex-1 px-4 py-3 rounded-lg font-bold transition-colors flex items-center justify-center gap-2 ${
+                isApplyingAllRules
+                  ? 'bg-gray-400 cursor-not-allowed text-white'
+                  : 'bg-brand-600 hover:bg-brand-700 text-white'
+              }`}
+            >
+              {isApplyingAllRules && (
+                <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
+              )}
+              {isApplyingAllRules ? 'Aplicando reglas...' : 'Aplicar a Todos los Palets'}
+            </button>
           </div>
         </div>
       </div>
