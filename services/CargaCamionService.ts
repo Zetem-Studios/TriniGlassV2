@@ -636,6 +636,9 @@ export const finalizarRuta = async (
       entregadoEn: serverTimestamp(),
       entregadoPorMatricula: matricula,
       rutaId: rutaActivaId ?? null,
+      zona: null,
+      subzona: null,
+      posicion: null,
     });
 
     batch.set(doc(db, PALETS_ENTREGADOS, p.docId), {
