@@ -393,15 +393,60 @@ const CanvasGridTest: React.FC = () => {
     };
   };
 
-  // Añadir área en posición A1
+  // Encontrar la próxima posición disponible en el grid para un área
+  const findNextAvailableGridPosition = () => {
+    const columns = generateColumnLetters(gridBounds.startCol, gridBounds.endCol);
+    const maxCols = columns.length;
+    const maxRows = gridBounds.endRow - gridBounds.startRow + 1;
+    
+    // Crear un mapa de celdas ocupadas por todas las áreas
+    const occupiedCells = new Set();
+    
+    areas.forEach(area => {
+      const areaCol = columns.indexOf(area.col);
+      const areaRow = area.row - gridBounds.startRow;
+      const areaWidth = Math.ceil(area.width / gridSize.cellWidth);
+      const areaHeight = Math.ceil(area.height / gridSize.cellHeight);
+      
+      // Marcar todas las celdas ocupadas por esta área
+      for (let r = areaRow; r < areaRow + areaHeight; r++) {
+        for (let c = areaCol; c < areaCol + areaWidth; c++) {
+          occupiedCells.add(`${r},${c}`);
+        }
+      }
+    });
+    
+    // Buscar la primera celda disponible
+    for (let row = 0; row < maxRows; row++) {
+      for (let col = 0; col < maxCols; col++) {
+        if (!occupiedCells.has(`${row},${col}`)) {
+          return { row, col };
+        }
+      }
+    }
+    
+    return null; // No hay espacio disponible
+  };
+
+  // Añadir área en la primera posición libre del grid
   const addArea = () => {
+    const nextPos = findNextAvailableGridPosition();
+    if (!nextPos) {
+      console.log('El grid está completamente lleno, no se pueden añadir más áreas');
+      return;
+    }
+    
+    const columns = generateColumnLetters(gridBounds.startCol, gridBounds.endCol);
+    const gridCol = columns[nextPos.col];
+    const gridRow = gridBounds.startRow + nextPos.row;
+    
     const newArea: Area = {
       id: `area-${Date.now()}`,
       name: selectedZone ? (zonesHierarchy.find(z => z.id === selectedZone)?.nombre || '') : '', // Nombre de la zona seleccionada
-      col: 'A',
-      row: 1,
-      x: 0,
-      y: 0,
+      col: gridCol,
+      row: gridRow,
+      x: nextPos.col * gridSize.cellWidth,
+      y: nextPos.row * gridSize.cellHeight,
       width: gridSize.cellWidth,
       height: gridSize.cellHeight,
       subAreas: [],
