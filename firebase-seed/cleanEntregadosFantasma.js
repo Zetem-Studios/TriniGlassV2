@@ -1,73 +1,71 @@
 const admin = require("firebase-admin");
 const serviceAccount = require("./serviceAccountKey.json");
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
-
+admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 const db = admin.firestore();
 
-const DRY_RUN = process.argv.includes("--apply") ? false : true;
-const BATCH_LIMIT = 450;
+const DRY_RUN = !process.argv.includes("--apply");
+const PAGE_SIZE = 200; // 200 docs * 2 ops = 400 ops por batch (límite Firestore: 500)
+const MAX_DOCS = Number(process.env.MAX_DOCS ?? 1000);
 
 async function main() {
-  console.log(DRY_RUN ? "Modo DRY-RUN (no escribe)." : "Modo APPLY (escribe cambios).");
-
-  const snap = await db
-    .collection("productos")
-    .where("estado_pedido", "==", "Entregado")
-    .get();
-
-  const fantasmas = snap.docs.filter((d) => {
-    const x = d.data();
-    return x.zona != null || x.subzona != null || x.posicion != null;
-  });
-
-  console.log(`Entregados totales: ${snap.size}`);
-  console.log(`Con posición fantasma: ${fantasmas.length}`);
-
-  if (fantasmas.length === 0) {
-    console.log("Nada que limpiar.");
-    return;
-  }
-
-  console.table(
-    fantasmas.slice(0, 20).map((d) => {
-      const x = d.data();
-      return {
-        id: d.id,
-        zona: x.zona ?? null,
-        subzona: x.subzona ?? null,
-        posicion: x.posicion ?? null,
-      };
-    })
+  console.log(
+    DRY_RUN ? "Modo DRY-RUN (no escribe)." : "Modo APPLY (mueve productos -> palets_entregados)."
   );
-  if (fantasmas.length > 20) {
-    console.log(`... y ${fantasmas.length - 20} más`);
-  }
+  console.log(`Tope por ejecución: ${MAX_DOCS} docs.`);
 
-  if (DRY_RUN) {
-    console.log("\nDRY-RUN: no se ha modificado nada. Re-ejecuta con --apply para limpiar.");
-    return;
-  }
+  let lastDoc = null;
+  let leidos = 0;
+  let movidos = 0;
 
-  let updated = 0;
-  for (let i = 0; i < fantasmas.length; i += BATCH_LIMIT) {
-    const chunk = fantasmas.slice(i, i + BATCH_LIMIT);
-    const batch = db.batch();
-    chunk.forEach((d) => {
-      batch.update(d.ref, {
-        zona: null,
-        subzona: null,
-        posicion: null,
+  while (leidos < MAX_DOCS) {
+    let q = db
+      .collection("productos")
+      .where("estado_pedido", "==", "Entregado")
+      .orderBy("__name__")
+      .limit(Math.min(PAGE_SIZE, MAX_DOCS - leidos));
+    if (lastDoc) q = q.startAfter(lastDoc);
+
+    const snap = await q.get();
+    if (snap.empty) break;
+    leidos += snap.size;
+
+    if (DRY_RUN) {
+      console.log(`Página leída: ${snap.size} docs (acumulado: ${leidos})`);
+      snap.docs.slice(0, 5).forEach((d) => {
+        const x = d.data();
+        console.log(`  - ${d.id} | cliente: ${x.apellido_cliente ?? "?"} | posicion: ${x.posicion ?? "-"}`);
       });
-    });
-    await batch.commit();
-    updated += chunk.length;
-    console.log(`Lote ${i / BATCH_LIMIT + 1}: ${chunk.length} actualizados (acumulado: ${updated}).`);
+      if (snap.size > 5) console.log(`  ... y ${snap.size - 5} más en esta página`);
+    } else {
+      const batch = db.batch();
+      snap.docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        const archiveRef = db.collection("palets_entregados").doc(docSnap.id);
+        batch.set(
+          archiveRef,
+          {
+            ...data,
+            movidoDesdeProductosEn: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+        batch.delete(docSnap.ref);
+      });
+      await batch.commit();
+      movidos += snap.size;
+      console.log(`Lote: ${snap.size} movidos (total: ${movidos})`);
+    }
+
+    lastDoc = snap.docs[snap.docs.length - 1];
+    if (snap.size < PAGE_SIZE) break;
   }
 
-  console.log(`\nLimpieza completada. Total actualizados: ${updated}`);
+  console.log(`\nFin. Leídos: ${leidos}, movidos: ${DRY_RUN ? 0 : movidos}.`);
+  if (DRY_RUN) {
+    console.log("Re-ejecuta con --apply para mover de verdad.");
+    console.log("Tope ajustable con MAX_DOCS=500 node cleanEntregadosFantasma.js --apply");
+  }
 }
 
 main()
