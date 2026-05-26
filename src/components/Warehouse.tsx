@@ -1287,8 +1287,6 @@ const renderSubzonesFromMap = () => {
         <div className="bg-brand-100 dark:bg-brand-900/30 border border-brand-400 dark:border-brand-700 px-6 py-4 rounded-2xl m-6">
           <p className="font-bold text-brand-700 dark:text-brand-200">
             ✅ {blocks.length} productos cargados · {blocks.filter(block => block.zoneId && block.area).length} productos posicionados
-            {TEST_MODE && <span className="ml-2 text-xs bg-yellow-400 text-yellow-900 px-2 py-1 rounded-full font-bold">MODO TEST</span>}
-            {!TEST_MODE && <span className="ml-2 text-xs bg-green-400 text-green-900 px-2 py-1 rounded-full font-bold">MODO ENTREGA</span>}
           </p>
         </div>
       )}
