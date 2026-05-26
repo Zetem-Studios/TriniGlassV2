@@ -7,6 +7,27 @@ import type { Camion } from "./CamionService";
 export const CAPACITY_LIMIT = 0.90;
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Subconjunto mínimo del diseño de almacén necesario para calcular proximidad.
+ * Compatible estructuralmente con MapDesign de mapDesignsService.
+ */
+export interface MapaDiseno {
+  areas: {
+    name: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    subAreas: {
+      name: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }[];
+  }[];
+}
+
 export interface ResultadoCargaAutomatica {
   seleccionados: PaletPendiente[];
   pesoTotal: number;
@@ -20,17 +41,21 @@ export interface ResultadoCargaAutomatica {
 /**
  * Algoritmo de carga automática.
  *
- * Estrategia (Triple técnico):
+ * Estrategia:
  *  1. Urgencia: los palets más antiguos (fecha_linea_pedido ASC) tienen prioridad.
  *     `subscribeToPalets` los devuelve ordenados DESC, así que los revertimos.
- *  2. Optimización de ruta: los palets del mismo cliente se agrupan juntos,
- *     manteniendo el orden de urgencia del primer palet del grupo.
- *  3. Relleno greedy: se añaden grupos completos de cliente hasta alcanzar
- *     CAPACITY_LIMIT del peso máximo del camión.
+ *  2. Proximidad a Expediciones (opcional): si se proporciona el diseño del almacén
+ *     se calcula la distancia euclidiana de la subzona de cada palet al área
+ *     "Expediciones", combinando urgencia (70%) y proximidad (30%).
+ *  3. Optimización de ruta: los palets del mismo cliente se agrupan juntos,
+ *     manteniendo el orden de score del primer palet del grupo.
+ *  4. Relleno greedy: se añaden grupos completos de cliente hasta alcanzar
+ *     los límites configurados de peso y volumen.
  *
  * @param pendientes  Palets disponibles (ya filtrados: sin asignar, estado visible).
  * @param camion      Camión destino con sus capacidades.
  * @param cargaActual Estado actual de la carga del camión (puede estar vacío).
+ * @param mapaDiseno  Diseño activo del almacén para calcular proximidad (opcional).
  */
 export const calcularCargaAutomatica = (
   pendientes: PaletPendiente[],
@@ -38,6 +63,7 @@ export const calcularCargaAutomatica = (
   cargaActual: CargaCamion | undefined,
   limitePeso = CAPACITY_LIMIT,
   limiteVolumen = CAPACITY_LIMIT,
+  mapaDiseno?: MapaDiseno | null,
 ): ResultadoCargaAutomatica => {
   const pesoMaximo = camion.capacidadPeso * limitePeso;
   const volumenMaximo = camion.capacidadVolumen * limiteVolumen;
@@ -50,8 +76,64 @@ export const calcularCargaAutomatica = (
   const yaAsignados = new Set(cargaActual?.palets.map((p) => p.docId) ?? []);
   const candidatos = pendientes.filter((p) => !yaAsignados.has(p.docId));
 
-  // Paso 1: Invertir → más urgentes (fecha más antigua) primero
-  const porUrgencia = [...candidatos].reverse();
+  // Paso 1: Ordenar por score combinado urgencia (70%) + proximidad a Expediciones (30%)
+  // Si no hay mapa disponible, se usa únicamente el orden de urgencia (comportamiento original).
+  let expedicionesCenter: { x: number; y: number } | null = null;
+  const subzonaCoords = new Map<string, { x: number; y: number }>();
+
+  if (mapaDiseno) {
+    const expArea = mapaDiseno.areas.find((a) =>
+      a.name.toLowerCase().includes("expediciones")
+    );
+    if (expArea) {
+      expedicionesCenter = {
+        x: expArea.x + expArea.width / 2,
+        y: expArea.y + expArea.height / 2,
+      };
+    }
+    for (const area of mapaDiseno.areas) {
+      for (const sub of area.subAreas) {
+        subzonaCoords.set(sub.name, {
+          x: sub.x + sub.width / 2,
+          y: sub.y + sub.height / 2,
+        });
+      }
+    }
+  }
+
+  const getDistancia = (palet: PaletPendiente): number => {
+    if (!expedicionesCenter || !palet.subzona) return Infinity;
+    const coords = subzonaCoords.get(palet.subzona);
+    if (!coords) return Infinity;
+    const dx = coords.x - expedicionesCenter.x;
+    const dy = coords.y - expedicionesCenter.y;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  const n = candidatos.length;
+  let porUrgencia: PaletPendiente[];
+
+  if (expedicionesCenter) {
+    const distancias = new Map<string, number>(
+      candidatos.map((p) => [p.docId, getDistancia(p)])
+    );
+    const dists = [...distancias.values()].filter(isFinite);
+    const maxDist = dists.length > 0 ? Math.max(...dists) : 1;
+
+    // candidatos viene DESC (más reciente = índice 0 = menos urgente)
+    // urgencia: i / (n-1) → 0 para el más reciente, 1 para el más antiguo
+    porUrgencia = [...candidatos]
+      .map((p, i) => {
+        const dist = distancias.get(p.docId) ?? Infinity;
+        const urgencia = i / Math.max(n - 1, 1);
+        const prox = 1 - (isFinite(dist) ? dist / maxDist : 1);
+        return { palet: p, score: urgencia * 0.7 + prox * 0.3 };
+      })
+      .sort((a, b) => b.score - a.score)
+      .map(({ palet }) => palet);
+  } else {
+    porUrgencia = [...candidatos].reverse();
+  }
 
   // Paso 2: Agrupar por cliente manteniendo el orden de urgencia del grupo
   const gruposPorCliente = new Map<string, PaletPendiente[]>();

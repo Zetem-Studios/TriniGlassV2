@@ -40,8 +40,10 @@ import { getCamiones, type Camion } from "../../services/CamionService";
 import {
   calcularCargaAutomatica,
   CAPACITY_LIMIT,
+  type MapaDiseno,
   type ResultadoCargaAutomatica,
 } from "../../services/CargaAutomaticaService";
+import { mapDesignsService, type MapDesign } from "../services/mapDesignsService";
 import { useAuth } from "../context/useAuth";
 
 const formatNumber = (n: number, decimals = 0) =>
@@ -220,6 +222,7 @@ export default function CargaCamion() {
   const [deshaciendo, setDeshaciendo] = useState(false);
   const [limitePesoAuto, setLimitePesoAuto] = useState(100);
   const [limiteVolumenAuto, setLimiteVolumenAuto] = useState(100);
+  const [mapaDiseno, setMapaDiseno] = useState<MapaDiseno | null>(null);
   const [vaciando, setVaciando] = useState(false);
   const [confirmVaciar, setConfirmVaciar] = useState(false);
   const [iniciandoRuta, setIniciandoRuta] = useState(false);
@@ -264,6 +267,12 @@ export default function CargaCamion() {
       setCargas(map);
       setLoadingCargas(false);
     });
+
+    // Cargar diseño activo del almacén para cálculo de proximidad
+    mapDesignsService.getAllDesigns().then((designs: MapDesign[]) => {
+      const activo = designs.find((d) => d.activo);
+      if (activo) setMapaDiseno(activo);
+    }).catch(() => { /* sin mapa: el algoritmo usa solo urgencia */ });
 
     return () => {
       mounted = false;
@@ -410,7 +419,7 @@ export default function CargaCamion() {
   // Paso 1: calcular y mostrar previsualización para confirmar
   const calcularPreview = (lp: number, lv: number): ResultadoCargaAutomatica | null => {
     if (!canEditarCarga || !selectedCamion) return null;
-    return calcularCargaAutomatica(pendientes, selectedCamion, cargaActual, lp / 100, lv / 100);
+    return calcularCargaAutomatica(pendientes, selectedCamion, cargaActual, lp / 100, lv / 100, mapaDiseno);
   };
 
   const handlePrevisualizarAuto = () => {
@@ -435,7 +444,7 @@ export default function CargaCamion() {
     const val = Number(pesoSliderRef.current?.value ?? limitePesoAuto);
     setLimitePesoAuto(val);
     if (previewAuto && selectedCamion) {
-      const r = calcularCargaAutomatica(pendientes, selectedCamion, cargaActual, val / 100, limiteVolumenAuto / 100);
+      const r = calcularCargaAutomatica(pendientes, selectedCamion, cargaActual, val / 100, limiteVolumenAuto / 100, mapaDiseno);
       setPreviewAuto(r.seleccionados.length > 0 ? r : null);
     }
   };
@@ -449,7 +458,7 @@ export default function CargaCamion() {
     const val = Number(volumenSliderRef.current?.value ?? limiteVolumenAuto);
     setLimiteVolumenAuto(val);
     if (previewAuto && selectedCamion) {
-      const r = calcularCargaAutomatica(pendientes, selectedCamion, cargaActual, limitePesoAuto / 100, val / 100);
+      const r = calcularCargaAutomatica(pendientes, selectedCamion, cargaActual, limitePesoAuto / 100, val / 100, mapaDiseno);
       setPreviewAuto(r.seleccionados.length > 0 ? r : null);
     }
   };
