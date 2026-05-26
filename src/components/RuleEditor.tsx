@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Trash2, Edit, Save, X, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
+import { Plus, Trash2, Edit, Save, X, ChevronUp, ChevronDown, RotateCcw, ToggleLeft, ToggleRight } from 'lucide-react';
 import { collection, getDocs, limit, query } from 'firebase/firestore';
 import type { ReglaAsignacion } from '../utils/RuleEngine';
 import { useRules } from '../hooks/useRules';
@@ -27,6 +27,7 @@ const RuleEditor = () => {
   const [applicationMode, setLocalApplicationMode] = useState<'all' | 'new_only' | 'both'>(getApplicationMode());
   const [isApplyingAllRules, setIsApplyingAllRules] = useState(false);
   const [isApplyingNewRules, setIsApplyingNewRules] = useState(false);
+  const [togglingRuleId, setTogglingRuleId] = useState<string | null>(null);
   const [productFields, setProductFields] = useState<string[]>([]);
   const [productFieldTypes, setProductFieldTypes] = useState<Record<string, string>>({});
   const conditionFieldOptions = Array.from(
@@ -62,6 +63,8 @@ const RuleEditor = () => {
     const type = productFieldTypes[field];
     if (type === 'number') return 'number';
     if (type === 'date') return 'date';
+    const inferredType = inferFieldType(field, undefined);
+    if (inferredType !== 'string') return inferredType;
     return 'string';
   };
 
@@ -109,6 +112,41 @@ const RuleEditor = () => {
     return { from, to };
   };
 
+  function inferFieldType(field: string, value: unknown): 'number' | 'string' | 'date' {
+    const normalizedField = field.toLowerCase();
+    if (normalizedField.includes('fecha')) return 'date';
+    if (value instanceof Date || (value && typeof value === 'object' && typeof (value as any).toDate === 'function')) return 'date';
+
+    if (
+      normalizedField.includes('peso') ||
+      normalizedField.endsWith('_kg') ||
+      normalizedField.includes('altura') ||
+      normalizedField.includes('longitud') ||
+      normalizedField.includes('ancho') ||
+      normalizedField.includes('cantidad') ||
+      normalizedField.includes('dias')
+    ) {
+      return 'number';
+    }
+
+    if (typeof value === 'number') return 'number';
+    if (typeof value === 'string' && value.trim() !== '') {
+      const numericValue = Number(value.trim().replace(',', '.'));
+      if (!Number.isNaN(numericValue)) return 'number';
+    }
+
+    return 'string';
+  }
+
+  const mergeFieldType = (
+    currentType: string | undefined,
+    nextType: 'number' | 'string' | 'date'
+  ) => {
+    if (currentType === 'date' || nextType === 'date') return 'date';
+    if (currentType === 'number' || nextType === 'number') return 'number';
+    return nextType;
+  };
+
   const updateRangeValue = (
     currentValue: ReglaAsignacion['condiciones'][number]['valor'],
     side: 'from' | 'to',
@@ -133,10 +171,8 @@ const RuleEditor = () => {
         ).sort((a, b) => a.localeCompare(b));
         const fieldTypes = snapshot.docs.reduce<Record<string, string>>((types, docSnap) => {
           Object.entries(docSnap.data()).forEach(([field, value]) => {
-            if (!types[field] && value !== null && value !== undefined) {
-              types[field] = typeof value === 'object' && typeof (value as any).toDate === 'function'
-                ? 'date'
-                : typeof value;
+            if (value !== null && value !== undefined) {
+              types[field] = mergeFieldType(types[field], inferFieldType(field, value));
             }
           });
 
@@ -295,6 +331,19 @@ const RuleEditor = () => {
       setEditingRule(null);
     } catch (err) {
       alert('Error al actualizar la regla');
+    }
+  };
+
+  const handleToggleRuleActive = async (rule: ReglaAsignacion) => {
+    if (rule.esDefecto) return;
+
+    try {
+      setTogglingRuleId(rule.id);
+      await updateRule(rule.id, { activa: !rule.activa });
+    } catch (err) {
+      alert('Error al cambiar el estado de la regla');
+    } finally {
+      setTogglingRuleId(null);
     }
   };
 
@@ -751,6 +800,21 @@ const RuleEditor = () => {
                       >
                         <ChevronDown size={16} />
                       </button>
+                      {!rule.esDefecto && (
+                        <button
+                          onClick={() => handleToggleRuleActive(rule)}
+                          disabled={togglingRuleId === rule.id}
+                          className={`p-1 disabled:opacity-40 ${
+                            rule.activa
+                              ? 'text-green-600 hover:text-green-800'
+                              : 'text-gray-400 hover:text-gray-600'
+                          }`}
+                          title={rule.activa ? 'Desactivar regla' : 'Activar regla'}
+                          aria-label={rule.activa ? 'Desactivar regla' : 'Activar regla'}
+                        >
+                          {rule.activa ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
+                        </button>
+                      )}
                       <button
                         onClick={() => setEditingRule(rule)}
                         className="p-1 text-brand-500 hover:text-brand-700"

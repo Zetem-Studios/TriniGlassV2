@@ -137,7 +137,46 @@ export class RuleEngine {
   private normalizarFecha(valor: any): number {
     if (valor && typeof valor.toDate === 'function') return valor.toDate().getTime();
     if (valor instanceof Date) return valor.getTime();
-    return new Date(String(valor ?? '').trim()).getTime();
+
+    const normalized = String(valor ?? '')
+      .replace(/\u00A0/g, ' ')
+      .replace(/\u202F/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const meses: Record<string, number> = {
+      enero: 0,
+      febrero: 1,
+      marzo: 2,
+      abril: 3,
+      mayo: 4,
+      junio: 5,
+      julio: 6,
+      agosto: 7,
+      septiembre: 8,
+      octubre: 9,
+      noviembre: 10,
+      diciembre: 11
+    };
+
+    const spanishDateMatch = normalized.match(/(\d{1,2}) de (\w+) de (\d{4})(?: a las (\d{1,2}):(\d{2})(?::(\d{2}))?)?/i);
+    if (spanishDateMatch) {
+      const [, dayValue, monthValue, yearValue, hourValue = '0', minuteValue = '0', secondValue = '0'] = spanishDateMatch;
+      const month = meses[monthValue.toLowerCase()];
+      if (month !== undefined) {
+        return new Date(
+          Number(yearValue),
+          month,
+          Number(dayValue),
+          Number(hourValue),
+          Number(minuteValue),
+          Number(secondValue)
+        ).getTime();
+      }
+    }
+
+    const parsed = Date.parse(normalized.replace('UTC', 'GMT').replace(/\//g, '-'));
+    return Number.isNaN(parsed) ? NaN : parsed;
   }
 
   // Obtener valor anidado de un objeto (ej: producto.cliente.nombre)

@@ -54,6 +54,7 @@ function App() {
           <Route path="add-user" element={<RoleRoute requiredRol="admin"><AddUser /></RoleRoute>} />
           <Route path="inventario" element={<Stock />} />
           <Route path="almacen" element={<Warehouse />} />
+          <Route path="scanner" element={<MobileScanner />} />
           <Route path="camiones" element={<Camiones />} />
           <Route path="camiones/cargar" element={<CargaCamion />} />
           <Route path="camiones/cargar/:matricula" element={<CargaCamion />} />
