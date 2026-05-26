@@ -1,6 +1,6 @@
 ﻿import { useMemo, useState, useEffect, useRef } from "react";
-import { Search, Filter, ArrowUpDown, Plus, Eye, MoreVertical, X, Edit, Trash2, AlertCircle } from "lucide-react";
-import { collection, getDocs, query, where, orderBy, limit, Timestamp } from "firebase/firestore";
+import { Search, Filter, ArrowUpDown, Plus, Eye, X, Edit, Copy, AlertCircle } from "lucide-react";
+import { collection, getDocs, query, where, orderBy, limit, Timestamp, addDoc, updateDoc, doc } from "firebase/firestore";
 import { db } from "../firebase";
 
 // Límite máximo de resultados por query en Firestore
@@ -64,6 +64,27 @@ export default function Stock() {
     thickness: "",
   });
 
+  const [isViewMode, setIsViewMode] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
+
+  const EMPTY_PALET: Palet = {
+    id: "",
+    docId: "",
+    type: "",
+    dimensions: "0x0x0",
+    client: "",
+    date: "",
+    location: "",
+    status: "Pendiente",
+    zone: "",
+    codigo_barra: "",
+    codificador: "",
+    numero_linea_pedido: "",
+    referencia_linea_pedido: "",
+  };
+
   const debouncedClient = useDebounce(clientFilters.client, 400);
   const debouncedType = useDebounce(clientFilters.type, 400);
 
@@ -84,108 +105,242 @@ export default function Stock() {
     };
   };
 
+  const parseFirestoreDateToISO = (value: unknown): string => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const anyValue = value as any;
+    if (!value) return "";
+    if (value instanceof Date) return value.toISOString().split("T")[0];
+    if (anyValue?.toDate && typeof anyValue.toDate === "function") {
+      return anyValue.toDate().toISOString().split("T")[0];
+    }
+    if (typeof value === "string") {
+      return value.includes("/") ? value.split("/").reverse().join("-") : value;
+    }
+    return "";
+  };
+
+  const parseDateForFirestore = (dateValue: string) => {
+    if (!dateValue) return Timestamp.now();
+    const parsedDate = new Date(dateValue);
+    return Number.isNaN(parsedDate.getTime()) ? Timestamp.now() : Timestamp.fromDate(parsedDate);
+  };
+
+  const mapPaletToFirestore = (palet: Palet) => {
+    const { width, height, thickness } = parseDimensions(palet.dimensions);
+    const dateTimestamp = parseDateForFirestore(palet.date);
+
+    return {
+      descripcion_producido_longitud: palet.type || "Sin descripción",
+      apellido_cliente: palet.client || "Cliente desconocido",
+      fecha_linea_pedido: dateTimestamp,
+      fecha_entrega: dateTimestamp,
+      subzona: palet.location || palet.zone || null,
+      estado_pedido: palet.status || "Pendiente",
+      codificador: palet.codificador || null,
+      codigo_barra: palet.codigo_barra || null,
+      numero_linea_pedido: palet.numero_linea_pedido || palet.id || null,
+      referencia_linea_pedido: palet.referencia_linea_pedido || null,
+      longitud: width,
+      altura: height,
+      peso_pieza_kg: thickness,
+    };
+  };
+
+  const fetchStock = async () => {
+    setLoading(true);
+    try {
+      const conditions: ReturnType<typeof where>[] = [];
+
+      if (serverFilters.dateFrom) {
+        conditions.push(where("fecha_linea_pedido", ">=", Timestamp.fromDate(new Date(serverFilters.dateFrom))));
+      }
+
+      if (serverFilters.dateTo) {
+        conditions.push(where("fecha_linea_pedido", "<=", Timestamp.fromDate(new Date(serverFilters.dateTo))));
+      }
+
+      if (serverFilters.status) {
+        conditions.push(where("estado_pedido", "==", serverFilters.status));
+      }
+
+      if (serverFilters.zone) {
+        conditions.push(where("subzona", "==", serverFilters.zone));
+      }
+
+      if (serverFilters.codificador) {
+        conditions.push(where("codificador", "==", serverFilters.codificador));
+      }
+
+      if (serverFilters.codigo_barra) {
+        conditions.push(where("codigo_barra", "==", serverFilters.codigo_barra));
+      }
+
+      if (serverFilters.numero_linea_pedido) {
+        conditions.push(where("numero_linea_pedido", "==", serverFilters.numero_linea_pedido));
+      }
+
+      if (serverFilters.referencia_linea_pedido) {
+        conditions.push(where("referencia_linea_pedido", "==", serverFilters.referencia_linea_pedido));
+      }
+
+      const productosQuery = query(
+        collection(db, "productos"),
+        ...conditions,
+        orderBy("fecha_linea_pedido", "desc"),
+        limit(MAX_FIRESTORE_RESULTS)
+      );
+
+      const querySnapshot = await getDocs(productosQuery);
+      console.log("Firestore: productos encontrados", querySnapshot.size);
+      setHitLimit(querySnapshot.size >= MAX_FIRESTORE_RESULTS);
+
+      const firestoreInventory: Palet[] = querySnapshot.docs.map((doc) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const data = doc.data() as any;
+        const dateValue = data.fecha_entrega || data.fecha_linea_pedido || data.infos_entrega || "";
+        const dateString = parseFirestoreDateToISO(dateValue);
+        const ancho = Number(data.longitud ?? 0);
+        const alto = Number(data.altura ?? 0);
+        const grosor = Number(data.peso_pieza_kg ?? 0);
+        const locationValue = data.subzona ? String(data.subzona) : "Sin zona";
+        const estado = data.estado_pedido || data.estado_linea_pdd || "Pendiente";
+
+        return {
+          id: data.numero_linea_pedido || doc.id,
+          docId: doc.id,
+          type: data.descripcion_producido_longitud || data.estado_linea_pdd || "Sin descripción",
+          dimensions: `${ancho || alto || 0}x${alto || 0}x${grosor || 0}`,
+          client: data.apellido_cliente || data.nombre_abreviado || "Cliente desconocido",
+          date: dateString,
+          location: locationValue,
+          status: estado,
+          zone: data.subzona ? String(data.subzona) : "",
+          codigo_barra: data.codigo_barra ? String(data.codigo_barra) : undefined,
+          codificador: data.codificador ? String(data.codificador) : undefined,
+          numero_linea_pedido: data.numero_linea_pedido ? String(data.numero_linea_pedido) : undefined,
+          referencia_linea_pedido: data.referencia_linea_pedido ? String(data.referencia_linea_pedido) : undefined,
+        };
+      });
+
+      console.log("Inventario normalizado", firestoreInventory.slice(0, 5));
+      setInventory(firestoreInventory);
+    } catch (error) {
+      console.error("Error cargando inventario desde Firestore:", error);
+      setInventory([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const parseFirestoreDateToISO = (value: unknown): string => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const anyValue = value as any;
-      if (!value) return "";
-      if (value instanceof Date) return value.toISOString().split("T")[0];
-      if (anyValue?.toDate && typeof anyValue.toDate === "function") {
-        return anyValue.toDate().toISOString().split("T")[0];
-      }
-      if (typeof value === "string") {
-        return value.includes("/") ? value.split("/").reverse().join("-") : value;
-      }
-      return "";
-    };
-
-    const fetchStock = async () => {
-      setLoading(true);
-      try {
-        const conditions: ReturnType<typeof where>[] = [];
-
-        if (serverFilters.dateFrom) {
-          conditions.push(where("fecha_linea_pedido", ">=", Timestamp.fromDate(new Date(serverFilters.dateFrom))));
-        }
-
-        if (serverFilters.dateTo) {
-          conditions.push(where("fecha_linea_pedido", "<=", Timestamp.fromDate(new Date(serverFilters.dateTo))));
-        }
-
-        if (serverFilters.status) {
-          conditions.push(where("estado_pedido", "==", serverFilters.status));
-        }
-
-        if (serverFilters.zone) {
-          conditions.push(where("subzona", "==", serverFilters.zone));
-        }
-
-        if (serverFilters.codificador) {
-          conditions.push(where("codificador", "==", serverFilters.codificador));
-        }
-
-        if (serverFilters.codigo_barra) {
-          conditions.push(where("codigo_barra", "==", serverFilters.codigo_barra));
-        }
-
-        if (serverFilters.numero_linea_pedido) {
-          conditions.push(where("numero_linea_pedido", "==", serverFilters.numero_linea_pedido));
-        }
-
-        if (serverFilters.referencia_linea_pedido) {
-          conditions.push(where("referencia_linea_pedido", "==", serverFilters.referencia_linea_pedido));
-        }
-
-        const productosQuery = query(
-          collection(db, "productos"),
-          ...conditions,
-          orderBy("fecha_linea_pedido", "desc"),
-          limit(MAX_FIRESTORE_RESULTS)
-        );
-
-        const querySnapshot = await getDocs(productosQuery);
-        console.log("Firestore: productos encontrados", querySnapshot.size);
-        setHitLimit(querySnapshot.size >= MAX_FIRESTORE_RESULTS);
-
-        const firestoreInventory: Palet[] = querySnapshot.docs.map((doc) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const data = doc.data() as any;
-          const dateValue = data.fecha_entrega || data.fecha_linea_pedido || data.infos_entrega || "";
-          const dateString = parseFirestoreDateToISO(dateValue);
-          const ancho = Number(data.longitud ?? 0);
-          const alto = Number(data.altura ?? 0);
-          const grosor = Number(data.peso_pieza_kg ?? 0);
-          const locationValue = data.subzona ? String(data.subzona) : "Sin zona";
-          const estado = data.estado_pedido || data.estado_linea_pdd || "Pendiente";
-
-          return {
-            id: data.numero_linea_pedido || doc.id,
-            docId: doc.id,
-            type: data.descripcion_producido_longitud || data.estado_linea_pdd || "Sin descripción",
-            dimensions: `${ancho || alto || 0}x${alto || 0}x${grosor || 0}`,
-            client: data.apellido_cliente || data.nombre_abreviado || "Cliente desconocido",
-            date: dateString,
-            location: locationValue,
-            status: estado,
-            zone: data.subzona ? String(data.subzona) : "",
-            codigo_barra: data.codigo_barra ? String(data.codigo_barra) : undefined,
-            codificador: data.codificador ? String(data.codificador) : undefined,
-            numero_linea_pedido: data.numero_linea_pedido ? String(data.numero_linea_pedido) : undefined,
-            referencia_linea_pedido: data.referencia_linea_pedido ? String(data.referencia_linea_pedido) : undefined,
-          };
-        });
-
-        console.log("Inventario normalizado", firestoreInventory.slice(0, 5));
-        setInventory(firestoreInventory);
-      } catch (error) {
-        console.error("Error cargando inventario desde Firestore:", error);
-        setInventory([]);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchStock();
   }, [serverFilters]);
+
+  const openPaletPanel = (palet: Palet | null, viewMode = false) => {
+    setSelectedPalet(palet);
+    setIsPanelOpen(true);
+    setIsViewMode(viewMode);
+    setActionError(null);
+    setInfoMessage(null);
+  };
+
+  const handleNewPalet = () => {
+    openPaletPanel({ ...EMPTY_PALET });
+  };
+
+  const handleViewPalet = (palet: Palet) => {
+    openPaletPanel(palet, true);
+  };
+
+  const handleEditPalet = (palet: Palet) => {
+    openPaletPanel(palet, false);
+  };
+
+  const updateSelectedPaletField = (key: keyof Palet, value: string) => {
+    setSelectedPalet((prev) => (prev ? { ...prev, [key]: value } : prev));
+  };
+
+  const handleSavePalet = async () => {
+    if (!selectedPalet) return;
+    setSaving(true);
+    setActionError(null);
+
+    try {
+      const paletToSave = { ...selectedPalet };
+      const firestoreData = mapPaletToFirestore(paletToSave);
+
+      if (paletToSave.docId) {
+        await updateDoc(doc(db, "productos", paletToSave.docId), firestoreData);
+      } else {
+        const productRef = await addDoc(collection(db, "productos"), firestoreData);
+        if (!paletToSave.numero_linea_pedido) {
+          await updateDoc(productRef, { numero_linea_pedido: productRef.id });
+          paletToSave.numero_linea_pedido = productRef.id;
+        }
+        paletToSave.docId = productRef.id;
+        paletToSave.id = paletToSave.numero_linea_pedido || productRef.id;
+        setSelectedPalet(paletToSave);
+      }
+
+      // Update local inventory to avoid refetching everything
+      setInventory((prev) => {
+        const exists = prev.some((p) => p.docId === paletToSave.docId);
+        if (exists) {
+          return prev.map((p) => (p.docId === paletToSave.docId ? { ...p, ...paletToSave } : p));
+        }
+        // New palet -> add to the beginning
+        return [paletToSave, ...prev];
+      });
+
+      setIsPanelOpen(false);
+      setSelectedPalet(null);
+    } catch (error) {
+      console.error("Error guardando palet:", error);
+      setActionError("Error guardando cambios. Revisa la consola o intenta de nuevo.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCopyId = async (palet: Palet) => {
+    const textToCopy = palet.id || palet.docId;
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      setInfoMessage("ID copiado al portapapeles");
+      setActionError(null);
+    } catch {
+      setActionError(null);
+      window.prompt("Copia manualmente el ID:", textToCopy);
+    }
+  };
+
+  const handleMarkAsErroneous = async () => {
+    if (!selectedPalet?.docId) return;
+    setSaving(true);
+    setActionError(null);
+    setInfoMessage(null);
+
+    try {
+      await updateDoc(doc(db, "productos", selectedPalet.docId), {
+        estado_pedido: "Erróneo",
+      });
+      // Update selectedPalet and local inventory without refetching all
+      setSelectedPalet((prev) => (prev ? { ...prev, status: "Erróneo" } : prev));
+      setInventory((prev) => prev.map((p) => (p.docId === selectedPalet.docId ? { ...p, status: "Erróneo" } : p)));
+      setInfoMessage("Palet marcado como erróneo");
+    } catch (error) {
+      console.error("Error marcando palet erróneo:", error);
+      setActionError("No se pudo marcar el palet como erróneo.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleClosePanel = () => {
+    setIsPanelOpen(false);
+    setSelectedPalet(null);
+    setIsViewMode(false);
+  };
 
   const updateServerFilter = (key: string, value: string) => {
     setServerFilters((prev) => ({ ...prev, [key]: value }));
@@ -298,7 +453,7 @@ export default function Stock() {
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Inventario de Vidrio</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Gestión de palets y bloques almacenados.</p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-medium transition-colors shadow-sm">
+        <button onClick={handleNewPalet} className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-medium transition-colors shadow-sm">
           <Plus size={18} /> Nuevo Palet
         </button>
       </div>
@@ -452,19 +607,16 @@ export default function Stock() {
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap">
                       <div className="flex justify-end gap-1">
-                        <button className="p-1.5 text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 rounded transition-colors" title="Ver detalle">
-                          <Eye size={16} />
-                        </button>
-                        <button
-                          onClick={() => { setSelectedPalet(item); setIsPanelOpen(true); }}
-                          className="p-1.5 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 rounded transition-colors" title="Editar / Ubicar"
-                        >
-                          <Edit size={16} />
-                        </button>
-                        <button className="p-1.5 text-slate-400 hover:text-slate-900 dark:hover:text-white rounded transition-colors">
-                          <MoreVertical size={16} />
-                        </button>
-                      </div>
+                          <button onClick={() => handleViewPalet(item)} className="p-1.5 text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 rounded transition-colors" title="Ver detalle">
+                            <Eye size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleEditPalet(item)}
+                            className="p-1.5 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 rounded transition-colors" title="Editar palet"
+                          >
+                            <Edit size={16} />
+                          </button>
+                        </div>
                     </td>
                   </tr>
                 ))
@@ -528,17 +680,17 @@ export default function Stock() {
       </div>
 
       {/* --- PANEL LATERAL DE EDICIÓN --- */}
-      {isPanelOpen && <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 transition-opacity" onClick={() => setIsPanelOpen(false)} />}
+      {isPanelOpen && <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 transition-opacity" onClick={handleClosePanel} />}
       
       <div className={`fixed top-0 right-0 h-full w-full max-w-md bg-white dark:bg-slate-900 shadow-2xl z-50 transform transition-transform duration-300 ease-in-out border-l border-slate-200/80 dark:border-slate-800/80 flex flex-col ${
         isPanelOpen ? 'translate-x-0' : 'translate-x-full'
       }`}>
         <div className="p-6 border-b border-slate-200/80 dark:border-slate-800/80 flex justify-between items-center bg-slate-50 dark:bg-slate-950/50">
           <div>
-            <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-white">Editar Palet</h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{selectedPalet?.id}</p>
+            <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-white">{isViewMode ? "Ver Palet" : selectedPalet?.docId ? "Editar Palet" : "Crear Palet"}</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{selectedPalet?.id || selectedPalet?.docId || "Nuevo palet"}</p>
           </div>
-          <button onClick={() => setIsPanelOpen(false)} className="p-2 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-white rounded-full transition-colors">
+          <button onClick={handleClosePanel} className="p-2 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-white rounded-full transition-colors">
             <X size={20} />
           </button>
         </div>
@@ -548,47 +700,133 @@ export default function Stock() {
             <div className="space-y-5">
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Cliente asignado</label>
-                <input type="text" defaultValue={selectedPalet.client} className="w-full p-2.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-500 dark:text-white outline-none transition-shadow" />
+                <input
+                  type="text"
+                  value={selectedPalet.client}
+                  disabled={isViewMode}
+                  onChange={(e) => updateSelectedPaletField("client", e.target.value)}
+                  className="w-full p-2.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-500 dark:text-white outline-none transition-shadow disabled:cursor-not-allowed disabled:bg-slate-100 dark:disabled:bg-slate-800"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Tipo de material</label>
-                <input type="text" defaultValue={selectedPalet.type} className="w-full p-2.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-500 dark:text-white outline-none transition-shadow" />
+                <input
+                  type="text"
+                  value={selectedPalet.type}
+                  disabled={isViewMode}
+                  onChange={(e) => updateSelectedPaletField("type", e.target.value)}
+                  className="w-full p-2.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-500 dark:text-white outline-none transition-shadow disabled:cursor-not-allowed disabled:bg-slate-100 dark:disabled:bg-slate-800"
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Dimensiones</label>
-                  <input type="text" defaultValue={selectedPalet.dimensions} className="w-full p-2.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-500 dark:text-white outline-none transition-shadow" />
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Nº de línea</label>
+                  <input
+                    type="text"
+                    value={selectedPalet.numero_linea_pedido}
+                    disabled={isViewMode}
+                    onChange={(e) => updateSelectedPaletField("numero_linea_pedido", e.target.value)}
+                    className="w-full p-2.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-500 dark:text-white outline-none transition-shadow disabled:cursor-not-allowed disabled:bg-slate-100 dark:disabled:bg-slate-800"
+                  />
                 </div>
                 <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Referencia</label>
+                  <input
+                    type="text"
+                    value={selectedPalet.referencia_linea_pedido}
+                    disabled={isViewMode}
+                    onChange={(e) => updateSelectedPaletField("referencia_linea_pedido", e.target.value)}
+                    className="w-full p-2.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-500 dark:text-white outline-none transition-shadow disabled:cursor-not-allowed disabled:bg-slate-100 dark:disabled:bg-slate-800"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Fecha</label>
+                  <input
+                    type="date"
+                    value={selectedPalet.date}
+                    disabled={isViewMode}
+                    onChange={(e) => updateSelectedPaletField("date", e.target.value)}
+                    className="w-full p-2.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-500 dark:text-white outline-none transition-shadow disabled:cursor-not-allowed disabled:bg-slate-100 dark:disabled:bg-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Dimensiones</label>
+                  <input
+                    type="text"
+                    value={selectedPalet.dimensions}
+                    disabled={isViewMode}
+                    onChange={(e) => updateSelectedPaletField("dimensions", e.target.value)}
+                    className="w-full p-2.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-500 dark:text-white outline-none transition-shadow disabled:cursor-not-allowed disabled:bg-slate-100 dark:disabled:bg-slate-800"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-4">
+                <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Ubicación</label>
-                  <input type="text" defaultValue={selectedPalet.location} className="w-full p-2.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-500 dark:text-white outline-none transition-shadow" />
+                  <input
+                    type="text"
+                    value={selectedPalet.location}
+                    disabled={isViewMode}
+                    onChange={(e) => updateSelectedPaletField("location", e.target.value)}
+                    className="w-full p-2.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-500 dark:text-white outline-none transition-shadow disabled:cursor-not-allowed disabled:bg-slate-100 dark:disabled:bg-slate-800"
+                  />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Estado del palet</label>
-                <select defaultValue={selectedPalet.status} className="w-full p-2.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-500 dark:text-white outline-none transition-shadow">
+                <select
+                  value={selectedPalet.status}
+                  disabled={isViewMode}
+                  onChange={(e) => updateSelectedPaletField("status", e.target.value)}
+                  className="w-full p-2.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-500 dark:text-white outline-none transition-shadow disabled:cursor-not-allowed disabled:bg-slate-100 dark:disabled:bg-slate-800"
+                >
                   <option value="Almacenado">Almacenado</option>
                   <option value="Reservado">Reservado</option>
                   <option value="Pendiente">Pendiente</option>
                   <option value="Listo para carga">Listo para carga</option>
                 </select>
               </div>
-              <div className="pt-4 mt-6 border-t border-slate-200/80 dark:border-slate-800/80">
-                 <button className="flex items-center gap-2 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 font-medium transition-colors">
-                    <Trash2 size={18} /> Eliminar este palet del sistema
-                 </button>
-              </div>
+              {selectedPalet?.docId && (
+                <div className="pt-4 mt-6 border-t border-slate-200/80 dark:border-slate-800/80 space-y-3">
+                  {!isViewMode && (
+                    <button onClick={handleMarkAsErroneous} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:hover:bg-amber-900 font-medium transition-colors" disabled={saving}>
+                      <AlertCircle size={18} /> Marcar como palet erróneo
+                    </button>
+                  )}
+                  <button onClick={() => handleCopyId(selectedPalet)} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 font-medium transition-colors">
+                    <Copy size={18} /> Copiar ID
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
 
+        {actionError && (
+          <div className="p-4 text-sm text-red-700 bg-red-50 dark:bg-red-950/40 dark:text-red-300">
+            {actionError}
+          </div>
+        )}
+        {infoMessage && (
+          <div className="p-4 text-sm text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300">
+            {infoMessage}
+          </div>
+        )}
         <div className="p-6 border-t border-slate-200/80 dark:border-slate-800/80 flex justify-end gap-3 bg-slate-50 dark:bg-slate-950/50">
-          <button onClick={() => setIsPanelOpen(false)} className="px-5 py-2.5 text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 font-medium transition-colors">
+          <button onClick={handleClosePanel} className="px-5 py-2.5 text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 font-medium transition-colors">
             Cancelar
           </button>
-          <button className="px-5 py-2.5 text-white bg-brand-600 rounded-lg hover:bg-brand-700 font-medium transition-colors shadow-sm">
-            Guardar Cambios
-          </button>
+          {!isViewMode && (
+            <button
+              onClick={handleSavePalet}
+              disabled={saving}
+              className="px-5 py-2.5 text-white bg-brand-600 rounded-lg hover:bg-brand-700 font-medium transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {selectedPalet?.docId ? "Guardar Cambios" : "Crear Palet"}
+            </button>
+          )}
         </div>
       </div>
     </div>
