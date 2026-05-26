@@ -18,12 +18,15 @@ import {
   Flag,
   ArrowUp,
   ArrowDown,
+  Zap,
+  RotateCcw,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   subscribeToPalets,
   subscribeToCargas,
   assignPaletToCamion,
+  assignPaletsBatch,
   removePaletFromCamion,
   vaciarCamion,
   validarCarga,
@@ -34,6 +37,13 @@ import {
   type Parada,
 } from "../../services/CargaCamionService";
 import { getCamiones, type Camion } from "../../services/CamionService";
+import {
+  calcularCargaAutomatica,
+  CAPACITY_LIMIT,
+  type MapaDiseno,
+  type ResultadoCargaAutomatica,
+} from "../../services/CargaAutomaticaService";
+import { mapDesignsService, type MapDesign } from "../services/mapDesignsService";
 import { useAuth } from "../context/useAuth";
 
 const formatNumber = (n: number, decimals = 0) =>
@@ -206,6 +216,13 @@ export default function CargaCamion() {
   const [loadingPalets, setLoadingPalets] = useState(true);
   const [loadingCargas, setLoadingCargas] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [cargandoAuto, setCargandoAuto] = useState(false);
+  const [previewAuto, setPreviewAuto] = useState<ResultadoCargaAutomatica | null>(null);
+  const [undoAutoIds, setUndoAutoIds] = useState<string[] | null>(null);
+  const [deshaciendo, setDeshaciendo] = useState(false);
+  const [limitePesoAuto, setLimitePesoAuto] = useState(100);
+  const [limiteVolumenAuto, setLimiteVolumenAuto] = useState(100);
+  const [mapaDiseno, setMapaDiseno] = useState<MapaDiseno | null>(null);
   const [vaciando, setVaciando] = useState(false);
   const [confirmVaciar, setConfirmVaciar] = useState(false);
   const [iniciandoRuta, setIniciandoRuta] = useState(false);
@@ -217,6 +234,10 @@ export default function CargaCamion() {
   const [ordenClientes, setOrdenClientes] = useState<string[]>([]);
 
   const infoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pesoSliderRef = useRef<HTMLInputElement>(null);
+  const volumenSliderRef = useRef<HTMLInputElement>(null);
+  const pesoLabelRef = useRef<HTMLSpanElement>(null);
+  const volumenLabelRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -246,6 +267,12 @@ export default function CargaCamion() {
       setCargas(map);
       setLoadingCargas(false);
     });
+
+    // Cargar diseño activo del almacén para cálculo de proximidad
+    mapDesignsService.getAllDesigns().then((designs: MapDesign[]) => {
+      const activo = designs.find((d) => d.activo);
+      if (activo) setMapaDiseno(activo);
+    }).catch(() => { /* sin mapa: el algoritmo usa solo urgencia */ });
 
     return () => {
       mounted = false;
@@ -386,6 +413,122 @@ export default function CargaCamion() {
     } finally {
       setSaving(false);
       setDraggingPalet(null);
+    }
+  };
+
+  // Paso 1: calcular y mostrar previsualización para confirmar
+  const calcularPreview = (lp: number, lv: number): ResultadoCargaAutomatica | null => {
+    if (!canEditarCarga || !selectedCamion) return null;
+    return calcularCargaAutomatica(pendientes, selectedCamion, cargaActual, lp / 100, lv / 100, mapaDiseno);
+  };
+
+  const handlePrevisualizarAuto = () => {
+    if (!canEditarCarga || cargandoAuto || !selectedCamion) return;
+    setError("");
+    const resultado = calcularPreview(limitePesoAuto, limiteVolumenAuto);
+    if (!resultado || resultado.seleccionados.length === 0) {
+      setError(
+        `No hay palets que quepan dentro del límite configurado (peso ${limitePesoAuto}% · vol. ${limiteVolumenAuto}%).`
+      );
+      return;
+    }
+    setPreviewAuto(resultado);
+  };
+
+  const handleLimitePesoChange = () => {
+    const val = Number(pesoSliderRef.current?.value ?? limitePesoAuto);
+    if (pesoLabelRef.current) pesoLabelRef.current.textContent = `${val}%`;
+  };
+
+  const handleLimitePesoCommit = () => {
+    const val = Number(pesoSliderRef.current?.value ?? limitePesoAuto);
+    setLimitePesoAuto(val);
+    if (previewAuto && selectedCamion) {
+      const r = calcularCargaAutomatica(pendientes, selectedCamion, cargaActual, val / 100, limiteVolumenAuto / 100, mapaDiseno);
+      setPreviewAuto(r.seleccionados.length > 0 ? r : null);
+    }
+  };
+
+  const handleLimiteVolumenChange = () => {
+    const val = Number(volumenSliderRef.current?.value ?? limiteVolumenAuto);
+    if (volumenLabelRef.current) volumenLabelRef.current.textContent = `${val}%`;
+  };
+
+  const handleLimiteVolumenCommit = () => {
+    const val = Number(volumenSliderRef.current?.value ?? limiteVolumenAuto);
+    setLimiteVolumenAuto(val);
+    if (previewAuto && selectedCamion) {
+      const r = calcularCargaAutomatica(pendientes, selectedCamion, cargaActual, limitePesoAuto / 100, val / 100, mapaDiseno);
+      setPreviewAuto(r.seleccionados.length > 0 ? r : null);
+    }
+  };
+
+  // Paso 2: confirmar y ejecutar la carga
+  const handleConfirmarAuto = async () => {
+    if (!previewAuto || !canEditarCarga || cargandoAuto || !selectedCamion) return;
+    const resultado = previewAuto;
+    setPreviewAuto(null);
+    setError("");
+    setCargandoAuto(true);
+    setUndoAutoIds(null);
+    try {
+      setOrdenClientes(
+        resultado.seleccionados
+          .map((p) => p.cliente)
+          .filter((c, i, a) => a.indexOf(c) === i)
+      );
+
+      const total = resultado.seleccionados.length;
+
+      await assignPaletsBatch({
+        matricula: selectedCamion.matricula,
+        palets: resultado.seleccionados.map((p) => ({
+          docId: p.docId,
+          codigoBarra: p.codigoBarra,
+          cliente: p.cliente,
+          descripcion: p.descripcion,
+          pesoKg: p.pesoKg,
+          volumenM3: p.volumenM3,
+        })),
+        email: user?.email ?? "anónimo",
+      });
+
+      const asignadosIds = resultado.seleccionados.map((p) => p.docId);
+      if (asignadosIds.length > 0) setUndoAutoIds(asignadosIds);
+
+      const omitidosMsg =
+        resultado.omitidos > 0
+          ? ` (${resultado.omitidos} omitido${resultado.omitidos !== 1 ? "s" : ""} por límite)`
+          : "";
+      showInfo(
+        `Carga automática: ${total} palets · ${resultado.pesoTotal.toFixed(0)} kg (${resultado.porcentajePeso.toFixed(0)}%) · ${resultado.volumenTotal.toFixed(1)} m³ (${resultado.porcentajeVolumen.toFixed(0)}%)${omitidosMsg}`
+      );
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Error en la carga automática");
+    } finally {
+      setCargandoAuto(false);
+    }
+  };
+
+  const handleCancelarPreview = () => {
+    setPreviewAuto(null);
+  };
+
+  // Deshacer la última carga automática (solo en sesión, sin BD extra)
+  const handleDeshacerAuto = async () => {
+    if (!undoAutoIds || !selectedCamion || deshaciendo) return;
+    setDeshaciendo(true);
+    setError("");
+    try {
+      for (const docId of undoAutoIds) {
+        await removePaletFromCamion(selectedCamion.matricula, docId);
+      }
+      showInfo(`Revertidos ${undoAutoIds.length} palets de la carga automática`);
+      setUndoAutoIds(null);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Error al deshacer la carga automática");
+    } finally {
+      setDeshaciendo(false);
     }
   };
 
@@ -532,6 +675,30 @@ export default function CargaCamion() {
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              onClick={handlePrevisualizarAuto}
+              disabled={!canEditarCarga || cargandoAuto || !!previewAuto || pendientes.length === 0}
+              title={`Rellena el camión automáticamente hasta el ${Math.round(CAPACITY_LIMIT * 100)}% de capacidad, priorizando los palets más urgentes y agrupando por cliente.`}
+              className="flex items-center gap-2 px-4 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black rounded-2xl text-xs uppercase tracking-wider shadow-md active:scale-95 transition-all"
+            >
+              {cargandoAuto ? (
+                <Loader2 size={15} className="animate-spin" />
+              ) : (
+                <Zap size={15} />
+              )}
+              {cargandoAuto ? "Guardando…" : "Carga automática"}
+            </button>
+            {undoAutoIds && !cargandoAuto && (
+              <button
+                onClick={handleDeshacerAuto}
+                disabled={deshaciendo}
+                title="Revertir los palets asignados en la última carga automática"
+                className="flex items-center gap-1.5 px-3 py-2.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 disabled:opacity-50 font-black rounded-2xl text-xs uppercase tracking-wider shadow-md active:scale-95 transition-all"
+              >
+                {deshaciendo ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
+                Deshacer ({undoAutoIds.length})
+              </button>
+            )}
             <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Camión
             </label>
@@ -553,6 +720,93 @@ export default function CargaCamion() {
             </select>
           </div>
         </div>
+
+        {/* Previsualización carga automática */}
+        {previewAuto && (
+          <div className="flex flex-col gap-3 p-4 bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-900/50 rounded-2xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-violet-700 dark:text-violet-300">
+                <Zap size={16} />
+                <p className="text-sm font-black uppercase tracking-wider">Confirmar carga automática</p>
+              </div>
+              <button onClick={handleCancelarPreview} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Sliders de límite */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                    <Weight size={10} /> Límite peso
+                  </label>
+                  <span ref={pesoLabelRef} className="text-[11px] font-black text-violet-600 dark:text-violet-400">{limitePesoAuto}%</span>
+                </div>
+                <input
+                  ref={pesoSliderRef}
+                  type="range" min={10} max={100} step={1}
+                  defaultValue={limitePesoAuto}
+                  onChange={handleLimitePesoChange}
+                  onPointerUp={handleLimitePesoCommit}
+                  onTouchEnd={handleLimitePesoCommit}
+                  className="w-full accent-violet-600"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                    <Box size={10} /> Límite volumen
+                  </label>
+                  <span ref={volumenLabelRef} className="text-[11px] font-black text-violet-600 dark:text-violet-400">{limiteVolumenAuto}%</span>
+                </div>
+                <input
+                  ref={volumenSliderRef}
+                  type="range" min={10} max={100} step={1}
+                  defaultValue={limiteVolumenAuto}
+                  onChange={handleLimiteVolumenChange}
+                  onPointerUp={handleLimiteVolumenCommit}
+                  onTouchEnd={handleLimiteVolumenCommit}
+                  className="w-full accent-violet-600"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="bg-white dark:bg-slate-800 rounded-xl p-3 border border-violet-100 dark:border-violet-900/40">
+                <p className="text-2xl font-black text-violet-600 dark:text-violet-400">{previewAuto.seleccionados.length}</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mt-0.5">palets</p>
+              </div>
+              <div className="bg-white dark:bg-slate-800 rounded-xl p-3 border border-violet-100 dark:border-violet-900/40">
+                <p className="text-2xl font-black text-violet-600 dark:text-violet-400">{previewAuto.pesoTotal.toFixed(0)} <span className="text-sm font-semibold">kg</span></p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mt-0.5">{previewAuto.porcentajePeso.toFixed(0)}% peso</p>
+              </div>
+              <div className="bg-white dark:bg-slate-800 rounded-xl p-3 border border-violet-100 dark:border-violet-900/40">
+                <p className="text-2xl font-black text-violet-600 dark:text-violet-400">{previewAuto.volumenTotal.toFixed(1)} <span className="text-sm font-semibold">m³</span></p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mt-0.5">{previewAuto.porcentajeVolumen.toFixed(0)}% vol.</p>
+              </div>
+            </div>
+            {previewAuto.omitidos > 0 && (
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                {previewAuto.omitidos} palet{previewAuto.omitidos !== 1 ? "s" : ""} omitido{previewAuto.omitidos !== 1 ? "s" : ""} por superar el límite configurado.
+              </p>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={handleConfirmarAuto}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-violet-600 hover:bg-violet-500 text-white font-black rounded-xl text-xs uppercase tracking-wider shadow-md active:scale-95 transition-all"
+              >
+                <Zap size={14} /> Confirmar y cargar
+              </button>
+              <button
+                onClick={handleCancelarPreview}
+                className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-black rounded-xl text-xs uppercase tracking-wider active:scale-95 transition-all"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
 
         {isCamionEnRuta && (
           <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-2xl">
