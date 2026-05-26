@@ -591,32 +591,6 @@ const CanvasGridTest: React.FC = () => {
     }
   };
 
-  // Manejar doble click en área para editar nombre
-  const handleAreaDoubleClick = (e: React.MouseEvent, areaId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const area = areas.find(a => a.id === areaId);
-    if (!area) return;
-    
-    setEditingArea(areaId);
-    setTempName(area.name || '');
-  };
-
-  // Manejar doble click en sub-área para editar nombre
-  const handleSubAreaDoubleClick = (e: React.MouseEvent, subAreaId: string, parentId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const parentArea = areas.find(a => a.id === parentId);
-    if (!parentArea) return;
-    
-    const subArea = parentArea.subAreas.find(sa => sa.id === subAreaId);
-    if (!subArea) return;
-    
-    setEditingSubArea({ parentId, subAreaId });
-    setTempName(subArea.name || '');
-  };
 
   // Guardar nombre editado
   const handleNameSave = () => {
@@ -1612,7 +1586,6 @@ const CanvasGridTest: React.FC = () => {
                     height: `${area.height}px`
                   }}
                   onMouseDown={(e) => handleAreaMouseDown(e, area.id)}
-                  onDoubleClick={(e) => handleAreaDoubleClick(e, area.id)}
                 >
                   {/* Nombre del área o input de edición */}
                   {editingArea === area.id ? (
@@ -1653,7 +1626,6 @@ const CanvasGridTest: React.FC = () => {
                         boxSizing: 'border-box'
                       }}
                       onMouseDown={(e) => handleSubAreaMouseDown(e, subArea.id, area.id)}
-                      onDoubleClick={(e) => handleSubAreaDoubleClick(e, subArea.id, area.id)}
                     >
                       {/* Nombre de sub-área o input de edición */}
                       {editingSubArea?.subAreaId === subArea.id ? (
@@ -1740,16 +1712,15 @@ const CanvasGridTest: React.FC = () => {
           <details className="text-sm text-brand-600 dark:text-brand-300 cursor-pointer">
             <summary>Ver instrucciones de uso</summary>
             <div className="mt-3 space-y-2 text-xs">
-              <p>• <strong>Canvas:</strong> A-Z x 1-25 (650 celdas iniciales)</p>
-              <p>• <strong>Tamaño celda:</strong> 40x40px</p>
-              <p>• <strong>Hover:</strong> Muestra coordenadas de celda</p>
-              <p>• <strong>Áreas:</strong> Click "Añadir Área" para crear en A1</p>
-              <p>• <strong>Seleccionar:</strong> Click sobre área/sub-área</p>
-              <p>• <strong>Sub-áreas:</strong> Se añaden dentro del área padre</p>
-              <p>• <strong>Edición:</strong> Doble click para editar nombres</p>
-              <p>• <strong>Redimensionar:</strong> Arrastrar desde esquinas</p>
-              <p>• <strong>Mover:</strong> Arrastrar áreas/sub-áreas</p>
-              <p>• <strong>Eliminación:</strong> Seleccionar y usar botones correspondientes</p>
+              <p>• <strong>Crear una zona:</strong> Pulsa el botón "Añadir Área" para crear una nueva zona en el mapa</p>
+              <p>• <strong>Seleccionar una zona:</strong> Haz clic sobre cualquier zona para seleccionarla</p>
+              <p>• <strong>Mover una zona:</strong> Arrastra la zona con el ratón a la posición que quieras</p>
+              <p>• <strong>Cambiar el tamaño:</strong> Arrastra desde las esquinas de la zona para hacerla más grande o pequeña</p>
+              <p>• <strong>Crear una subzona:</strong> Primero selecciona una zona, luego pulsa "Añadir Sub-área" para crear una subzona dentro de ella</p>
+              <p>• <strong>Eliminar una zona:</strong> Selecciona la zona y pulsa el botón de eliminar</p>
+              <p>• <strong>Ver posición:</strong> Pasa el ratón por encima de una celda para ver su posición (ej: A1, B2)</p>
+              <p>• <strong>Guardar el mapa:</strong> Pulsa "Guardar Diseño" para guardar tu mapa actual</p>
+              <p>• <strong>Cargar un mapa:</strong> Pulsa "Gestor de Diseños" para cargar un mapa guardado anteriormente</p>
             </div>
           </details>
         </div>

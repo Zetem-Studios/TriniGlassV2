@@ -448,7 +448,6 @@ export default function Warehouse() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [subzonas, setSubzonas] = useState<any[]>([]);
-  const [defaultSubzones, setDefaultSubzones] = useState<Set<string>>(new Set());
   const [expandedSubzones, setExpandedSubzones] = useState<Set<string>>(new Set());
   const [showRuleEditor, setShowRuleEditor] = useState(false);
   const [selectedMapDesign, setSelectedMapDesign] = useState("default");
@@ -472,40 +471,8 @@ export default function Warehouse() {
     }
   }, [designs, designsLoading]);
 
-  // Calcular estadísticas de palets
-  const calculatePalletStats = () => {
-    // Agrupar productos por código de barras para contar palets
-    const palletsByBarcode = new Map<string, Block[]>();
-    blocks.forEach(block => {
-      const barcode = block.codigo_barra || `UNICO_${block.id}`;
-      if (!palletsByBarcode.has(barcode)) {
-        palletsByBarcode.set(barcode, []);
-      }
-      palletsByBarcode.get(barcode)!.push(block);
-    });
-
-    const totalPalets = palletsByBarcode.size;
-
-    // Contar palets en subzona default vs no default
-    let paletsInDefault = 0;
-    let paletsNotInDefault = 0;
-
-    palletsByBarcode.forEach((products) => {
-      // Un palet está en default si TODOS sus productos están en una subzona default
-      const allInDefault = products.every(p => {
-        const subzona = p.area;
-        return subzona && defaultSubzones.has(subzona);
-      });
-
-      if (allInDefault) {
-        paletsInDefault++;
-      } else {
-        paletsNotInDefault++;
-      }
-    });
-
-    return { totalPalets, paletsInDefault, paletsNotInDefault };
-  };
+  // MODO TEST/ENTREGA: Cambiar a false para modo entrega (cargar todos los datos)
+  const TEST_MODE = false; // true = modo test (solo 200 lecturas), false = modo entrega (todos los datos)
 
   // Función para cargar el mapa activo desde Firebase
   const loadActiveMapFromFirebase = () => {
@@ -700,16 +667,6 @@ export default function Warehouse() {
         const subzonasSnapshot = await getDocs(collection(db, 'subzonas'));
         const subzonasData = subzonasSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
         setSubzonas(subzonasData);
-        
-        // Extraer subzonas default
-        const defaultSet = new Set<string>();
-        subzonasData.forEach((subzona: any) => {
-          if (subzona.default === true) {
-            defaultSet.add(subzona.id);
-            defaultSet.add(subzona.nombre);
-          }
-        });
-        setDefaultSubzones(defaultSet);
       } catch (error) {
         console.error("Error cargando subzonas:", error);
       }
@@ -735,7 +692,9 @@ export default function Warehouse() {
           return;
         }
 
-        const docsToProcess = snapshot.docs;
+        const docsToProcess = TEST_MODE ? snapshot.docs.slice(0, 200) : snapshot.docs;
+        if (TEST_MODE) {
+        }
 
         const productos = docsToProcess
           .map((doc, index) => {
@@ -1327,14 +1286,9 @@ const renderSubzonesFromMap = () => {
       {!loading && blocks.length > 0 && (
         <div className="bg-brand-100 dark:bg-brand-900/30 border border-brand-400 dark:border-brand-700 px-6 py-4 rounded-2xl m-6">
           <p className="font-bold text-brand-700 dark:text-brand-200">
-            {(() => {
-              const { totalPalets, paletsInDefault, paletsNotInDefault } = calculatePalletStats();
-              return (
-                <>
-                  📦 {totalPalets} palets en base de datos · {paletsNotInDefault} palets posicionados · {paletsInDefault} palets en zona de posicionamiento por defecto
-                </>
-              );
-            })()}
+            ✅ {blocks.length} productos cargados · {blocks.filter(block => block.zoneId && block.area).length} productos posicionados
+            {TEST_MODE && <span className="ml-2 text-xs bg-yellow-400 text-yellow-900 px-2 py-1 rounded-full font-bold">MODO TEST</span>}
+            {!TEST_MODE && <span className="ml-2 text-xs bg-green-400 text-green-900 px-2 py-1 rounded-full font-bold">MODO ENTREGA</span>}
           </p>
         </div>
       )}
@@ -2196,6 +2150,7 @@ const renderSubzonesFromMap = () => {
 
             <div className="bg-white dark:bg-slate-800/60 rounded-2xl p-6 border border-slate-100 dark:border-slate-700 mt-2 grid grid-cols-1 gap-3 shadow-inner">
               <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Código de barras</span><span className="text-sm font-mono break-all">{selectedBlock.codigo_barra || 'Sin código'}</span></div>
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">ID documento</span><span className="text-sm font-mono break-all">{selectedBlock.id}</span></div>
               <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Cliente</span><span className="text-sm font-mono">{selectedBlock.client || 'Desconocido'}</span></div>
               <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Dimensiones totales</span><span className="text-sm font-mono">{selectedPalletGroup.length > 1 ? getAggregatedDimensions(selectedPalletGroup) : selectedBlock.dimensions || 'N/A'}</span></div>
               <div className="rounded-xl bg-slate-100 dark:bg-slate-900/40 p-3 flex flex-col"><span className="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1">Peso total</span><span className="text-sm font-mono">{selectedPalletGroup.length > 1 ? getAggregatedWeight(selectedPalletGroup) : selectedBlock.weight || 'N/A'}</span></div>
