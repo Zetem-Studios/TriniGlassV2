@@ -401,17 +401,8 @@ export const entregarPaletEnRuta = async ({
       { merge: true }
     );
 
-    tx.update(productoRef, {
-      estado_pedido: ESTADO_ENTREGADO,
-      entregadoEn: serverTimestamp(),
-      entregadoPorMatricula: matricula,
-      rutaId,
-      zona: null,
-      subzona: null,
-      posicion: null,
-    });
-
     tx.set(entregadoRef, {
+      ...productoData,
       docId: paletEntregado.docId,
       codigoBarra: paletEntregado.codigoBarra,
       cliente: paletEntregado.cliente,
@@ -422,10 +413,17 @@ export const entregarPaletEnRuta = async ({
       asignadoEnIso: paletEntregado.asignadoEnIso,
       matricula,
       estado: ESTADO_ENTREGADO,
+      estado_pedido: ESTADO_ENTREGADO,
       entregadoEn: serverTimestamp(),
       entregadoPor: email,
+      entregadoPorMatricula: matricula,
       rutaId,
+      zona: null,
+      subzona: null,
+      posicion: null,
     });
+
+    tx.delete(productoRef);
 
     if (rutaTxSnap.exists()) {
       const rutaTxData = rutaTxSnap.data();
@@ -660,17 +658,17 @@ export const finalizarRuta = async (
   const pesoEntregado = palets.reduce((a, p) => a + (p.pesoKg ?? 0), 0);
   const volumenEntregado = palets.reduce((a, p) => a + (p.volumenM3 ?? 0), 0);
 
+  const productoRefs = palets.map((p) => doc(db, PRODUCTOS, p.docId));
+  const productoSnaps = await Promise.all(productoRefs.map((ref) => getDoc(ref)));
+  const productosData = productoSnaps.map((snap) =>
+    snap.exists() ? snap.data() : {}
+  );
+
   const batch = writeBatch(db);
 
-  palets.forEach((p) => {
-    batch.update(doc(db, PRODUCTOS, p.docId), {
-      estado_pedido: ESTADO_ENTREGADO,
-      entregadoEn: serverTimestamp(),
-      entregadoPorMatricula: matricula,
-      rutaId: rutaActivaId ?? null,
-    });
-
+  palets.forEach((p, i) => {
     batch.set(doc(db, PALETS_ENTREGADOS, p.docId), {
+      ...productosData[i],
       docId: p.docId,
       codigoBarra: p.codigoBarra,
       cliente: p.cliente,
@@ -681,9 +679,19 @@ export const finalizarRuta = async (
       asignadoEnIso: p.asignadoEnIso,
       matricula,
       estado: ESTADO_ENTREGADO,
+      estado_pedido: ESTADO_ENTREGADO,
       entregadoEn: serverTimestamp(),
+      entregadoPor: email,
+      entregadoPorMatricula: matricula,
       rutaId: rutaActivaId ?? null,
+      zona: null,
+      subzona: null,
+      posicion: null,
     });
+
+    if (productoSnaps[i].exists()) {
+      batch.delete(productoRefs[i]);
+    }
   });
 
   if (rutaActivaId) {
