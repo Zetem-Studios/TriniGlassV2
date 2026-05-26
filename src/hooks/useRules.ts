@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, getDocs, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, doc, deleteDoc, writeBatch } from 'firebase/firestore';
 import type { ReglaAsignacion } from '../utils/RuleEngine';
 import { RuleEngine } from '../utils/RuleEngine';
 
@@ -9,7 +9,32 @@ export const useRules = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [zones, setZones] = useState<Array<{id: string; name: string}>>([]);
-  const [subzones, setSubzones] = useState<Array<{id: string; name: string; zonaId: string}>>([]);
+  const [subzones, setSubzones] = useState<Array<{id: string; name: string; zonaId: string; capacidadMaxima?: number | null}>>([]);
+
+  const sortRulesByPriority = (rulesToSort: ReglaAsignacion[]) =>
+    [...rulesToSort].sort((a, b) => a.prioridad - b.prioridad);
+
+  const getSubzoneKey = (zoneId?: string, subzoneName?: string) =>
+    `${zoneId || ''}:${subzoneName || ''}`;
+
+  const ensureSingleDefaultRule = async (rulesToNormalize: ReglaAsignacion[]) => {
+    const rulesCollection = collection(db, 'reglas_asignacion');
+    const defaultRules = rulesToNormalize.filter(rule => rule.esDefecto);
+
+    if (defaultRules.length === 0) {
+      const fallbackRule = RuleEngine.getReglasPorDefecto()[0];
+      const docRef = await addDoc(rulesCollection, fallbackRule);
+      return [...rulesToNormalize, { ...fallbackRule, id: docRef.id }];
+    }
+
+    if (defaultRules.length > 1) {
+      const [defaultRuleToKeep, ...defaultRulesToDelete] = defaultRules;
+      await Promise.all(defaultRulesToDelete.map(rule => deleteDoc(doc(db, 'reglas_asignacion', rule.id))));
+      return rulesToNormalize.filter(rule => !rule.esDefecto || rule.id === defaultRuleToKeep.id);
+    }
+
+    return rulesToNormalize;
+  };
 
   // Cargar zonas y subzonas desde Firebase
   const loadZonesAndSubzones = async () => {
@@ -32,7 +57,8 @@ export const useRules = () => {
         return {
           id: doc.id,
           name: data.nombre || data.name || doc.id,
-          zonaId: data.zonaId || ''
+          zonaId: data.zonaId || '',
+          capacidadMaxima: data.capacidadMaxima ?? null
         };
       });
       setSubzones(subzonesList);
@@ -46,6 +72,29 @@ export const useRules = () => {
   // Obtener subzonas para una zona específica
   const getSubzonesForZone = (zoneId: string) => {
     return subzones.filter(subzone => subzone.zonaId === zoneId);
+  };
+
+  const syncDefaultSubzone = async (zoneId: string, selectedSubzoneName: string) => {
+    const subzonasSnapshot = await getDocs(collection(db, 'subzonas'));
+    const batch = writeBatch(db);
+
+    subzonasSnapshot.docs.forEach((subzonaDoc) => {
+      const data = subzonaDoc.data();
+      const subzoneName = data.nombre || data.name || subzonaDoc.id;
+      const isDefaultSubzone = data.zonaId === zoneId && (subzoneName === selectedSubzoneName || subzonaDoc.id === selectedSubzoneName);
+      batch.update(subzonaDoc.ref, {
+        default: isDefaultSubzone
+      });
+      if (isDefaultSubzone) {
+        console.log('✅ Subzona marcada como default:', {
+          id: subzonaDoc.id,
+          zonaId: data.zonaId,
+          nombre: subzoneName
+        });
+      }
+    });
+
+    await batch.commit();
   };
 
   // Cargar reglas desde Firebase - SIN LOCAL STORAGE
@@ -78,7 +127,7 @@ export const useRules = () => {
           } as ReglaAsignacion));
         }
         
-        setRules(finalRules);
+        setRules(sortRulesByPriority(await ensureSingleDefaultRule(finalRules)));
         setError(null);
       } catch (err) {
         console.error('Error cargando reglas:', err);
@@ -98,7 +147,7 @@ export const useRules = () => {
       const rulesCollection = collection(db, 'reglas_asignacion');
       const docRef = await addDoc(rulesCollection, rule);
       const newRule = { ...rule, id: docRef.id };
-      setRules(prev => [...prev, newRule]);
+      setRules(prev => sortRulesByPriority([...prev, newRule]));
       return newRule;
     } catch (err) {
       console.error('Error guardando regla:', err);
@@ -110,9 +159,16 @@ export const useRules = () => {
   const updateRule = async (id: string, rule: Partial<ReglaAsignacion>) => {
     try {
       console.log('📝 Actualizando regla en Firebase:', id);
+      const previousRule = rules.find(existingRule => existingRule.id === id);
+      const ruleToUpdate = previousRule?.esDefecto
+        ? { ...rule, esDefecto: true, condiciones: [], activa: true }
+        : rule;
       const ruleRef = doc(db, 'reglas_asignacion', id);
-      await updateDoc(ruleRef, rule);
-      setRules(prev => prev.map(r => r.id === id ? { ...r, ...rule } : r));
+      await updateDoc(ruleRef, ruleToUpdate);
+      if (previousRule?.esDefecto && ruleToUpdate.acciones?.zona && ruleToUpdate.acciones?.subzona) {
+        await syncDefaultSubzone(ruleToUpdate.acciones.zona, ruleToUpdate.acciones.subzona);
+      }
+      setRules(prev => sortRulesByPriority(prev.map(r => r.id === id ? { ...r, ...ruleToUpdate } : r)));
     } catch (err) {
       console.error('Error actualizando regla:', err);
       throw new Error('Error al actualizar la regla');
@@ -122,6 +178,11 @@ export const useRules = () => {
   // Eliminar regla
   const deleteRule = async (id: string) => {
     try {
+      const ruleToDelete = rules.find(rule => rule.id === id);
+      if (ruleToDelete?.esDefecto) {
+        throw new Error('La regla por defecto no se puede eliminar');
+      }
+
       console.log('🗑️ Eliminando regla de Firebase:', id);
       const ruleRef = doc(db, 'reglas_asignacion', id);
       await deleteDoc(ruleRef);
@@ -140,33 +201,37 @@ export const useRules = () => {
         updateDoc(doc(db, 'reglas_asignacion', rule.id), { prioridad: index + 1 })
       );
       await Promise.all(batch);
-      setRules(reorderedRules);
+      setRules(sortRulesByPriority(reorderedRules.map((rule, index) => ({
+        ...rule,
+        prioridad: index + 1
+      }))));
     } catch (err) {
       console.error('Error reordenando reglas:', err);
       throw new Error('Error al reordenar las reglas');
     }
   };
 
-  // Restaurar reglas por defecto
+  // Restaurar posicionamiento de productos
   const restoreDefaults = async () => {
     try {
-      console.log('🔄 Restaurando reglas por defecto...');
+      console.log('🔄 Limpiando posicionamiento de productos...');
       
-      // Eliminar todas las reglas actuales
-      const rulesCollection = collection(db, 'reglas_asignacion');
-      const snapshot = await getDocs(rulesCollection);
-      await Promise.all(snapshot.docs.map(doc => deleteDoc(doc.ref)));
+      const productosCollection = collection(db, 'productos');
+      const snapshot = await getDocs(productosCollection);
+      const batch = writeBatch(db);
+
+      snapshot.docs.forEach((docSnap) => {
+        batch.update(docSnap.ref, {
+          zona: '',
+          subzona: '',
+          posicion: ''
+        });
+      });
       
-      // Cargar reglas por defecto
-      const defaultRules = RuleEngine.getReglasPorDefecto();
-      await Promise.all(
-        defaultRules.map(rule => addDoc(rulesCollection, rule))
-      );
-      
-      setRules(defaultRules);
+      await batch.commit();
     } catch (err) {
-      console.error('Error restaurando reglas por defecto:', err);
-      throw new Error('Error al restaurar las reglas por defecto');
+      console.error('Error limpiando posicionamiento de productos:', err);
+      throw new Error('Error al limpiar el posicionamiento de productos');
     }
   };
 
@@ -183,29 +248,73 @@ export const useRules = () => {
       }
 
       const ruleEngine = new RuleEngine(rules);
+      const defaultRule = rules.find(rule => rule.esDefecto);
+      const defaultZone = defaultRule?.acciones.zona || 'expediciones';
+      const defaultSubzone = defaultRule?.acciones.subzona || 'H';
+      const subzoneCapacities = new Map(
+        subzones
+          .filter(subzone => typeof subzone.capacidadMaxima === 'number' && subzone.capacidadMaxima > 0)
+          .map(subzone => [getSubzoneKey(subzone.zonaId, subzone.name), subzone.capacidadMaxima as number])
+      );
+      const allocatedBySubzone = new Map<string, number>();
       let processedCount = 0;
+      let overflowToDefaultCount = 0;
+      const unpositionedProducts: any[] = [];
       
       const updatePromises = snapshot.docs.map(async (docSnap) => {
         const producto = { ...docSnap.data(), id: docSnap.id } as any;
         const resultado = ruleEngine.evaluarProducto(producto);
         
-        if (resultado) {
+        if (resultado?.zona && resultado?.subzona) {
+          let targetZone = resultado.zona;
+          let targetSubzone = resultado.subzona;
+          const targetKey = getSubzoneKey(targetZone, targetSubzone);
+          const targetCapacity = subzoneCapacities.get(targetKey);
+          const alreadyAllocated = allocatedBySubzone.get(targetKey) || 0;
+
+          if (
+            targetCapacity !== undefined &&
+            alreadyAllocated >= targetCapacity &&
+            getSubzoneKey(targetZone, targetSubzone) !== getSubzoneKey(defaultZone, defaultSubzone)
+          ) {
+            targetZone = defaultZone;
+            targetSubzone = defaultSubzone;
+            overflowToDefaultCount++;
+          } else {
+            allocatedBySubzone.set(targetKey, alreadyAllocated + 1);
+          }
+
           const docRef = doc(db, 'productos', docSnap.id);
           await updateDoc(docRef, {
-            subzona: resultado.subzona,
-            zona: resultado.zona
+            subzona: targetSubzone,
+            zona: targetZone
           });
           processedCount++;
+        } else {
+          unpositionedProducts.push(producto);
         }
         
         return resultado;
       });
 
       await Promise.all(updatePromises);
+
+      if (unpositionedProducts.length > 0) {
+        console.group(`⚠️ Productos no posicionados (${unpositionedProducts.length})`);
+        console.table(unpositionedProducts);
+        unpositionedProducts.forEach(producto => {
+          console.log('Producto sin posicionar:', producto);
+        });
+        console.groupEnd();
+      }
       
+      const overflowMessage = overflowToDefaultCount > 0
+        ? ' Espacio insuficiente en esta subzona, los elementos sobrantes han sido enviados a la zona asignada por defecto'
+        : '';
+
       return { 
         success: true, 
-        message: `Reglas aplicadas a ${processedCount} productos`, 
+        message: `Reglas aplicadas a ${processedCount} productos.${overflowMessage}`, 
         count: processedCount,
         total: snapshot.size
       };

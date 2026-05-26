@@ -12,9 +12,9 @@ const ROL_LABELS: Record<Rol, string> = {
 };
 
 const ROL_BADGE: Record<Rol, string> = {
-  operario: "bg-slate-700/50 text-slate-300",
-  encargado: "bg-blue-900/40 text-blue-300",
-  admin: "bg-amber-900/40 text-amber-300",
+  operario: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  encargado: "bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-400",
+  admin: "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
 };
 
 export default function GestionUsuarios() {
@@ -80,85 +80,86 @@ export default function GestionUsuarios() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto mt-8 p-4">
-      <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 backdrop-blur-sm">
+    <div className="max-w-4xl mx-auto mt-4">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-xl p-6">
 
-        <div className="flex items-center gap-4 mb-8">
+        <div className="flex items-center gap-3 mb-6">
           <button
             onClick={() => navigate("/configuracion")}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            aria-label="Volver a configuración"
+            className="p-1.5 -ml-1.5 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800 transition-colors"
           >
-            <ChevronLeft className="w-5 h-5" />
+            <ChevronLeft className="w-4 h-4" />
           </button>
-          <div className="bg-amber-600/20 p-3 rounded-xl">
-            <ShieldCheck className="w-6 h-6 text-amber-500" />
+          <div className="bg-amber-50 dark:bg-amber-500/10 p-2.5 rounded-lg">
+            <ShieldCheck className="w-5 h-5 text-amber-600 dark:text-amber-400" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-white">Gestión de usuarios</h2>
-            <p className="text-slate-400 text-sm">Administra los roles del equipo</p>
+            <h2 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-white">Gestión de usuarios</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Administra los roles del equipo</p>
           </div>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-900/20 border border-red-800/40 rounded-xl text-red-400 text-sm">
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-500/5 border border-red-200/80 dark:border-red-500/20 rounded-lg text-red-700 dark:text-red-400 text-sm">
             {error}
           </div>
         )}
 
         {loadingList ? (
-          <div className="flex items-center justify-center py-16 text-slate-400 gap-3">
-            <Loader2 className="w-5 h-5 animate-spin" />
-            Cargando usuarios...
+          <div className="flex items-center justify-center py-16 text-slate-500 dark:text-slate-400 gap-2">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span className="text-sm">Cargando usuarios...</span>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto -mx-6">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-slate-500 border-b border-slate-800">
-                  <th className="pb-3 font-medium">
-                    <div className="flex items-center gap-2">
-                      <Users className="w-4 h-4" />
+                <tr className="border-b border-slate-200/80 dark:border-slate-800/80">
+                  <th className="px-6 pb-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    <div className="flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5" />
                       Email
                     </div>
                   </th>
-                  <th className="pb-3 font-medium px-4">Rol actual</th>
-                  <th className="pb-3 font-medium px-4">Cambiar rol</th>
-                  <th className="pb-3 font-medium px-4">Alta</th>
-                  {esAdmin && <th className="pb-3 font-medium px-4">Acciones</th>}
+                  <th className="px-4 pb-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Rol actual</th>
+                  <th className="px-4 pb-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Cambiar rol</th>
+                  <th className="px-4 pb-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Alta</th>
+                  {esAdmin && <th className="px-6 pb-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Acciones</th>}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                 {usuarios.map(u => {
                   const esMismoUsuario = u.uid === user?.uid;
                   const cambiando = changingUid === u.uid;
                   const eliminando = deletingUid === u.uid;
 
                   return (
-                    <tr key={u.uid} className="text-slate-300">
-                      <td className="py-4 pr-4 font-medium text-white max-w-[220px] truncate">
+                    <tr key={u.uid}>
+                      <td className="py-3 px-6 font-medium text-slate-900 dark:text-white max-w-[220px] truncate">
                         {u.email}
                         {esMismoUsuario && (
-                          <span className="ml-2 text-xs text-slate-500">(tú)</span>
+                          <span className="ml-2 text-xs font-normal text-slate-400 dark:text-slate-500">(tú)</span>
                         )}
                       </td>
-                      <td className="py-4 px-4">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${ROL_BADGE[u.rol]}`}>
+                      <td className="py-3 px-4">
+                        <span className={`inline-flex px-2 py-0.5 rounded-md text-xs font-medium ${ROL_BADGE[u.rol]}`}>
                           {ROL_LABELS[u.rol]}
                         </span>
                       </td>
-                      <td className="py-4 px-4">
+                      <td className="py-3 px-4">
                         {esMismoUsuario ? (
-                          <span className="text-xs text-slate-600 italic">No puedes cambiar tu propio rol</span>
+                          <span className="text-xs text-slate-400 dark:text-slate-600 italic">No puedes cambiar tu propio rol</span>
                         ) : (
                           <div className="relative">
                             {cambiando && (
-                              <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-slate-400" />
+                              <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-slate-400" />
                             )}
                             <select
                               value={u.rol}
                               disabled={cambiando}
                               onChange={e => handleRolChange(u.uid, e.target.value as Rol)}
-                              className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 pr-8 appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 text-sm rounded-md px-2.5 py-1.5 pr-7 appearance-none focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               <option value="operario">Operario</option>
                               <option value="encargado">Encargado</option>
@@ -167,26 +168,26 @@ export default function GestionUsuarios() {
                           </div>
                         )}
                       </td>
-                      <td className="py-4 px-4 text-slate-500 text-xs">
+                      <td className="py-3 px-4 text-slate-500 dark:text-slate-400 text-xs tabular-nums">
                         {u.creadoEn
                           ? u.creadoEn.toLocaleDateString("es-ES")
                           : "—"}
                       </td>
                       {esAdmin && (
-                        <td className="py-4 px-4">
+                        <td className="py-3 px-6">
                           {esMismoUsuario ? (
-                            <span className="text-xs text-slate-600 italic">—</span>
+                            <span className="text-xs text-slate-400 dark:text-slate-600">—</span>
                           ) : (
                             <button
                               onClick={() => handleDeleteUser(u.uid)}
                               disabled={eliminando || cambiando}
                               title="Eliminar usuario"
-                              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-red-900/30 text-red-300 border border-red-800/40 hover:bg-red-900/50 hover:text-red-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               {eliminando ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
                               ) : (
-                                <Trash2 className="w-4 h-4" />
+                                <Trash2 className="w-3.5 h-3.5" />
                               )}
                               <span>Eliminar</span>
                             </button>

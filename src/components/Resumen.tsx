@@ -80,10 +80,10 @@ export default function Resumen() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white mb-1">
           Panel de Control
         </h1>
-        <p className="text-slate-600 dark:text-slate-400">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           Resumen del estado actual del almacén
         </p>
       </div>
@@ -155,12 +155,12 @@ export default function Resumen() {
       {/* Gráficos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Gráfico de barras - Ocupación por zona */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+        <div className="bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200/80 dark:border-slate-800/80">
+          <h3 className="text-base font-semibold tracking-tight text-slate-900 dark:text-white mb-4">
             Ocupación por Zona
           </h3>
           {loading ? (
-            <div className="h-[300px] animate-pulse bg-slate-100 dark:bg-slate-700 rounded-xl" />
+            <div className="h-[300px] animate-pulse bg-slate-100 dark:bg-slate-800 rounded-lg" />
           ) : (
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={barChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
@@ -190,12 +190,12 @@ export default function Resumen() {
         </div>
 
         {/* Gráfico circular - Distribución por zona */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+        <div className="bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200/80 dark:border-slate-800/80">
+          <h3 className="text-base font-semibold tracking-tight text-slate-900 dark:text-white mb-4">
             Distribución de Palets
           </h3>
           {loading ? (
-            <div className="h-[300px] animate-pulse bg-slate-100 dark:bg-slate-700 rounded-xl" />
+            <div className="h-[300px] animate-pulse bg-slate-100 dark:bg-slate-800 rounded-lg" />
           ) : pieChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
@@ -235,12 +235,12 @@ export default function Resumen() {
       {/* Segunda fila de gráficos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Gráfico de prioridades */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+        <div className="bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200/80 dark:border-slate-800/80">
+          <h3 className="text-base font-semibold tracking-tight text-slate-900 dark:text-white mb-4">
             Distribución por Prioridad
           </h3>
           {loading ? (
-            <div className="h-[250px] animate-pulse bg-slate-100 dark:bg-slate-700 rounded-xl" />
+            <div className="h-[250px] animate-pulse bg-slate-100 dark:bg-slate-800 rounded-lg" />
           ) : priorityData.length > 0 ? (
             <ResponsiveContainer width="100%" height={250}>
               <PieChart>
@@ -278,12 +278,12 @@ export default function Resumen() {
         </div>
 
         {/* Gráfico de tipos de vidrio */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+        <div className="bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200/80 dark:border-slate-800/80">
+          <h3 className="text-base font-semibold tracking-tight text-slate-900 dark:text-white mb-4">
             Tipos de Vidrio
           </h3>
           {loading ? (
-            <div className="h-[250px] animate-pulse bg-slate-100 dark:bg-slate-700 rounded-xl" />
+            <div className="h-[250px] animate-pulse bg-slate-100 dark:bg-slate-800 rounded-lg" />
           ) : glassTypeData.length > 0 ? (
             <ResponsiveContainer width="100%" height={250}>
               <PieChart>
@@ -323,11 +323,11 @@ export default function Resumen() {
 
       {/* Sección Flota */}
       <div className="pt-2">
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-1">
-          <Truck className="w-5 h-5 text-blue-500" />
+        <h2 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-white flex items-center gap-2 mb-1">
+          <Truck className="w-5 h-5 text-brand-500" />
           Gestión de flota
         </h2>
-        <p className="text-sm text-slate-600 dark:text-slate-400">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           Camiones, rutas y entregas en vivo
         </p>
       </div>
@@ -423,12 +423,12 @@ export default function Resumen() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Entregas por día (últimos 7 días) */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+        <div className="bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200/80 dark:border-slate-800/80">
+          <h3 className="text-base font-semibold tracking-tight text-slate-900 dark:text-white mb-4">
             Entregas por día (últimos 7 días)
           </h3>
           {fleetLoading ? (
-            <div className="h-65 animate-pulse bg-slate-100 dark:bg-slate-700 rounded-xl" />
+            <div className="h-65 animate-pulse bg-slate-100 dark:bg-slate-800 rounded-lg" />
           ) : fleet && fleet.entregasPorDia.some(d => d.entregas > 0) ? (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={fleet.entregasPorDia} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
@@ -454,12 +454,12 @@ export default function Resumen() {
         </div>
 
         {/* Top camiones por entregas */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+        <div className="bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200/80 dark:border-slate-800/80">
+          <h3 className="text-base font-semibold tracking-tight text-slate-900 dark:text-white mb-4">
             Camiones con más entregas
           </h3>
           {fleetLoading ? (
-            <div className="h-65 animate-pulse bg-slate-100 dark:bg-slate-700 rounded-xl" />
+            <div className="h-65 animate-pulse bg-slate-100 dark:bg-slate-800 rounded-lg" />
           ) : fleet && fleet.topCamiones.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart
@@ -490,46 +490,46 @@ export default function Resumen() {
       </div>
 
       {/* Tabla de resumen por zonas */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700">
-        <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+      <div className="bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200/80 dark:border-slate-800/80">
+        <h3 className="text-base font-semibold tracking-tight text-slate-900 dark:text-white mb-4">
           Estado por Zona
         </h3>
         {loading ? (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {[1, 2, 3, 4, 5, 6].map(i => (
-              <div key={i} className="h-12 animate-pulse bg-slate-100 dark:bg-slate-700 rounded-lg" />
+              <div key={i} className="h-12 animate-pulse bg-slate-100 dark:bg-slate-800 rounded-md" />
             ))}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="overflow-x-auto -mx-5">
+            <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-700">
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                <tr className="border-b border-slate-200/80 dark:border-slate-800/80">
+                  <th className="text-left py-2.5 px-5 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Zona
                   </th>
-                  <th className="text-center py-3 px-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                  <th className="text-center py-2.5 px-4 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Ocupados
                   </th>
-                  <th className="text-center py-3 px-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                  <th className="text-center py-2.5 px-4 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Capacidad
                   </th>
-                  <th className="text-center py-3 px-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                  <th className="text-center py-2.5 px-4 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Ocupación
                   </th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                  <th className="text-left py-2.5 px-5 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Estado
                   </th>
                 </tr>
               </thead>
-              <tbody>
-                {stats?.zonas.map((zona, index) => {
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                {stats?.zonas.map((zona) => {
                   const statusColor =
                     zona.percentage >= 90
-                      ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                      ? 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400'
                       : zona.percentage >= 70
-                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                      : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400';
+                      ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
+                      : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400';
 
                   const statusText =
                     zona.percentage >= 90
@@ -539,24 +539,19 @@ export default function Resumen() {
                       : 'Normal';
 
                   return (
-                    <tr
-                      key={zona.zoneId}
-                      className={`border-b border-slate-100 dark:border-slate-700/50 ${
-                        index % 2 === 0 ? 'bg-slate-50/50 dark:bg-slate-800/50' : ''
-                      }`}
-                    >
-                      <td className="py-3 px-4 font-medium text-slate-900 dark:text-white">
+                    <tr key={zona.zoneId}>
+                      <td className="py-3 px-5 font-medium text-slate-900 dark:text-white">
                         {zona.zoneName}
                       </td>
-                      <td className="py-3 px-4 text-center text-slate-700 dark:text-slate-300">
+                      <td className="py-3 px-4 text-center text-slate-700 dark:text-slate-300 tabular-nums">
                         {zona.occupied}
                       </td>
-                      <td className="py-3 px-4 text-center text-slate-700 dark:text-slate-300">
+                      <td className="py-3 px-4 text-center text-slate-700 dark:text-slate-300 tabular-nums">
                         {zona.total}
                       </td>
                       <td className="py-3 px-4 text-center">
                         <div className="flex items-center justify-center gap-2">
-                          <div className="w-20 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                          <div className="w-20 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                             <div
                               className={`h-full rounded-full ${
                                 zona.percentage >= 90
@@ -568,13 +563,13 @@ export default function Resumen() {
                               style={{ width: `${zona.percentage}%` }}
                             />
                           </div>
-                          <span className="text-sm text-slate-600 dark:text-slate-400">
+                          <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums w-9 text-right">
                             {zona.percentage}%
                           </span>
                         </div>
                       </td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusColor}`}>
+                      <td className="py-3 px-5">
+                        <span className={`inline-flex px-2 py-0.5 rounded-md text-xs font-medium ${statusColor}`}>
                           {statusText}
                         </span>
                       </td>
