@@ -1094,7 +1094,7 @@ Para reportar bugs o solicitar features:
 
 ---
 
-**Última actualización**: Febrero 2025  
+**Última actualización**: Mayo 2026  
 **Versión**: 0.0.0  
 **Estado**: En desarrollo activo
 
