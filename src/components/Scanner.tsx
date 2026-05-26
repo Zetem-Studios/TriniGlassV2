@@ -32,6 +32,7 @@ import {
   type WarehouseBlock,
   type WarehouseZone
 } from "../domain/warehouseRecommendation";
+import type { ReglaAsignacion } from "../utils/RuleEngine";
 
 type MobileScannerProps = {
   showLogout?: boolean;
@@ -254,7 +255,7 @@ export default function MobileScanner({ showLogout = false }: MobileScannerProps
     subzonasSnapshot.docs.forEach((subzonaDoc) => {
       const subzona = subzonaDoc.data();
       const zoneId = normalizeZoneId(subzona.zonaId);
-      const subzoneName = String(subzona.nombre ?? "").trim();
+      const subzoneName = String(subzona.nombre ?? subzona.name ?? subzonaDoc.id).trim();
       if (!zoneId || !subzoneName) return;
 
       const capacityValue = Number(subzona.capacidadMaxima);
@@ -349,11 +350,16 @@ export default function MobileScanner({ showLogout = false }: MobileScannerProps
       };
     }
 
-    const [productsSnapshot, firestoreZones] = await Promise.all([
+    const [productsSnapshot, firestoreZones, rulesSnapshot] = await Promise.all([
       getDocs(collection(db, "productos")),
       buildRecommendationZonesFromFirestore(),
+      getDocs(collection(db, "reglas_asignacion")),
     ]);
     const zonesForRecommendation = firestoreZones.length > 0 ? firestoreZones : INITIAL_ZONES;
+    const activeRules = rulesSnapshot.docs
+      .map((ruleDoc) => ({ ...ruleDoc.data(), id: ruleDoc.id } as ReglaAsignacion))
+      .filter((rule) => rule.activa)
+      .sort((a, b) => a.prioridad - b.prioridad);
     const occupiedBlocks = productsSnapshot.docs
       .filter((doc) => doc.id !== docId)
       .filter((doc) => hasStoredWarehouseLocation(doc.data()))
@@ -361,7 +367,7 @@ export default function MobileScanner({ showLogout = false }: MobileScannerProps
         mapProductoToOccupiedRecommendationBlock({ ...doc.data(), id: doc.id }, index, doc.id)
       );
 
-    return recommendPalletLocation(rawProducto, zonesForRecommendation, occupiedBlocks);
+    return recommendPalletLocation(rawProducto, zonesForRecommendation, occupiedBlocks, activeRules);
   };
 
   const mapFoundPaletToData = async (palet: FoundPalet, fallbackCode: string): Promise<PaletData> => {

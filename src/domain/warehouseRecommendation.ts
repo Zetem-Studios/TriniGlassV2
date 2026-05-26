@@ -1,3 +1,5 @@
+import { RuleEngine, type ReglaAsignacion } from "../utils/RuleEngine";
+
 export type ZoneLayout = "horizontal" | "vertical" | "single";
 
 export interface WarehouseBlock {
@@ -96,6 +98,11 @@ export const INITIAL_ZONES = ZONES;
 
 const normalizeText = (value: unknown) => String(value ?? "").trim().toUpperCase();
 
+const normalizeNumber = (value: unknown) => {
+  const parsed = Number(String(value ?? "").trim().replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 export const buildLocationId = (zoneId: string, area: string, position: string) => `${zoneId}-${area}-${position}`;
 
 export const normalizeLocationId = (value: unknown) => String(value ?? "").trim().toUpperCase();
@@ -186,6 +193,44 @@ export const parseFechaLineaPedido = (fecha: any) => {
 
   const parsed = Date.parse(normalized.replace('UTC', 'GMT'));
   return isNaN(parsed) ? null : new Date(parsed);
+};
+
+const getDaysUntil = (fecha: any) => {
+  const parsedDate = parseFechaLineaPedido(fecha);
+  if (!parsedDate) return null;
+
+  const today = new Date();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const startOfTarget = new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate()).getTime();
+  return Math.ceil((startOfTarget - startOfToday) / (1000 * 60 * 60 * 24));
+};
+
+export const buildRuleEvaluationProduct = (producto: any) => {
+  const fechaPedido = parseFechaLineaPedido(producto.fecha_linea_pedido);
+  const fechaEntrega = parseFechaLineaPedido(producto.fecha_entrega);
+  const hoy = new Date();
+  const diasStock = fechaPedido
+    ? Math.max(0, Math.floor((hoy.getTime() - fechaPedido.getTime()) / (1000 * 60 * 60 * 24)))
+    : 0;
+
+  return {
+    ...producto,
+    nombre_abreviado: producto.nombre_abreviado ?? producto.nombreAbreviado,
+    numero_cliente: producto.numero_cliente ?? producto.numeroCliente,
+    peso_total_kg: normalizeNumber(producto.peso_total_kg),
+    altura: normalizeNumber(producto.altura),
+    longitud: normalizeNumber(producto.longitud),
+    vidrio_simple:
+      typeof producto.vidrio_simple === "boolean"
+        ? producto.vidrio_simple
+        : String(producto.vidrio_simple ?? "").trim().toLowerCase() === "true" ||
+          String(producto.vidrio_simple ?? "").trim() === "1",
+    fecha_linea_pedido: fechaPedido ?? producto.fecha_linea_pedido,
+    fecha_entrega: fechaEntrega ?? producto.fecha_entrega,
+    dias_en_stock: diasStock,
+    daysInStorage: diasStock,
+    dias_hasta_entrega: getDaysUntil(producto.fecha_entrega),
+  };
 };
 
 export const mapProductoToBlock = (producto: any, index: number): WarehouseBlock => {
@@ -342,19 +387,47 @@ export const assignPositionsForArea = (zone: RecommendationZone, area: string) =
   }));
 };
 
-export const getBestLocation = (producto: any, todasLasZonas: RecommendationZone[]) => {
-  const assignedBlock = producto.zoneId && producto.area ? producto : mapProductoToBlock(producto, -1);
+const getAssignedBlock = (producto: any, reglas: ReglaAsignacion[] = []) => {
+  if (reglas.length > 0) {
+    const resultado = new RuleEngine(reglas).evaluarProducto(buildRuleEvaluationProduct(producto));
+    if (resultado?.zona && resultado?.subzona) {
+      return {
+        ...mapProductoToBlock(producto, -1),
+        zoneId: String(resultado.zona).trim().toLowerCase(),
+        area: String(resultado.subzona).trim(),
+      };
+    }
+  }
+
+  return producto.zoneId && producto.area ? producto : mapProductoToBlock(producto, -1);
+};
+
+export const getBestLocation = (
+  producto: any,
+  todasLasZonas: RecommendationZone[],
+  reglas: ReglaAsignacion[] = []
+) => {
+  const assignedBlock = getAssignedBlock(producto, reglas);
   const assignedZone = todasLasZonas.find(zone => zone.id === assignedBlock.zoneId);
   if (!assignedZone) return null;
 
   const assignedName = normalizeText(producto.nombre_abreviado ?? producto.nombreAbreviado);
   const assignedClient = normalizeText(producto.numero_cliente ?? producto.numeroCliente);
 
-  const getFreeCandidates = (zone: RecommendationZone, preferredArea?: string, zoneOrder = 0) => {
-    const orderedAreas = [
-      preferredArea,
-      ...zone.areas.filter(area => area !== preferredArea),
-    ].filter(Boolean) as string[];
+  const getFreeCandidates = (
+    zone: RecommendationZone,
+    preferredArea?: string,
+    zoneOrder = 0,
+    includeOtherAreas = true
+  ) => {
+    const orderedAreas = (
+      preferredArea && !includeOtherAreas
+        ? [preferredArea]
+        : [
+            preferredArea,
+            ...zone.areas.filter(area => area !== preferredArea),
+          ]
+    ).filter(Boolean) as string[];
     const matchedBlocks = zone.blocks.filter(block => {
       const sameName = assignedName && normalizeText(block.nombreAbreviado) === assignedName;
       const sameClient = assignedClient && normalizeText(block.numeroCliente) === assignedClient;
@@ -403,8 +476,27 @@ export const getBestLocation = (producto: any, todasLasZonas: RecommendationZone
       return a.positionIndex - b.positionIndex;
     });
 
-  const originalZoneCandidates = sortCandidates(getFreeCandidates(assignedZone, assignedBlock.area));
+  const hasDynamicRules = reglas.length > 0;
+  const defaultRule = reglas.find(regla => regla.activa && regla.esDefecto);
+  const defaultZone = defaultRule?.acciones.zona
+    ? todasLasZonas.find(zone => zone.id === String(defaultRule.acciones.zona).trim().toLowerCase())
+    : null;
+  const defaultArea = defaultRule?.acciones.subzona ? String(defaultRule.acciones.subzona).trim() : undefined;
+
+  const originalZoneCandidates = sortCandidates(
+    getFreeCandidates(assignedZone, assignedBlock.area, 0, !hasDynamicRules)
+  );
   if (originalZoneCandidates.length > 0) return originalZoneCandidates[0].id;
+
+  if (
+    hasDynamicRules &&
+    defaultZone &&
+    defaultArea &&
+    (defaultZone.id !== assignedZone.id || defaultArea !== assignedBlock.area)
+  ) {
+    const defaultCandidates = sortCandidates(getFreeCandidates(defaultZone, defaultArea, 0, false));
+    if (defaultCandidates.length > 0) return defaultCandidates[0].id;
+  }
 
   const alternativeZoneCandidates = sortCandidates(
     todasLasZonas
@@ -435,10 +527,11 @@ export const recommendPalletLocation = (
   producto: any,
   zones: WarehouseZone[],
   blocks: WarehouseBlock[],
+  reglas: ReglaAsignacion[] = [],
 ): PalletLocationRecommendation => {
   const recommendationZones = buildRecommendationZones(zones, blocks);
-  const assignedBlock = producto.zoneId && producto.area ? producto : mapProductoToBlock(producto, -1);
-  const locationId = getBestLocation(producto, recommendationZones);
+  const assignedBlock = getAssignedBlock(producto, reglas);
+  const locationId = getBestLocation(producto, recommendationZones, reglas);
   const recommendedZone = findZoneByLocationId(locationId, recommendationZones);
 
   return {
