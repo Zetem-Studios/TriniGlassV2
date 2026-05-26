@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 
-import { LayoutDashboard, Package, Building2, Bell, Settings, Sun, Moon, Menu, UserPlus, Truck, PackageOpen, X, LogOut, Smartphone } from 'lucide-react';
+import { LayoutDashboard, Package, Building2, Bell, Settings, Sun, Moon, Menu, UserPlus, Truck, PackageOpen, X, LogOut } from 'lucide-react';
 import { useAuth } from '../context/useAuth';
 import { useAlertasCount } from '../useAlertasCount';
 import { signOut } from 'firebase/auth';
@@ -34,7 +34,6 @@ export default function Layout() {
     { to: "/", icon: LayoutDashboard, label: "Resumen", pill: null, adminOnly: false },
     { to: "/inventario", icon: Package, label: "Inventario", pill: { text: "98", type: "grey" }, adminOnly: false },
     { to: "/almacen", icon: Building2, label: "Almacén", pill: null, adminOnly: false },
-    { to: "/scanner", icon: Smartphone, label: "Escaner", pill: null, adminOnly: false },
     { to: "/camiones", icon: Truck, label: "Flota", pill: null, adminOnly: false },
     { to: "/camiones/cargar", icon: PackageOpen, label: "Carga camión", pill: null, adminOnly: false },
     { to: "/alertas", icon: Bell, label: "Alertas", pill: alertasCount > 0 ? { text: String(alertasCount), type: "red" } : null, adminOnly: false },
