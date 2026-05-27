@@ -591,6 +591,7 @@ export default function Stock() {
                     <td className="px-3 py-3">
                       <div className="text-slate-900 dark:text-slate-200 font-medium">{item.type}</div>
                       <div className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">{item.dimensions} mm</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{item.codigo_barra ? `Código: ${item.codigo_barra}` : "Sin código"}</div>
                     </td>
                     <td className="px-3 py-3 text-slate-700 dark:text-slate-300">{item.client}</td>
                     <td className="px-3 py-3 text-slate-700 dark:text-slate-300">{item.location}</td>
@@ -715,6 +716,16 @@ export default function Stock() {
                   value={selectedPalet.type}
                   disabled={isViewMode}
                   onChange={(e) => updateSelectedPaletField("type", e.target.value)}
+                  className="w-full p-2.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-500 dark:text-white outline-none transition-shadow disabled:cursor-not-allowed disabled:bg-slate-100 dark:disabled:bg-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Código de barras</label>
+                <input
+                  type="text"
+                  value={selectedPalet.codigo_barra || ""}
+                  disabled={isViewMode}
+                  onChange={(e) => updateSelectedPaletField("codigo_barra", e.target.value)}
                   className="w-full p-2.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-500 dark:text-white outline-none transition-shadow disabled:cursor-not-allowed disabled:bg-slate-100 dark:disabled:bg-slate-800"
                 />
               </div>
