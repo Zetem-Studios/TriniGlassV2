@@ -768,52 +768,39 @@ export default function Warehouse() {
           usedPositionsByLocation.get(key)?.add(block.posicion);
         });
 
-        processedBlocks.forEach((block) => {
-          if (!block.zoneId || !block.area || block.posicion) return;
-
+        // Agrupar productos sin posición por zona/subzona para asignar posiciones consecutivas
+        const blocksWithoutPosition = processedBlocks.filter(block => !block.zoneId || !block.area || !block.posicion);
+        const groupedByLocation = new Map<string, Block[]>();
+        blocksWithoutPosition.forEach(block => {
+          if (!block.zoneId || !block.area) return;
           const locationKey = `${block.zoneId}__${block.area}`;
-          const zoneName = zones.find(z => z.id === block.zoneId)?.name || block.zoneId;
-          const subzonaConfig = subzonas.find(sub => sub.zonaId === block.zoneId && sub.nombre === block.area);
+          if (!groupedByLocation.has(locationKey)) {
+            groupedByLocation.set(locationKey, []);
+          }
+          groupedByLocation.get(locationKey)!.push(block);
+        });
+
+        // Asignar posiciones consecutivas a cada grupo
+        groupedByLocation.forEach((blocks, locationKey) => {
+          const [zoneId, area] = locationKey.split('__');
+          const zoneName = zones.find(z => z.id === zoneId)?.name || zoneId;
+          const subzonaConfig = subzonas.find(sub => sub.zonaId === zoneId && sub.nombre === area);
           const capacidad = subzonaConfig?.capacidadMaxima;
-          const blocksInSubzone = processedBlocks.filter(item => item.zoneId === block.zoneId && item.area === block.area);
-          const maxColumnInUse = Math.max(
-            0,
-            ...blocksInSubzone
-              .map(item => getSlotFromPosition(item.posicion)?.columna || 0)
-          );
           const tarjetasPorFila = capacidad
             ? Math.ceil(capacidad / 2)
-            : Math.max(maxColumnInUse + 1, Math.ceil((blocksInSubzone.length + 1) / 2), 1);
+            : Math.ceil((blocks.length + 1) / 2);
 
-          if (!usedPositionsByLocation.has(locationKey)) usedPositionsByLocation.set(locationKey, new Set());
-          const usedPositions = usedPositionsByLocation.get(locationKey)!;
-          let assignedPosition: string | null = null;
+          let positionIndex = 0;
+          blocks.forEach((block) => {
+            const fila = positionIndex < tarjetasPorFila ? 1 : 2;
+            const columna = fila === 1 ? positionIndex + 1 : positionIndex - tarjetasPorFila + 1;
+            const assignedPosition = generarCodigoUbicacion(zoneName, area, fila, columna);
 
-          for (let columna = 1; columna <= tarjetasPorFila; columna++) {
-            const candidatePosition = generarCodigoUbicacion(zoneName, block.area, 1, columna);
-            if (!usedPositions.has(candidatePosition)) {
-              assignedPosition = candidatePosition;
-              break;
-            }
-          }
+            block.posicion = assignedPosition;
+            pendingPositionUpdates.push({ id: block.id, posicion: assignedPosition });
 
-          if (!assignedPosition) {
-            for (let columna = 1; columna <= tarjetasPorFila; columna++) {
-              const candidatePosition = generarCodigoUbicacion(zoneName, block.area, 2, columna);
-              if (!usedPositions.has(candidatePosition)) {
-                assignedPosition = candidatePosition;
-                break;
-              }
-            }
-          }
-
-          if (!assignedPosition) {
-            assignedPosition = generarCodigoUbicacion(zoneName, block.area, 1, tarjetasPorFila + 1);
-          }
-
-          usedPositions.add(assignedPosition);
-          block.posicion = assignedPosition;
-          pendingPositionUpdates.push({ id: block.id, posicion: assignedPosition });
+            positionIndex++;
+          });
         });
 
         for (let i = 0; i < pendingPositionUpdates.length; i += 500) {
@@ -1699,9 +1686,9 @@ const renderSubzonesFromMap = () => {
                     
                     // Filtrar palets que pertenecen a esta subzona (usando campos actualizados por reglas)
                     const paletsEnSubzona = blocks.filter(block => {
-                      // Priorizar campos zona/subzona actualizados por reglas
-                      const blockArea = (block as any).subzona || block.area;
-                      
+                      // Usar el campo actualizado por movimiento/reglas
+                      const blockArea = block.area || (block as any).subzona;
+
                       // Solo filtrar por nombre de subzona, no por zona
                       return blockArea === subZone.nombre;
                     });
