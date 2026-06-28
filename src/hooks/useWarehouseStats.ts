@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { db } from './firebase';
+import { db } from '../firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 
 const ESTADOS_FUERA_DE_ALMACEN = new Set(['Entregado', 'En tránsito']);

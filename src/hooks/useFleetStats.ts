@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { collection, onSnapshot, Timestamp } from 'firebase/firestore';
-import { db } from './firebase';
+import { db } from '../firebase';
 
 export interface EntregasPorDia {
   date: string; // ISO yyyy-mm-dd
