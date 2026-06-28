@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { 
   collection, getDocs, query, where, orderBy, limit, Timestamp, 
-  addDoc, updateDoc, doc 
+  addDoc, updateDoc, doc, startAfter, DocumentSnapshot 
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { 
@@ -15,7 +15,7 @@ import { formatDate } from "../lib/utils";
 import type { Column, SelectOption } from "./ui";
 
 // Límite máximo de resultados por query en Firestore
-const MAX_FIRESTORE_RESULTS = 200;
+const PAGE_SIZE = 100;
 
 const useDebounce = (value: string, delay: number) => {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -87,18 +87,31 @@ const EMPTY_PALET: Palet = {
 
 const STATUS_OPTIONS: SelectOption[] = [
   { value: "", label: "Todos los estados" },
+  { value: "Pendiente", label: "Pendiente" },
+  { value: "Para verificar", label: "Para verificar" },
+  { value: "Codificada", label: "Codificada" },
+  { value: "Verificado", label: "Verificado" },
+  { value: "Producción", label: "Producción" },
+  { value: "Producida", label: "Producida" },
+  { value: "Listo para carga", label: "Listo para carga" },
+  { value: "En tránsito", label: "En tránsito" },
+  { value: "Entregado", label: "Entregado" },
+  { value: "Almacenado", label: "Almacenado" },
+  { value: "Reservado", label: "Reservado" },
+  { value: "Bloqueada", label: "Bloqueada" },
+  { value: "Erróneo", label: "Erróneo" },
+];
+
+const PALET_STATUS_OPTIONS: SelectOption[] = [
+  { value: "Pendiente", label: "Pendiente" },
   { value: "Para verificar", label: "Para verificar" },
   { value: "Codificada", label: "Codificada" },
   { value: "Producción", label: "Producción" },
   { value: "Producida", label: "Producida" },
-  { value: "Bloqueada", label: "Bloqueada" },
-];
-
-const PALET_STATUS_OPTIONS: SelectOption[] = [
+  { value: "Listo para carga", label: "Listo para carga" },
   { value: "Almacenado", label: "Almacenado" },
   { value: "Reservado", label: "Reservado" },
-  { value: "Pendiente", label: "Pendiente" },
-  { value: "Listo para carga", label: "Listo para carga" },
+  { value: "Erróneo", label: "Erróneo" },
 ];
 
 const ROWS_PER_PAGE_OPTIONS: SelectOption[] = [
@@ -156,11 +169,21 @@ const mapPaletToFirestore = (palet: Palet) => {
   };
 };
 
-const getStatusBadgeVariant = (status: string): "success" | "warning" | "info" | "neutral" => {
+const getStatusBadgeVariant = (status: string): "success" | "warning" | "info" | "neutral" | "danger" => {
   switch (status) {
     case "Almacenado": return "success";
     case "Pendiente": return "warning";
+    case "Para verificar": return "warning";
     case "Reservado": return "info";
+    case "Producción": return "info";
+    case "Codificada": return "info";
+    case "Verificado": return "success";
+    case "Producida": return "success";
+    case "Listo para carga": return "success";
+    case "En tránsito": return "info";
+    case "Entregado": return "success";
+    case "Bloqueada": return "neutral";
+    case "Erróneo": return "danger";
     default: return "neutral";
   }
 };
@@ -173,7 +196,6 @@ export default function Stock() {
   const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearch = useDebounce(searchTerm, 300);
-  const [hitLimit, setHitLimit] = useState(false);
 
   const [serverFilters, setServerFilters] = useState<ServerFilters>({
 
@@ -207,90 +229,96 @@ export default function Stock() {
   const debouncedClient = useDebounce(clientFilters.client, 400);
   const debouncedType = useDebounce(clientFilters.type, 400);
 
+  const parsedDimensions = useMemo(() => {
+    const cache = new Map<string, { width: number; height: number; thickness: number }>();
+    inventory.forEach(item => {
+      cache.set(item.docId, parseDimensions(item.dimensions));
+    });
+    return cache;
+  }, [inventory]);
+
   // Panel lateral de edición
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [selectedPalet, setSelectedPalet] = useState<Palet | null>(null);
 
-  // Paginado
+  // Paginado cliente
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
+  // Paginación servidor (cursor)
+  const [lastVisible, setLastVisible] = useState<DocumentSnapshot | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+
+  const buildFilters = useCallback(
+    (filters: ServerFilters) => {
+      const conditions: ReturnType<typeof where>[] = [];
+      if (filters.dateFrom) conditions.push(where("fecha_linea_pedido", ">=", Timestamp.fromDate(new Date(filters.dateFrom))));
+      if (filters.dateTo) conditions.push(where("fecha_linea_pedido", "<=", Timestamp.fromDate(new Date(filters.dateTo))));
+      if (filters.status) conditions.push(where("estado_pedido", "==", filters.status));
+      if (filters.zone) conditions.push(where("subzona", "==", filters.zone));
+      if (filters.codificador) conditions.push(where("codificador", "==", filters.codificador));
+      if (filters.codigo_barra) conditions.push(where("codigo_barra", "==", filters.codigo_barra));
+      if (filters.numero_linea_pedido) conditions.push(where("numero_linea_pedido", "==", filters.numero_linea_pedido));
+      if (filters.referencia_linea_pedido) conditions.push(where("referencia_linea_pedido", "==", filters.referencia_linea_pedido));
+      return conditions;
+    },
+    [],
+  );
+
+  const mapDocToPalet = useCallback((doc: DocumentSnapshot): Palet => {
+    const data = doc.data() as Record<string, unknown>;
+    const dateValue = data.fecha_entrega || data.fecha_linea_pedido || data.infos_entrega || "";
+    const dateString = parseFirestoreDateToISO(dateValue);
+    const ancho = Number(data.longitud ?? 0);
+    const alto = Number(data.altura ?? 0);
+    const grosor = Number(data.peso_pieza_kg ?? 0);
+    const locationValue = data.subzona ? String(data.subzona) : "Sin zona";
+    const estado = (data.estado_pedido as string) || (data.estado_linea_pdd as string) || "Pendiente";
+
+    return {
+      id: (data.numero_linea_pedido as string) || doc.id,
+      docId: doc.id,
+      type: (data.descripcion_producido_longitud as string) || (data.estado_linea_pdd as string) || "Sin descripción",
+      dimensions: `${ancho || alto || 0}x${alto || 0}x${grosor || 0}`,
+      client: (data.apellido_cliente as string) || (data.nombre_abreviado as string) || "Cliente desconocido",
+      date: dateString,
+      location: locationValue,
+      status: estado,
+      zone: data.subzona ? String(data.subzona) : "",
+      codigo_barra: data.codigo_barra ? String(data.codigo_barra) : undefined,
+      codificador: data.codificador ? String(data.codificador) : undefined,
+      numero_linea_pedido: data.numero_linea_pedido ? String(data.numero_linea_pedido) : undefined,
+      referencia_linea_pedido: data.referencia_linea_pedido ? String(data.referencia_linea_pedido) : undefined,
+    };
+  }, []);
+
   const fetchStock = useCallback(async () => {
     const filters = JSON.parse(debouncedServerFilters) as ServerFilters;
+    setLastVisible(null);
+    setHasMore(false);
     if (inventory.length === 0) {
       setLoading(true);
     }
     try {
-      const conditions: ReturnType<typeof where>[] = [];
-
-      if (filters.dateFrom) {
-        conditions.push(where("fecha_linea_pedido", ">=", Timestamp.fromDate(new Date(filters.dateFrom))));
-      }
-
-      if (filters.dateTo) {
-        conditions.push(where("fecha_linea_pedido", "<=", Timestamp.fromDate(new Date(filters.dateTo))));
-      }
-
-      if (filters.status) {
-        conditions.push(where("estado_pedido", "==", filters.status));
-      }
-
-      if (filters.zone) {
-        conditions.push(where("subzona", "==", filters.zone));
-      }
-
-      if (filters.codificador) {
-        conditions.push(where("codificador", "==", filters.codificador));
-      }
-
-      if (filters.codigo_barra) {
-        conditions.push(where("codigo_barra", "==", filters.codigo_barra));
-      }
-
-      if (filters.numero_linea_pedido) {
-        conditions.push(where("numero_linea_pedido", "==", filters.numero_linea_pedido));
-      }
-
-      if (filters.referencia_linea_pedido) {
-        conditions.push(where("referencia_linea_pedido", "==", filters.referencia_linea_pedido));
-      }
+      const conditions = buildFilters(filters);
 
       const productosQuery = query(
         collection(db, "productos"),
         ...conditions,
         orderBy("fecha_linea_pedido", "desc"),
-        limit(MAX_FIRESTORE_RESULTS)
+        limit(PAGE_SIZE),
       );
 
       const querySnapshot = await getDocs(productosQuery);
-      setHitLimit(querySnapshot.size >= MAX_FIRESTORE_RESULTS);
+      const docs = querySnapshot.docs;
+      setHasMore(docs.length >= PAGE_SIZE);
+      if (docs.length > 0) {
+        setLastVisible(docs[docs.length - 1]);
+      }
 
-      const firestoreInventory: Palet[] = querySnapshot.docs.map((doc) => {
-        const data = doc.data() as Record<string, unknown>;
-        const dateValue = data.fecha_entrega || data.fecha_linea_pedido || data.infos_entrega || "";
-        const dateString = parseFirestoreDateToISO(dateValue);
-        const ancho = Number(data.longitud ?? 0);
-        const alto = Number(data.altura ?? 0);
-        const grosor = Number(data.peso_pieza_kg ?? 0);
-        const locationValue = data.subzona ? String(data.subzona) : "Sin zona";
-        const estado = (data.estado_pedido as string) || (data.estado_linea_pdd as string) || "Pendiente";
-
-        return {
-          id: (data.numero_linea_pedido as string) || doc.id,
-          docId: doc.id,
-          type: (data.descripcion_producido_longitud as string) || (data.estado_linea_pdd as string) || "Sin descripción",
-          dimensions: `${ancho || alto || 0}x${alto || 0}x${grosor || 0}`,
-          client: (data.apellido_cliente as string) || (data.nombre_abreviado as string) || "Cliente desconocido",
-          date: dateString,
-          location: locationValue,
-          status: estado,
-          zone: data.subzona ? String(data.subzona) : "",
-          codigo_barra: data.codigo_barra ? String(data.codigo_barra) : undefined,
-          codificador: data.codificador ? String(data.codificador) : undefined,
-          numero_linea_pedido: data.numero_linea_pedido ? String(data.numero_linea_pedido) : undefined,
-          referencia_linea_pedido: data.referencia_linea_pedido ? String(data.referencia_linea_pedido) : undefined,
-        };
-      });
+      const firestoreInventory: Palet[] = docs.map((doc) => mapDocToPalet(doc));
 
       setInventory(firestoreInventory);
     } catch (error) {
@@ -298,20 +326,54 @@ export default function Stock() {
       if (inventory.length === 0) {
         setInventory([]);
       }
-      addToast({ type: "error", title: "Error", message: "No se pudo cargar el inventario. Reintentando..." });
+      addToast({ type: "error", title: "Error", message: "No se pudo cargar el inventario." });
     } finally {
       setLoading(false);
     }
-  }, [debouncedServerFilters, addToast]);
+  }, [debouncedServerFilters, addToast, buildFilters, mapDocToPalet, inventory.length]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !lastVisible) return;
+    setLoadingMore(true);
+    try {
+      const filters = JSON.parse(debouncedServerFilters) as ServerFilters;
+      const conditions = buildFilters(filters);
+
+      const productosQuery = query(
+        collection(db, "productos"),
+        ...conditions,
+        orderBy("fecha_linea_pedido", "desc"),
+        startAfter(lastVisible),
+        limit(PAGE_SIZE),
+      );
+
+      const querySnapshot = await getDocs(productosQuery);
+      const docs = querySnapshot.docs;
+      setHasMore(docs.length >= PAGE_SIZE);
+      if (docs.length > 0) {
+        setLastVisible(docs[docs.length - 1]);
+      }
+
+      const moreInventory: Palet[] = docs.map((doc) => mapDocToPalet(doc));
+      setInventory((prev) => [...prev, ...moreInventory]);
+    } catch (error) {
+      console.error("Error cargando más inventario:", error);
+      addToast({ type: "error", title: "Error", message: "No se pudieron cargar más resultados." });
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, lastVisible, debouncedServerFilters, buildFilters, mapDocToPalet, addToast]);
 
   useEffect(() => {
     fetchStock();
+    setCurrentPage(1);
   }, [fetchStock]);
 
   const openPaletPanel = useCallback((palet: Palet | null, viewMode = false) => {
     setSelectedPalet(palet);
     setIsPanelOpen(true);
     setIsViewMode(viewMode);
+    setSaving(false);
     setActionError(null);
     setInfoMessage(null);
   }, []);
@@ -483,7 +545,7 @@ export default function Stock() {
         debouncedType === "" ||
         item.type.toLowerCase().includes(debouncedType.toLowerCase());
 
-      const { width, height, thickness } = parseDimensions(item.dimensions);
+      const { width, height, thickness } = parsedDimensions.get(item.docId) ?? { width: 0, height: 0, thickness: 0 };
       const matchesWidthMin = clientFilters.widthMin === "" || width >= Number(clientFilters.widthMin);
       const matchesWidthMax = clientFilters.widthMax === "" || width <= Number(clientFilters.widthMax);
       const matchesHeightMin = clientFilters.heightMin === "" || height >= Number(clientFilters.heightMin);
@@ -714,17 +776,20 @@ export default function Stock() {
               />
             </div>
 
-            {hitLimit && (
-              <div className="flex items-start gap-3 px-4 py-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-lg mt-4">
-                <AlertCircle size={18} className="text-amber-600 dark:text-amber-500 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
-                    Límite de {MAX_FIRESTORE_RESULTS} resultados alcanzado
+            {hasMore && (
+              <div className="flex items-start gap-3 px-4 py-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded-lg mt-4">
+                <AlertCircle size={18} className="text-blue-600 dark:text-blue-500 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-blue-900 dark:text-blue-200">
+                    Hay más resultados disponibles
                   </p>
-                  <p className="text-xs text-amber-800 dark:text-amber-300 mt-1">
-                    Aplica filtros más específicos para ver otros resultados.
+                  <p className="text-xs text-blue-800 dark:text-blue-300 mt-1">
+                    Carga más resultados o aplica filtros más específicos.
                   </p>
                 </div>
+                <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore}>
+                  {loadingMore ? "Cargando..." : "Cargar más"}
+                </Button>
               </div>
             )}
 
@@ -796,6 +861,22 @@ export default function Stock() {
         title={isViewMode ? "Ver Palet" : selectedPalet?.docId ? "Editar Palet" : "Crear Palet"}
         description={selectedPalet?.id || selectedPalet?.docId || "Nuevo palet"}
         size="md"
+        footer={
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={handleClosePanel}>
+              Cancelar
+            </Button>
+            {!isViewMode && (
+              <Button
+                onClick={handleSavePalet}
+                disabled={saving}
+                loading={saving}
+              >
+                {selectedPalet?.docId ? "Guardar Cambios" : "Crear Palet"}
+              </Button>
+            )}
+          </div>
+        }
       >
         {selectedPalet && (
           <div className="space-y-5">
@@ -845,12 +926,41 @@ export default function Stock() {
                 disabled={isViewMode}
                 onChange={(e) => updateSelectedPaletField("date", e.target.value)}
               />
-              <Input
-                label="Dimensiones"
-                value={selectedPalet.dimensions}
-                disabled={isViewMode}
-                onChange={(e) => updateSelectedPaletField("dimensions", e.target.value)}
-              />
+              <div className="grid grid-cols-3 gap-2">
+                <Input
+                  label="Ancho (mm)"
+                  type="number"
+                  value={parseDimensions(selectedPalet.dimensions).width || ""}
+                  disabled={isViewMode}
+                  onChange={(e) => {
+                    const dims = parseDimensions(selectedPalet.dimensions);
+                    const newWidth = e.target.value;
+                    updateSelectedPaletField("dimensions", `${newWidth || 0}x${dims.height || 0}x${dims.thickness || 0}`);
+                  }}
+                />
+                <Input
+                  label="Alto (mm)"
+                  type="number"
+                  value={parseDimensions(selectedPalet.dimensions).height || ""}
+                  disabled={isViewMode}
+                  onChange={(e) => {
+                    const dims = parseDimensions(selectedPalet.dimensions);
+                    const newHeight = e.target.value;
+                    updateSelectedPaletField("dimensions", `${dims.width || 0}x${newHeight || 0}x${dims.thickness || 0}`);
+                  }}
+                />
+                <Input
+                  label="Grosor (mm)"
+                  type="number"
+                  value={parseDimensions(selectedPalet.dimensions).thickness || ""}
+                  disabled={isViewMode}
+                  onChange={(e) => {
+                    const dims = parseDimensions(selectedPalet.dimensions);
+                    const newThickness = e.target.value;
+                    updateSelectedPaletField("dimensions", `${dims.width || 0}x${dims.height || 0}x${newThickness || 0}`);
+                  }}
+                />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <Input
@@ -909,21 +1019,6 @@ export default function Stock() {
             {infoMessage}
           </div>
         )}
-
-        <div slot="footer" className="flex justify-end gap-3">
-          <Button variant="secondary" onClick={handleClosePanel}>
-            Cancelar
-          </Button>
-          {!isViewMode && (
-            <Button
-              onClick={handleSavePalet}
-              disabled={saving}
-              loading={saving}
-            >
-              {selectedPalet?.docId ? "Guardar Cambios" : "Crear Palet"}
-            </Button>
-          )}
-        </div>
       </Modal>
     </div>
   );

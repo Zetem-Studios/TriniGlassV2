@@ -10,6 +10,7 @@ export interface ModalProps {
   title?: string;
   description?: string;
   children: ReactNode;
+  footer?: ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
   showCloseButton?: boolean;
   closeOnOverlayClick?: boolean;
@@ -22,6 +23,7 @@ export function Modal({
   title,
   description,
   children,
+  footer,
   size = 'md',
   showCloseButton = true,
   closeOnOverlayClick = true,
@@ -130,6 +132,11 @@ export function Modal({
         <div className="p-5 max-h-[70vh] overflow-y-auto">
           {children}
         </div>
+        {footer && (
+          <div className="px-5 py-4 border-t border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950/50">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );
