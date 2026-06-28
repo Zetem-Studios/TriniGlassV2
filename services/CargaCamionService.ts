@@ -637,7 +637,7 @@ export interface FinalizarRutaResultado {
 
 export const finalizarRuta = async (
   matricula: string,
-  email: string = "anónimo"
+  email = "anónimo"
 ): Promise<FinalizarRutaResultado> => {
   const cargaRef = doc(db, CARGAS, matricula);
   const camionRef = doc(db, CAMIONES, matricula);
@@ -696,7 +696,7 @@ export const finalizarRuta = async (
 
   if (rutaActivaId) {
     batch.update(doc(db, RUTAS, rutaActivaId), {
-      estado: "finalizada" as RutaEstado,
+      estado: "finalizada",
       paletsEntregados: palets,
       totalEntregados: palets.length,
       pesoEntregadoKg: Number(pesoEntregado.toFixed(2)),
@@ -738,7 +738,7 @@ export interface CancelarRutaResultado {
 
 export const cancelarRuta = async (
   matricula: string,
-  email: string = "anónimo"
+  email = "anónimo"
 ): Promise<CancelarRutaResultado> => {
   const cargaRef = doc(db, CARGAS, matricula);
   const camionRef = doc(db, CAMIONES, matricula);
@@ -769,7 +769,7 @@ export const cancelarRuta = async (
 
   if (rutaActivaId) {
     batch.update(doc(db, RUTAS, rutaActivaId), {
-      estado: "cancelada" as RutaEstado,
+      estado: "cancelada",
       canceladoPor: email,
       fechaCancelacion: serverTimestamp(),
     });

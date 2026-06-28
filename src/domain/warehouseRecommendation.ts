@@ -164,12 +164,12 @@ export const parseFechaLineaPedido = (fecha: any) => {
     .replace(/\s+/g, ' ')
     .trim();
 
-  const meses: { [key: string]: number } = {
+  const meses: Record<string, number> = {
     enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
     julio: 6, agosto: 7, septiembre: 8, octubre: 9, noviembre: 10, diciembre: 11
   };
 
-  const match = normalized.match(/(\d{1,2}) de (\w+) de (\d{4}) a las (\d{1,2}:\d{2}:\d{2})\s*([ap]\.m\.)\s*UTC\s*([+-]?\d+)/i);
+  const match = /(\d{1,2}) de (\w+) de (\d{4}) a las (\d{1,2}:\d{2}:\d{2})\s*([ap]\.m\.)\s*UTC\s*([+-]?\d+)/i.exec(normalized);
   if (match) {
     const [, diaStr, mesStr, yearStr, horaStr, ampm, tz] = match;
     const dia = Number(diaStr);

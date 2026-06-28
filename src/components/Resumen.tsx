@@ -25,7 +25,7 @@ import {
   Cell,
   Legend,
 } from 'recharts';
-import KpiCard from './KpiCard';
+import { KpiCard } from './ui/KpiCard';
 import { useWarehouseStats } from '../useWarehouseStats';
 import { useFleetStats } from '../useFleetStats';
 
@@ -47,6 +47,8 @@ export default function Resumen() {
       </div>
     );
   }
+
+  const chartCardClass = "bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200/80 dark:border-slate-800/80 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-150";
 
   // Datos para gráfico de barras (ocupación por zona)
   const barChartData = stats?.zonas.map(zona => ({
@@ -79,13 +81,16 @@ export default function Resumen() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white mb-1">
-          Panel de Control
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Resumen del estado actual del almacén
-        </p>
+      <div className="relative">
+        <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-brand-500 to-brand-300 dark:from-brand-400 dark:to-brand-600 rounded-full" />
+        <div className="pl-4">
+          <h1 className="text-2xl font-bold tracking-tight mb-1">
+            <span className="bg-gradient-to-r from-brand-600 to-brand-400 bg-clip-text text-transparent">Panel de Control</span>
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Resumen del estado actual del almacén y flota
+          </p>
+        </div>
       </div>
 
       {/* KPI Cards Grid */}
@@ -155,12 +160,12 @@ export default function Resumen() {
       {/* Gráficos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Gráfico de barras - Ocupación por zona */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200/80 dark:border-slate-800/80">
+        <div className={chartCardClass}>
           <h3 className="text-base font-semibold tracking-tight text-slate-900 dark:text-white mb-4">
             Ocupación por Zona
           </h3>
           {loading ? (
-            <div className="h-[300px] animate-pulse bg-slate-100 dark:bg-slate-800 rounded-lg" />
+            <div className="h-[300px] animate-shimmer rounded-lg" />
           ) : (
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={barChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
@@ -190,12 +195,12 @@ export default function Resumen() {
         </div>
 
         {/* Gráfico circular - Distribución por zona */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200/80 dark:border-slate-800/80">
+        <div className={chartCardClass}>
           <h3 className="text-base font-semibold tracking-tight text-slate-900 dark:text-white mb-4">
             Distribución de Palets
           </h3>
           {loading ? (
-            <div className="h-[300px] animate-pulse bg-slate-100 dark:bg-slate-800 rounded-lg" />
+            <div className="h-[300px] animate-shimmer rounded-lg" />
           ) : pieChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
@@ -235,12 +240,12 @@ export default function Resumen() {
       {/* Segunda fila de gráficos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Gráfico de prioridades */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200/80 dark:border-slate-800/80">
+        <div className={chartCardClass}>
           <h3 className="text-base font-semibold tracking-tight text-slate-900 dark:text-white mb-4">
             Distribución por Prioridad
           </h3>
           {loading ? (
-            <div className="h-[250px] animate-pulse bg-slate-100 dark:bg-slate-800 rounded-lg" />
+            <div className="h-[250px] animate-shimmer rounded-lg" />
           ) : priorityData.length > 0 ? (
             <ResponsiveContainer width="100%" height={250}>
               <PieChart>
@@ -278,12 +283,12 @@ export default function Resumen() {
         </div>
 
         {/* Gráfico de tipos de vidrio */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200/80 dark:border-slate-800/80">
+        <div className={chartCardClass}>
           <h3 className="text-base font-semibold tracking-tight text-slate-900 dark:text-white mb-4">
             Tipos de Vidrio
           </h3>
           {loading ? (
-            <div className="h-[250px] animate-pulse bg-slate-100 dark:bg-slate-800 rounded-lg" />
+            <div className="h-[250px] animate-shimmer rounded-lg" />
           ) : glassTypeData.length > 0 ? (
             <ResponsiveContainer width="100%" height={250}>
               <PieChart>
@@ -322,14 +327,17 @@ export default function Resumen() {
       </div>
 
       {/* Sección Flota */}
-      <div className="pt-2">
-        <h2 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-white flex items-center gap-2 mb-1">
-          <Truck className="w-5 h-5 text-brand-500" />
-          Gestión de flota
-        </h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Camiones, rutas y entregas en vivo
-        </p>
+      <div className="relative pt-4">
+        <div className="absolute left-0 top-4 bottom-0 w-1 bg-gradient-to-b from-brand-500 to-brand-300 dark:from-brand-400 dark:to-brand-600 rounded-full" />
+        <div className="pl-4">
+          <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2 mb-1">
+            <Truck className="w-5 h-5 text-brand-500" />
+            Gestión de flota
+          </h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Camiones, rutas y entregas en vivo
+          </p>
+        </div>
       </div>
 
       {fleetError && (
@@ -423,12 +431,12 @@ export default function Resumen() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Entregas por día (últimos 7 días) */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200/80 dark:border-slate-800/80">
+        <div className={chartCardClass}>
           <h3 className="text-base font-semibold tracking-tight text-slate-900 dark:text-white mb-4">
             Entregas por día (últimos 7 días)
           </h3>
           {fleetLoading ? (
-            <div className="h-65 animate-pulse bg-slate-100 dark:bg-slate-800 rounded-lg" />
+            <div className="h-65 animate-shimmer rounded-lg" />
           ) : fleet && fleet.entregasPorDia.some(d => d.entregas > 0) ? (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={fleet.entregasPorDia} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
@@ -454,12 +462,12 @@ export default function Resumen() {
         </div>
 
         {/* Top camiones por entregas */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200/80 dark:border-slate-800/80">
+        <div className={chartCardClass}>
           <h3 className="text-base font-semibold tracking-tight text-slate-900 dark:text-white mb-4">
             Camiones con más entregas
           </h3>
           {fleetLoading ? (
-            <div className="h-65 animate-pulse bg-slate-100 dark:bg-slate-800 rounded-lg" />
+            <div className="h-65 animate-shimmer rounded-lg" />
           ) : fleet && fleet.topCamiones.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart
@@ -490,14 +498,14 @@ export default function Resumen() {
       </div>
 
       {/* Tabla de resumen por zonas */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200/80 dark:border-slate-800/80">
+      <div className={chartCardClass}>
         <h3 className="text-base font-semibold tracking-tight text-slate-900 dark:text-white mb-4">
           Estado por Zona
         </h3>
         {loading ? (
           <div className="space-y-2">
             {[1, 2, 3, 4, 5, 6].map(i => (
-              <div key={i} className="h-12 animate-pulse bg-slate-100 dark:bg-slate-800 rounded-md" />
+              <div key={i} className="h-12 animate-shimmer rounded-md" />
             ))}
           </div>
         ) : (

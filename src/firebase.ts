@@ -52,15 +52,15 @@ export const getZonesHierarchy = async () => {
   });
 
   // Construir jerarquía: cada documento es una "zona" y sus subzonas están en subzones
-  const hierarchy: Array<{
+  const hierarchy: {
     zoneId: string;
     zoneName: string;
-    subzones: Array<{
+    subzones: {
       subzoneId: string;
       subzoneName: string;
       positions: string[];
-    }>;
-  }> = [];
+    }[];
+  }[] = [];
 
   zones.forEach(zone => {
     const subzoneEntries = Object.entries(zone.subzones || {});
@@ -166,7 +166,7 @@ export const getZonasNew = async (): Promise<Zona[]> => {
   } catch (error: any) {
     console.error("❌ Error obteniendo zonas:", error);
     // Si la colección no existe, devolver array vacío en lugar de lanzar error
-    if (error.message && error.message.includes('permission-denied')) {
+    if (error.message?.includes('permission-denied')) {
       throw error; // Permisos denegados sí es un error crítico
     }
     return []; // Para cualquier otro error (como colección inexistente), devolver vacío
@@ -227,7 +227,7 @@ export const getSubzonas = async (): Promise<Subzona[]> => {
   } catch (error: any) {
     console.error("❌ Error obteniendo subzonas:", error);
     // Si la colección no existe, devolver array vacío en lugar de lanzar error
-    if (error.message && error.message.includes('permission-denied')) {
+    if (error.message?.includes('permission-denied')) {
       throw error; // Permisos denegados sí es un error crítico
     }
     return []; // Para cualquier otro error (como colección inexistente), devolver vacío

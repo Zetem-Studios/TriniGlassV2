@@ -1,0 +1,13 @@
+dist
+node_modules
+coverage
+.vite
+*.log
+.env
+.env.local
+.env.*.local
+*.tsbuildinfo
+.prettierrc.json
+.eslintrc.js
+firebase-seed/node_modules
+firebase-seed/package-lock.json

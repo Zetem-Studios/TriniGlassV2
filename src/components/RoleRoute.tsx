@@ -3,10 +3,10 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/useAuth";
 import type { Rol } from "../../services/UserService";
 
-type RoleRouteProps = {
+interface RoleRouteProps {
   children: ReactNode;
   requiredRol: Rol;
-};
+}
 
 export const RoleRoute = ({ children, requiredRol }: RoleRouteProps) => {
   const { rol, loading } = useAuth();

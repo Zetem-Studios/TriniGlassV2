@@ -92,7 +92,7 @@ const customScrollbarStyles = `
 interface ZoneConfig {
   id: string;
   name: string;
-  subzones: { [key: string]: string[] };
+  subzones: Record<string, string[]>;
   layout: 'horizontal' | 'vertical' | 'single';
 }
 
@@ -157,12 +157,12 @@ const parseFechaLineaPedido = (fecha: unknown): Date | null => {
     .replace(/\s+/g, ' ')
     .trim();
 
-  const meses: { [key: string]: number } = {
+  const meses: Record<string, number> = {
     enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
     julio: 6, agosto: 7, septiembre: 8, octubre: 9, noviembre: 10, diciembre: 11
   };
 
-  const match = normalized.match(/(\d{1,2}) de (\w+) de (\d{4}) a las (\d{1,2}:\d{2}:\d{2})\s*([ap]\.m\.)\s*UTC\s*([+-]?\d+)/i);
+  const match = /(\d{1,2}) de (\w+) de (\d{4}) a las (\d{1,2}:\d{2}:\d{2})\s*([ap]\.m\.)\s*UTC\s*([+-]?\d+)/i.exec(normalized);
   if (match) {
     const [, diaStr, mesStr, yearStr, horaStr, ampm, tz] = match;
     const dia = Number(diaStr);
@@ -244,7 +244,7 @@ const mapProductoToBlock = async (producto: Producto, _rules: any[], index: numb
     area: area,
     type: tipoVidrio,
     daysInStorage: daysInStorage,
-    client: (producto.apellido_cliente as string) || (producto.nombre_abreviado as string) || "Cliente Desconocido",
+    client: (producto.apellido_cliente!) || (producto.nombre_abreviado!) || "Cliente Desconocido",
     occupied: true,
     dimensions: `${producto.altura || 0} x ${producto.longitud || 0} mm`,
     weight: `${producto.peso_total_kg || 0} kg`,
@@ -287,14 +287,14 @@ const generarCodigoUbicacion = (zoneName: string, subZoneName: string, fila: num
 
 const getSlotFromPosition = (posicion?: string | null): { fila: number; columna: number } | null => {
   if (!posicion) return null;
-  const legacyMatch = posicion.match(/F(\d+)C(\d+)$/i);
+  const legacyMatch = /F(\d+)C(\d+)$/i.exec(posicion);
   if (legacyMatch) {
     return {
       fila: Number(legacyMatch[1]),
       columna: Number(legacyMatch[2])
     };
   }
-  const shortMatch = posicion.match(/(\d)(\d+)$/);
+  const shortMatch = /(\d)(\d+)$/.exec(posicion);
   if (!shortMatch) return null;
   return {
     fila: Number(shortMatch[1]),
@@ -333,7 +333,7 @@ const getBlockSubzone = (block: Block): string => {
 const getAggregatedDimensions = (pallets: Block[]): string => {
   const parsedDimensions = pallets
     .map((pallet) => {
-      const matches = pallet.dimensions.match(/(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)/i);
+      const matches = /(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)/i.exec(pallet.dimensions);
       if (!matches) return null;
       return {
         width: Number(matches[1].replace(',', '.')),
@@ -353,7 +353,7 @@ const getAggregatedDimensions = (pallets: Block[]): string => {
 const getAggregatedWeight = (pallets: Block[]): string => {
   const weights = pallets
     .map((pallet) => {
-      const match = pallet.weight.match(/(\d+(?:[.,]\d+)?)/);
+      const match = /(\d+(?:[.,]\d+)?)/.exec(pallet.weight);
       return match ? Number(match[1].replace(',', '.')) : null;
     })
     .filter((weight): weight is number => typeof weight === 'number' && !Number.isNaN(weight));
@@ -479,7 +479,7 @@ export default function Warehouse() {
     
     // Buscar el mapa que tenga activo: true
     const activeMap = designs.find(design => design.activo === true);
-    if (activeMap && activeMap.id) {
+    if (activeMap?.id) {
       setSelectedMapDesign(activeMap.id);
     } else {
     }
@@ -526,7 +526,7 @@ export default function Warehouse() {
     }
 
     const selectedDesign = designs.find(d => d.id === selectedMapDesign);
-    if (!selectedDesign || !selectedDesign.areas || selectedDesign.areas.length === 0) {
+    if (!selectedDesign?.areas || selectedDesign.areas.length === 0) {
       return {
         totalSquaresWidth: 0,
         totalSquaresHeight: 0,
@@ -626,7 +626,7 @@ export default function Warehouse() {
           // Ordenar zonas según la posición en el mapa (misma lógica que getZonesOrderedByPosition)
           const orderedZones = zonesData.map(zone => {
             const map = designs.find((d) => d.id === selectedMapDesign);
-            if (!map || !map.areas) {
+            if (!map?.areas) {
               return { ...zone, x: Infinity, y: Infinity };
             }
             
@@ -718,7 +718,7 @@ export default function Warehouse() {
           processedBlocks.push(block);
         }
 
-        const pendingPositionUpdates: Array<{ id: string; posicion: string | null }> = [];
+        const pendingPositionUpdates: { id: string; posicion: string | null }[] = [];
 
         processedBlocks.forEach((block) => {
           const currentPosition = typeof block.posicion === 'string' && block.posicion.trim() !== ''
@@ -1099,7 +1099,7 @@ const getZonesOrderedByPosition = () => {
   }
 
   const map = designs.find((d) => d.id === selectedMapDesign);
-  if (!map || !map.areas) {
+  if (!map?.areas) {
     return zones;
   }
 
@@ -1150,7 +1150,7 @@ const renderSubzonesFromMap = () => {
   }
   
   const map = designs.find((d) => d.id === selectedMapDesign);
-  if (!map || !map.areas || map.areas.length === 0) {
+  if (!map?.areas || map.areas.length === 0) {
     return null;
   }
   
@@ -1656,7 +1656,7 @@ const renderSubzonesFromMap = () => {
             {/* Divs para cada subzona posicionados según el mapa */}
             {(() => {
               const map = designs.find((d) => d.id === selectedMapDesign);
-              if (!map || !map.areas) return null;
+              if (!map?.areas) return null;
               
               // Filtrar subzonas de Firebase por zonaId
               const zoneSubzonas = subzonas.filter(sub => sub.zonaId === selectedZone);
@@ -1721,7 +1721,7 @@ const renderSubzonesFromMap = () => {
                     }
                     
                     // Agrupar palets por código de barras para detectar agrupaciones (sin Map)
-                    let tarjetas: Array<{
+                    let tarjetas: {
                       id: string;
                       occupied: boolean;
                       daysInStorage: number;
@@ -1729,7 +1729,7 @@ const renderSubzonesFromMap = () => {
                       isGrouped?: boolean;
                       groupCount?: number;
                       allPalets?: Block[];
-                    }> = [];
+                    }[] = [];
 
                     if (tieneLimite && capacidad) {
                       tarjetas = Array.from({ length: totalTarjetas }, (_, index) => {

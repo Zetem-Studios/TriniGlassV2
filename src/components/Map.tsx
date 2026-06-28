@@ -7,11 +7,11 @@ interface Block {
 }
 
 interface MapProps {
-  zones: Array<{
+  zones: {
     id: string;
     name: string;
-    subzones: { [key: string]: string[] };
-  }>;
+    subzones: Record<string, string[]>;
+  }[];
   blocks: Block[];
   selectedZone: string;
   selectedBlock: Block | null;

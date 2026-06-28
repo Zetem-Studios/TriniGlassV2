@@ -15,7 +15,7 @@ interface Block {
 interface ZoneProps {
   zoneId: string;
   zoneName: string;
-  subzones: { [key: string]: string[] };
+  subzones: Record<string, string[]>;
   blocks: Block[];
   selectedBlock: Block | null;
   onBlockClick: (block: Block) => void;
@@ -28,7 +28,7 @@ interface ZoneProps {
 const Zone: React.FC<ZoneProps> = ({ zoneId, zoneName, subzones, blocks, selectedBlock, onBlockClick, onEmptySlotClick, preview = false}) => {
     subzones = subzones ?? {};
   // Create a map of position to block
-  const positionToBlock: { [key: string]: Block } = {};
+  const positionToBlock: Record<string, Block> = {};
 
   // For each subzone, assign blocks to positions
   Object.entries(subzones).forEach(([subzoneName, positions]) => {
@@ -142,7 +142,7 @@ const Zone: React.FC<ZoneProps> = ({ zoneId, zoneName, subzones, blocks, selecte
                         <BlockCard
                           block={{ id: `add-${subzoneName}`, daysInStorage: 0, occupied: false }}
                           isSelected={false}
-                          onClick={() => onEmptySlotClick && onEmptySlotClick(zoneId, subzoneName, '')}
+                          onClick={() => onEmptySlotClick?.(zoneId, subzoneName, '')}
                         />
                       </div>
                     )}

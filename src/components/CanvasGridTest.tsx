@@ -1049,8 +1049,8 @@ const CanvasGridTest: React.FC = () => {
       const dragDeltaX = e.clientX - dragStart.x;
       const dragDeltaY = e.clientY - dragStart.y;
       
-      let newX = areaStart.x + dragDeltaX;
-      let newY = areaStart.y + dragDeltaY;
+      const newX = areaStart.x + dragDeltaX;
+      const newY = areaStart.y + dragDeltaY;
       
       // Obtener el área padre para verificar límites
       const parentArea = areas.find(a => a.id === draggedSubAreaParent);

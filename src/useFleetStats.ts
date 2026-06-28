@@ -42,7 +42,7 @@ const tsToDate = (raw: unknown): Date | null => {
     const parsed = Date.parse(raw);
     return isNaN(parsed) ? null : new Date(parsed);
   }
-  if (typeof raw === 'object' && 'toDate' in (raw as object)) {
+  if (typeof raw === 'object' && 'toDate' in (raw)) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const d = (raw as any).toDate();
@@ -80,7 +80,7 @@ interface CamionDoc {
 }
 
 interface CargaDoc {
-  palets?: Array<{ pesoKg?: number; volumenM3?: number }>;
+  palets?: { pesoKg?: number; volumenM3?: number }[];
 }
 
 interface RutaDoc {
@@ -119,7 +119,7 @@ export function useFleetStats() {
       snap => {
         const map: Record<string, CamionDoc> = {};
         snap.docs.forEach(d => {
-          map[d.id] = d.data() as CamionDoc;
+          map[d.id] = d.data();
         });
         setCamiones(map);
         setReadiness(r => ({ ...r, camiones: true }));
@@ -134,7 +134,7 @@ export function useFleetStats() {
       snap => {
         const map: Record<string, CargaDoc> = {};
         snap.docs.forEach(d => {
-          map[d.id] = d.data() as CargaDoc;
+          map[d.id] = d.data();
         });
         setCargas(map);
         setReadiness(r => ({ ...r, cargas: true }));

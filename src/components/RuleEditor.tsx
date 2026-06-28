@@ -597,7 +597,7 @@ const RuleEditor = () => {
                       <label className="block text-sm font-medium text-black mb-1">Zona de Destino</label>
                       <select
                         value={editingRule.acciones?.zona}
-                        onChange={(e) => setEditingRule({...editingRule, acciones: {...editingRule.acciones!, zona: e.target.value}})}
+                        onChange={(e) => setEditingRule({...editingRule, acciones: {...editingRule.acciones, zona: e.target.value}})}
                         className="px-3 py-2 border rounded text-black w-full"
                       >
                         <option value="">Selecciona una zona</option>
@@ -613,7 +613,7 @@ const RuleEditor = () => {
                       <label className="block text-sm font-medium text-black mb-1">Subzona Específica</label>
                       <select
                         value={editingRule.acciones?.subzona}
-                        onChange={(e) => setEditingRule({...editingRule, acciones: {...editingRule.acciones!, subzona: e.target.value}})}
+                        onChange={(e) => setEditingRule({...editingRule, acciones: {...editingRule.acciones, subzona: e.target.value}})}
                         className="px-3 py-2 border rounded text-black w-full"
                       >
                         <option value="">Selecciona una subzona</option>

@@ -8,13 +8,13 @@ import { auth, db } from "../src/firebase";
 
 export type Rol = "operario" | "encargado" | "admin";
 
-export type UserProfile = {
+export interface UserProfile {
   uid: string;
   email: string;
   rol: Rol;
   activo: boolean;
   creadoEn: Date | null;
-};
+}
 
 // Registrar nuevo usuario y crear su perfil en Firestore
 export const registerUserInSystem = async (email: string, pass: string) => {

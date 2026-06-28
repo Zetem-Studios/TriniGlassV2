@@ -360,8 +360,8 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({ onClose }) => {
         const { db, doc, setDoc, Timestamp } = await import('../firebase');
         const nuevaZona: Zona = {
           id: `zona-${Date.now()}`,
-          nombre: data.nombre!,
-          tipo: data.tipo as 'produccion' | 'almacenamiento' | 'expedicion',
+          nombre: data.nombre,
+          tipo: data.tipo!,
           descripcion: data.descripcion,
           capacidadMaxima: data.capacidadMaxima || null,
           activa: data.activa!,
@@ -458,8 +458,8 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({ onClose }) => {
         const { db, doc, setDoc, Timestamp } = await import('../firebase');
         const nuevaSubzona: Subzona = {
           id: `subzona-${Date.now()}`,
-          nombre: data.nombre!,
-          zonaId: data.zonaId!,
+          nombre: data.nombre,
+          zonaId: data.zonaId,
           posiciones: [], // Se actualizará automáticamente desde el mapa
           capacidadMaxima: data.capacidadMaxima || null,
           color: '#6B7280', // Gris oscuro fijo para subzonas

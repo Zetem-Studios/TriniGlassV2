@@ -1,4 +1,4 @@
-type UserAgentData = { mobile?: boolean };
+interface UserAgentData { mobile?: boolean }
 
 function detectMobilePhone(): boolean {
   if (typeof navigator === "undefined") return false;

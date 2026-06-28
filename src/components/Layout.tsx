@@ -47,7 +47,10 @@ export default function Layout() {
       {/* Sidebar desktop */}
       <aside className="w-60 bg-white dark:bg-slate-900 flex-col hidden md:flex border-r border-slate-200/80 dark:border-slate-800/80 transition-colors duration-150">
         <div className="h-16 flex items-center px-5 border-b border-slate-200/80 dark:border-slate-800/80">
-          <h1 className="text-slate-900 dark:text-white font-semibold text-base tracking-tight">Triniglass</h1>
+          <h1 className="font-bold text-lg tracking-tight">
+            <span className="bg-gradient-to-r from-brand-600 to-brand-400 bg-clip-text text-transparent">Trini</span>
+            <span className="text-slate-900 dark:text-white">Glass</span>
+          </h1>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
           {navItems.map(item => (
@@ -89,10 +92,13 @@ export default function Layout() {
 
       {/* Sidebar móvil */}
       {sidebarOpen && (
-        <div className="fixed inset-0 z-40 flex md:hidden">
-          <div className="w-60 bg-white dark:bg-slate-900 flex flex-col h-full border-r border-slate-200/80 dark:border-slate-800/80 shadow-xl">
+        <div className="fixed inset-0 z-40 flex md:hidden animate-fade-in">
+          <div className="w-60 bg-white dark:bg-slate-900 flex flex-col h-full border-r border-slate-200/80 dark:border-slate-800/80 shadow-xl animate-slide-in">
             <div className="h-16 flex items-center px-5 border-b border-slate-200/80 dark:border-slate-800/80 justify-between">
-              <h1 className="text-slate-900 dark:text-white font-semibold text-base tracking-tight">Triniglass</h1>
+              <h1 className="font-bold text-lg tracking-tight">
+                <span className="bg-gradient-to-r from-brand-600 to-brand-400 bg-clip-text text-transparent">Trini</span>
+                <span className="text-slate-900 dark:text-white">Glass</span>
+              </h1>
               <button
                 onClick={() => setSidebarOpen(false)}
                 aria-label="Cerrar menú"
@@ -144,7 +150,7 @@ export default function Layout() {
       {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between px-6 transition-colors duration-150">
+        <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between px-6 shadow-xs transition-colors duration-150">
           <button
             className="md:hidden p-1.5 -ml-1.5 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800 transition-colors"
             onClick={() => setSidebarOpen(true)}
@@ -156,9 +162,11 @@ export default function Layout() {
             <button
               onClick={() => setIsDarkMode(!isDarkMode)}
               aria-label={isDarkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-              className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800 rounded-md transition-colors"
+              className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800 rounded-md transition-all duration-300"
             >
-              {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+              <span className={`block transition-transform duration-500 ${isDarkMode ? 'rotate-0' : 'rotate-90'}`}>
+                {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+              </span>
             </button>
             <div className="hidden sm:flex items-center gap-2.5 ml-2 pl-3 border-l border-slate-200 dark:border-slate-800">
               <div className="w-7 h-7 bg-brand-600 rounded-full flex items-center justify-center text-white text-xs font-medium">
@@ -180,7 +188,9 @@ export default function Layout() {
           </div>
         </header>
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-6">
-          <Outlet />
+          <div className="animate-fade-in">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

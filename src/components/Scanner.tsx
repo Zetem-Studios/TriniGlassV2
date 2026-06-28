@@ -34,15 +34,15 @@ import {
 } from "../domain/warehouseRecommendation";
 import type { ReglaAsignacion } from "../utils/RuleEngine";
 
-type MobileScannerProps = {
+interface MobileScannerProps {
   showLogout?: boolean;
-};
+}
 
 // Tipos para los estados
 type ResultType = "success" | "waiting" | "error" | "notfound" | null;
 
 
-type PaletData = {
+interface PaletData {
   id: string;
   docId: string;
   prioridad: string;
@@ -56,12 +56,12 @@ type PaletData = {
   diasStock: number;
   nombreAbreviado?: string;
   estadoPedido: string;
-};
+}
 
-type FoundPalet = {
+interface FoundPalet {
   [key: string]: any;
   rawProducto: any;
-};
+}
 
 type LookupDebug = {
   query: string;
@@ -575,7 +575,7 @@ export default function MobileScanner({ showLogout = false }: MobileScannerProps
       const snapshot = await getDocs(q);
       let found: FoundPalet[] = [];
       //let tried = 0;
-      let debugInfo: any = {
+      const debugInfo: any = {
         query: decodedText,
         queryType: typeof decodedText,
         queryLength: decodedText.length,

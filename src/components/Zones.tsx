@@ -10,7 +10,7 @@ interface Block {
 interface ZoneConfig {
   id: string;
   name: string;
-  subzones: { [key: string]: string[] };
+  subzones: Record<string, string[]>;
 }
 
 interface ZonesProps {

@@ -9,7 +9,7 @@ export interface ReglaAsignacion {
   condiciones: {
     campo: string; // nombre_abreviado, peso_total_kg, vidrio_simple, etc.
     operador: 'contiene' | 'igual' | 'mayor' | 'mayor_igual' | 'menor' | 'menor_igual' | 'entre' | 'fecha_antes' | 'fecha_despues' | 'fecha_entre';
-    valor: string | number | string | [number, number];
+    valor: string | number   | [number, number];
   }[];
   acciones: {
     zona?: string;
@@ -159,7 +159,7 @@ export class RuleEngine {
       diciembre: 11
     };
 
-    const spanishDateMatch = normalized.match(/(\d{1,2}) de (\w+) de (\d{4})(?: a las (\d{1,2}):(\d{2})(?::(\d{2}))?)?/i);
+    const spanishDateMatch = /(\d{1,2}) de (\w+) de (\d{4})(?: a las (\d{1,2}):(\d{2})(?::(\d{2}))?)?/i.exec(normalized);
     if (spanishDateMatch) {
       const [, dayValue, monthValue, yearValue, hourValue = '0', minuteValue = '0', secondValue = '0'] = spanishDateMatch;
       const month = meses[monthValue.toLowerCase()];

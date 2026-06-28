@@ -43,7 +43,7 @@ export default function KpiCard({
 
   if (loading) {
     return (
-      <div className="rounded-xl p-4 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 animate-pulse">
+      <div className="rounded-xl p-4 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 animate-shimmer">
         <div className="flex items-center justify-between mb-4">
           <div className="h-3.5 w-24 bg-slate-200 dark:bg-slate-800 rounded" />
           <div className="h-9 w-9 bg-slate-200 dark:bg-slate-800 rounded-lg" />

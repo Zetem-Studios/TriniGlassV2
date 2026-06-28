@@ -8,8 +8,8 @@ export const useRules = () => {
   const [rules, setRules] = useState<ReglaAsignacion[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [zones, setZones] = useState<Array<{id: string; name: string}>>([]);
-  const [subzones, setSubzones] = useState<Array<{id: string; name: string; zonaId: string; capacidadMaxima?: number | null}>>([]);
+  const [zones, setZones] = useState<{id: string; name: string}[]>([]);
+  const [subzones, setSubzones] = useState<{id: string; name: string; zonaId: string; capacidadMaxima?: number | null}[]>([]);
 
   const sortRulesByPriority = (rulesToSort: ReglaAsignacion[]) =>
     [...rulesToSort].sort((a, b) => a.prioridad - b.prioridad);
@@ -254,7 +254,7 @@ export const useRules = () => {
       const subzoneCapacities = new Map(
         subzones
           .filter(subzone => typeof subzone.capacidadMaxima === 'number' && subzone.capacidadMaxima > 0)
-          .map(subzone => [getSubzoneKey(subzone.zonaId, subzone.name), subzone.capacidadMaxima as number])
+          .map(subzone => [getSubzoneKey(subzone.zonaId, subzone.name), subzone.capacidadMaxima!])
       );
       const allocatedBySubzone = new Map<string, number>();
       let processedCount = 0;
