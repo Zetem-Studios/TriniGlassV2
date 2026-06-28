@@ -108,7 +108,7 @@ export async function deleteCamion(matricula: string): Promise<void> {
   const cargasRef = collection(db, CARGAS_COLLECTION);
   const cargasSnap = await getDocs(cargasRef);
   cargasSnap.docs.forEach((cargaDoc) => {
-    if (cargaDoc.id === matriculaNormalizada) {
+    if (cargaDoc.id === normalizeMatricula(matricula)) {
       batch.delete(cargaDoc.ref);
     }
   });

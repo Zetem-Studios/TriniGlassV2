@@ -111,11 +111,10 @@ export function calcularCargaAutomatica(
   const paletsConScore: PaletConScore[] = disponibles.map((palet) => {
     let score = 0;
 
-    // Score por urgencia (días en almacén)
     const diasEnAlmacen = palet.urgencia ?? 0;
     score += diasEnAlmacen * 10;
 
-    // Score por proximidad al mapa
+    let distancia: number | undefined;
     if (mapaDiseno && palet.subzona && zonasMapa.size > 0) {
       let minDist = 9999;
       for (const subAreas of zonasMapa.values()) {
@@ -124,14 +123,11 @@ export function calcularCargaAutomatica(
           if (dist < minDist) minDist = dist;
         }
       }
-      palet.distancia = minDist;
+      distancia = minDist;
       score += (10 - minDist) * 5;
     }
 
-    // Bonus por vidrio simple (más ligero, más fácil de cargar)
-    // This would need additional data from the product
-
-    return { ...palet, score };
+    return { ...palet, score, distancia };
   });
 
   paletsConScore.sort((a, b) => b.score - a.score);
