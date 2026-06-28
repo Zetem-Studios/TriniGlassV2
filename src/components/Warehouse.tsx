@@ -1515,11 +1515,19 @@ const renderSubzonesFromMap = () => {
                     return (
                       <div
                         key={index}
-                        className={`overflow-hidden ${bgColor} ${borderClass}`}
+                        className={`overflow-hidden ${area ? 'cursor-pointer' : ''} ${bgColor} ${borderClass}`}
                         title={`${position}${area ? ` - ${area.name}` : ''}${subArea ? ` (${subArea.name})` : ''}`}
                         style={{
                           width: `${cellSize}px`,
                           height: `${cellSize}px`
+                        }}
+                        onClick={() => {
+                          if (area?.id) {
+                            setSelectedZone(area.id);
+                            setSelectedBlock(null);
+                            setSelectedPalletGroup([]);
+                            setIsZoneDropdownOpen(false);
+                          }
                         }}
                       />
                     );
@@ -1535,7 +1543,7 @@ const renderSubzonesFromMap = () => {
                       <div key={`area-label-${areaIndex}`}>
                         {/* Etiqueta del área principal - anclada arriba y centrada */}
                         <div
-                          className="absolute flex items-center justify-center pointer-events-none dark:text-white text-black"
+                          className="absolute flex items-center justify-center cursor-pointer hover:bg-white/10 rounded dark:text-white text-black"
                           style={{
                             left: `${(areaStartCol - 1) * cellSize}px`,
                             top: `${(areaStartRow - 1) * cellSize - 25}px`,
@@ -1544,6 +1552,12 @@ const renderSubzonesFromMap = () => {
                             fontSize: `${Math.max(14, cellSize / 2.5)}px`,
                             fontWeight: 'bold',
                             zIndex: 10
+                          }}
+                          onClick={() => {
+                            setSelectedZone(area.id);
+                            setSelectedBlock(null);
+                            setSelectedPalletGroup([]);
+                            setIsZoneDropdownOpen(false);
                           }}
                         >
                           {area.name}
@@ -1559,7 +1573,7 @@ const renderSubzonesFromMap = () => {
                           return (
                             <div
                               key={`subarea-label-${areaIndex}-${subIndex}`}
-                              className="absolute flex items-center justify-center pointer-events-none dark:text-white text-black"
+                              className="absolute flex items-center justify-center cursor-pointer hover:bg-white/10 rounded dark:text-white text-black"
                               style={{
                                 left: `${(subStartCol + subEndCol - 1) * cellSize / 2}px`,
                                 top: `${(subStartRow + subEndRow - 1) * cellSize / 2}px`,
@@ -1569,6 +1583,12 @@ const renderSubzonesFromMap = () => {
                                 fontSize: `${Math.max(12, cellSize / 3)}px`,
                                 fontWeight: '600',
                                 zIndex: 11
+                              }}
+                              onClick={() => {
+                                setSelectedZone(subArea.areaId);
+                                setSelectedBlock(null);
+                                setSelectedPalletGroup([]);
+                                setIsZoneDropdownOpen(false);
                               }}
                             >
                               {subArea.name}
