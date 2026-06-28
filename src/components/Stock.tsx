@@ -65,7 +65,8 @@ interface ClientFilters {
   widthMax: string;
   heightMin: string;
   heightMax: string;
-  thickness: string;
+  thicknessMin: string;
+  thicknessMax: string;
 }
 
 const EMPTY_PALET: Palet = {
@@ -171,9 +172,11 @@ export default function Stock() {
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const debouncedSearch = useDebounce(searchTerm, 300);
   const [hitLimit, setHitLimit] = useState(false);
 
   const [serverFilters, setServerFilters] = useState<ServerFilters>({
+
     status: "",
     zone: "",
     codificador: "",
@@ -191,7 +194,8 @@ export default function Stock() {
     widthMax: "",
     heightMin: "",
     heightMax: "",
-    thickness: "",
+      thicknessMin: "",
+      thicknessMax: "",
   });
 
   const [isViewMode, setIsViewMode] = useState(false);
@@ -199,6 +203,7 @@ export default function Stock() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
+  const debouncedServerFilters = useDebounce(JSON.stringify(serverFilters), 400);
   const debouncedClient = useDebounce(clientFilters.client, 400);
   const debouncedType = useDebounce(clientFilters.type, 400);
 
@@ -211,40 +216,43 @@ export default function Stock() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
   const fetchStock = useCallback(async () => {
-    setLoading(true);
+    const filters = JSON.parse(debouncedServerFilters) as ServerFilters;
+    if (inventory.length === 0) {
+      setLoading(true);
+    }
     try {
       const conditions: ReturnType<typeof where>[] = [];
 
-      if (serverFilters.dateFrom) {
-        conditions.push(where("fecha_linea_pedido", ">=", Timestamp.fromDate(new Date(serverFilters.dateFrom))));
+      if (filters.dateFrom) {
+        conditions.push(where("fecha_linea_pedido", ">=", Timestamp.fromDate(new Date(filters.dateFrom))));
       }
 
-      if (serverFilters.dateTo) {
-        conditions.push(where("fecha_linea_pedido", "<=", Timestamp.fromDate(new Date(serverFilters.dateTo))));
+      if (filters.dateTo) {
+        conditions.push(where("fecha_linea_pedido", "<=", Timestamp.fromDate(new Date(filters.dateTo))));
       }
 
-      if (serverFilters.status) {
-        conditions.push(where("estado_pedido", "==", serverFilters.status));
+      if (filters.status) {
+        conditions.push(where("estado_pedido", "==", filters.status));
       }
 
-      if (serverFilters.zone) {
-        conditions.push(where("subzona", "==", serverFilters.zone));
+      if (filters.zone) {
+        conditions.push(where("subzona", "==", filters.zone));
       }
 
-      if (serverFilters.codificador) {
-        conditions.push(where("codificador", "==", serverFilters.codificador));
+      if (filters.codificador) {
+        conditions.push(where("codificador", "==", filters.codificador));
       }
 
-      if (serverFilters.codigo_barra) {
-        conditions.push(where("codigo_barra", "==", serverFilters.codigo_barra));
+      if (filters.codigo_barra) {
+        conditions.push(where("codigo_barra", "==", filters.codigo_barra));
       }
 
-      if (serverFilters.numero_linea_pedido) {
-        conditions.push(where("numero_linea_pedido", "==", serverFilters.numero_linea_pedido));
+      if (filters.numero_linea_pedido) {
+        conditions.push(where("numero_linea_pedido", "==", filters.numero_linea_pedido));
       }
 
-      if (serverFilters.referencia_linea_pedido) {
-        conditions.push(where("referencia_linea_pedido", "==", serverFilters.referencia_linea_pedido));
+      if (filters.referencia_linea_pedido) {
+        conditions.push(where("referencia_linea_pedido", "==", filters.referencia_linea_pedido));
       }
 
       const productosQuery = query(
@@ -255,7 +263,6 @@ export default function Stock() {
       );
 
       const querySnapshot = await getDocs(productosQuery);
-      console.log("Firestore: productos encontrados", querySnapshot.size);
       setHitLimit(querySnapshot.size >= MAX_FIRESTORE_RESULTS);
 
       const firestoreInventory: Palet[] = querySnapshot.docs.map((doc) => {
@@ -285,51 +292,63 @@ export default function Stock() {
         };
       });
 
-      console.log("Inventario normalizado", firestoreInventory.slice(0, 5));
       setInventory(firestoreInventory);
     } catch (error) {
       console.error("Error cargando inventario desde Firestore:", error);
-      setInventory([]);
-      addToast({ type: "error", title: "Error", message: "No se pudo cargar el inventario" });
+      if (inventory.length === 0) {
+        setInventory([]);
+      }
+      addToast({ type: "error", title: "Error", message: "No se pudo cargar el inventario. Reintentando..." });
     } finally {
       setLoading(false);
     }
-  }, [serverFilters, addToast]);
+  }, [debouncedServerFilters, addToast]);
 
   useEffect(() => {
     fetchStock();
   }, [fetchStock]);
 
-  const openPaletPanel = (palet: Palet | null, viewMode = false) => {
+  const openPaletPanel = useCallback((palet: Palet | null, viewMode = false) => {
     setSelectedPalet(palet);
     setIsPanelOpen(true);
     setIsViewMode(viewMode);
     setActionError(null);
     setInfoMessage(null);
-  };
+  }, []);
 
-  const handleNewPalet = () => {
+  const handleNewPalet = useCallback(() => {
     openPaletPanel({ ...EMPTY_PALET });
-  };
+  }, [openPaletPanel]);
 
-  const handleViewPalet = (palet: Palet) => {
+  const handleViewPalet = useCallback((palet: Palet) => {
     openPaletPanel(palet, true);
-  };
+  }, [openPaletPanel]);
 
-  const handleEditPalet = (palet: Palet) => {
+  const handleEditPalet = useCallback((palet: Palet) => {
     openPaletPanel(palet, false);
-  };
+  }, [openPaletPanel]);
 
-  const updateSelectedPaletField = (key: keyof Palet, value: string) => {
+  const updateSelectedPaletField = useCallback((key: keyof Palet, value: string) => {
     setSelectedPalet((prev) => (prev ? { ...prev, [key]: value } : prev));
-  };
+  }, []);
 
-  const handleSavePalet = async () => {
+  const handleSavePalet = useCallback(async () => {
     if (!selectedPalet) return;
     setSaving(true);
     setActionError(null);
 
     try {
+      const errors: string[] = [];
+      if (!selectedPalet.client.trim()) errors.push("Cliente");
+      if (!selectedPalet.type.trim()) errors.push("Tipo de material");
+      if (!selectedPalet.dimensions.trim() || selectedPalet.dimensions === "0x0x0") errors.push("Dimensiones");
+
+      if (errors.length > 0) {
+        setActionError(`Campos obligatorios: ${errors.join(", ")}`);
+        setSaving(false);
+        return;
+      }
+
       const paletToSave = { ...selectedPalet };
       const firestoreData = mapPaletToFirestore(paletToSave);
 
@@ -364,9 +383,9 @@ export default function Stock() {
     } finally {
       setSaving(false);
     }
-  };
+  }, [selectedPalet, addToast]);
 
-  const handleCopyId = async (palet: Palet) => {
+  const handleCopyId = useCallback(async (palet: Palet) => {
     const textToCopy = palet.id || palet.docId;
     try {
       await navigator.clipboard.writeText(textToCopy);
@@ -377,10 +396,11 @@ export default function Stock() {
       setActionError(null);
       window.prompt("Copia manualmente el ID:", textToCopy);
     }
-  };
+  }, [addToast]);
 
-  const handleMarkAsErroneous = async () => {
+  const handleMarkAsErroneous = useCallback(async () => {
     if (!selectedPalet?.docId) return;
+    if (!window.confirm("¿Estás seguro de marcar este palet como erróneo?")) return;
     setSaving(true);
     setActionError(null);
     setInfoMessage(null);
@@ -400,25 +420,25 @@ export default function Stock() {
     } finally {
       setSaving(false);
     }
-  };
+  }, [selectedPalet, addToast]);
 
-  const handleClosePanel = () => {
+  const handleClosePanel = useCallback(() => {
     setIsPanelOpen(false);
     setSelectedPalet(null);
     setIsViewMode(false);
-  };
+  }, []);
 
-  const updateServerFilter = (key: keyof ServerFilters, value: string) => {
+  const updateServerFilter = useCallback((key: keyof ServerFilters, value: string) => {
     setServerFilters((prev) => ({ ...prev, [key]: value }));
     setCurrentPage(1);
-  };
+  }, []);
 
-  const updateClientFilter = (key: keyof ClientFilters, value: string) => {
+  const updateClientFilter = useCallback((key: keyof ClientFilters, value: string) => {
     setClientFilters((prev) => ({ ...prev, [key]: value }));
     setCurrentPage(1);
-  };
+  }, []);
 
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setServerFilters({
       status: "",
       zone: "",
@@ -436,15 +456,16 @@ export default function Stock() {
       widthMax: "",
       heightMin: "",
       heightMax: "",
-      thickness: "",
+      thicknessMin: "",
+      thicknessMax: "",
     });
     setSearchTerm("");
     setCurrentPage(1);
-  };
+  }, []);
 
   const filteredInventory = useMemo(() => {
     return inventory.filter((item) => {
-      const search = searchTerm.toLowerCase().trim();
+      const search = debouncedSearch.toLowerCase().trim();
       const matchesSearch =
         item.id.toLowerCase().includes(search) ||
         item.client.toLowerCase().includes(search) ||
@@ -467,7 +488,8 @@ export default function Stock() {
       const matchesWidthMax = clientFilters.widthMax === "" || width <= Number(clientFilters.widthMax);
       const matchesHeightMin = clientFilters.heightMin === "" || height >= Number(clientFilters.heightMin);
       const matchesHeightMax = clientFilters.heightMax === "" || height <= Number(clientFilters.heightMax);
-      const matchesThickness = clientFilters.thickness === "" || thickness === Number(clientFilters.thickness);
+      const matchesThicknessMin = clientFilters.thicknessMin === "" || thickness >= Number(clientFilters.thicknessMin);
+      const matchesThicknessMax = clientFilters.thicknessMax === "" || thickness <= Number(clientFilters.thicknessMax);
 
       return (
         matchesSearch &&
@@ -477,10 +499,11 @@ export default function Stock() {
         matchesWidthMax &&
         matchesHeightMin &&
         matchesHeightMax &&
-        matchesThickness
+        matchesThicknessMin &&
+        matchesThicknessMax
       );
     });
-  }, [searchTerm, debouncedClient, debouncedType, clientFilters, inventory]);
+  }, [debouncedSearch, debouncedClient, debouncedType, clientFilters, inventory]);
 
   const totalPages = Math.max(1, Math.ceil(filteredInventory.length / rowsPerPage));
   
@@ -491,7 +514,7 @@ export default function Stock() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, debouncedClient, debouncedType]);
+  }, [debouncedSearch, debouncedClient, debouncedType]);
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -661,13 +684,22 @@ export default function Stock() {
                   onChange={(e) => updateClientFilter("heightMax", e.target.value)}
                 />
               </div>
-              <Input
-                label="Grosor (mm)"
-                type="number"
-                placeholder="Ej. 8"
-                value={clientFilters.thickness}
-                onChange={(e) => updateClientFilter("thickness", e.target.value)}
-              />
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  label="Grosor (mm) - Min"
+                  type="number"
+                  placeholder="Min"
+                  value={clientFilters.thicknessMin}
+                  onChange={(e) => updateClientFilter("thicknessMin", e.target.value)}
+                />
+                <Input
+                  label="Grosor (mm) - Max"
+                  type="number"
+                  placeholder="Max"
+                  value={clientFilters.thicknessMax}
+                  onChange={(e) => updateClientFilter("thicknessMax", e.target.value)}
+                />
+              </div>
               <Input
                 label="Fecha desde"
                 type="date"
@@ -785,6 +817,12 @@ export default function Stock() {
               disabled={isViewMode}
               onChange={(e) => updateSelectedPaletField("codigo_barra", e.target.value)}
             />
+            <Input
+              label="Codificador"
+              value={selectedPalet.codificador || ""}
+              disabled={isViewMode}
+              onChange={(e) => updateSelectedPaletField("codificador", e.target.value)}
+            />
             <div className="grid grid-cols-2 gap-4">
               <Input
                 label="Nº de línea"
@@ -814,12 +852,20 @@ export default function Stock() {
                 onChange={(e) => updateSelectedPaletField("dimensions", e.target.value)}
               />
             </div>
-            <Input
-              label="Ubicación"
-              value={selectedPalet.location}
-              disabled={isViewMode}
-              onChange={(e) => updateSelectedPaletField("location", e.target.value)}
-            />
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Ubicación"
+                value={selectedPalet.location}
+                disabled={isViewMode}
+                onChange={(e) => updateSelectedPaletField("location", e.target.value)}
+              />
+              <Input
+                label="Zona"
+                value={selectedPalet.zone || ""}
+                disabled={isViewMode}
+                onChange={(e) => updateSelectedPaletField("zone", e.target.value)}
+              />
+            </div>
             <Select
               label="Estado del palet"
               options={PALET_STATUS_OPTIONS}
