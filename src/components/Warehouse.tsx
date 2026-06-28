@@ -1,5 +1,5 @@
 // Warehouse.tsx - Implementación dinámica sin hardcode
-import { useState, useEffect, type KeyboardEvent } from "react";
+import { useState, useEffect, useCallback, type KeyboardEvent } from "react";
 import {
   Search, ChevronDown, Check, X, Package, 
   Layers, Maximize2, Zap, Box
@@ -462,6 +462,15 @@ export default function Warehouse() {
   // const [assignmentRules, setAssignmentRules] = useState<any[]>([]);
 
   const { designs, loading: designsLoading, error: designsError } = useMapDesigns();
+
+  const findZoneByAreaName = useCallback((areaName: string): string | undefined => {
+    const normalizedAreaName = areaName.toLowerCase().replace(/_/g, '/');
+    const match = zones.find(z => {
+      const normalizedZoneName = z.name.toLowerCase().replace(/_/g, '/');
+      return normalizedAreaName === normalizedZoneName;
+    });
+    return match?.id;
+  }, [zones]);
 
   // Cargar el mapa activo desde Firebase al montar el componente y cuando cambien los diseños
   useEffect(() => {
@@ -1522,11 +1531,14 @@ const renderSubzonesFromMap = () => {
                           height: `${cellSize}px`
                         }}
                         onClick={() => {
-                          if (area?.id) {
-                            setSelectedZone(area.id);
-                            setSelectedBlock(null);
-                            setSelectedPalletGroup([]);
-                            setIsZoneDropdownOpen(false);
+                          if (area?.name) {
+                            const zoneId = findZoneByAreaName(area.name);
+                            if (zoneId) {
+                              setSelectedZone(zoneId);
+                              setSelectedBlock(null);
+                              setSelectedPalletGroup([]);
+                              setIsZoneDropdownOpen(false);
+                            }
                           }
                         }}
                       />
@@ -1554,10 +1566,13 @@ const renderSubzonesFromMap = () => {
                             zIndex: 10
                           }}
                           onClick={() => {
-                            setSelectedZone(area.id);
-                            setSelectedBlock(null);
-                            setSelectedPalletGroup([]);
-                            setIsZoneDropdownOpen(false);
+                            const zoneId = findZoneByAreaName(area.name);
+                            if (zoneId) {
+                              setSelectedZone(zoneId);
+                              setSelectedBlock(null);
+                              setSelectedPalletGroup([]);
+                              setIsZoneDropdownOpen(false);
+                            }
                           }}
                         >
                           {area.name}
@@ -1585,10 +1600,13 @@ const renderSubzonesFromMap = () => {
                                 zIndex: 11
                               }}
                               onClick={() => {
-                                setSelectedZone(subArea.areaId);
-                                setSelectedBlock(null);
-                                setSelectedPalletGroup([]);
-                                setIsZoneDropdownOpen(false);
+                                const zoneId = findZoneByAreaName(area.name);
+                                if (zoneId) {
+                                  setSelectedZone(zoneId);
+                                  setSelectedBlock(null);
+                                  setSelectedPalletGroup([]);
+                                  setIsZoneDropdownOpen(false);
+                                }
                               }}
                             >
                               {subArea.name}
