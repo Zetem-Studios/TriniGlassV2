@@ -640,10 +640,10 @@ export default function Stock() {
       width: "100px",
       render: (item) => (
         <div className="flex justify-end gap-1">
-          <Button variant="ghost" size="sm" onClick={() => handleViewPalet(item)} aria-label="Ver detalle">
+          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleViewPalet(item); }} aria-label="Ver detalle">
             <Eye size={16} />
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => handleEditPalet(item)} aria-label="Editar palet">
+          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleEditPalet(item); }} aria-label="Editar palet">
             <Edit size={16} />
           </Button>
         </div>
