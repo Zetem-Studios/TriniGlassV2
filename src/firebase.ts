@@ -110,7 +110,6 @@ export const createCompleteZone = async (
       fechaCreacion: new Date(),
     });
 
-    console.log(`✅ Zona "${zoneName}" creada con código "${codigo}" (capacidad: ${capacidadMaxima})`);
     return codigo;
   } catch (error) {
     console.error("❌ Error creando zona:", error);
@@ -148,7 +147,6 @@ export const createZona = async (zona: Omit<Zona, 'id' | 'fechaCreacion'>): Prom
       fechaCreacion: Timestamp.now()
     };
     const docRef = await addDoc(collection(db, "zonas"), zonaData);
-    console.log("✅ Zona creada con ID:", docRef.id);
     return docRef.id;
   } catch (error) {
     console.error("❌ Error creando zona:", error);
@@ -177,7 +175,6 @@ export const updateZona = async (id: string, zona: Partial<Zona>): Promise<void>
   try {
     const zonaRef = doc(db, "zonas", id);
     await updateDoc(zonaRef, zona);
-    console.log("✅ Zona actualizada:", id);
   } catch (error) {
     console.error("❌ Error actualizando zona:", error);
     throw error;
@@ -194,7 +191,6 @@ export const deleteZona = async (id: string): Promise<void> => {
     
     // Luego eliminar la zona
     await deleteDoc(doc(db, "zonas", id));
-    console.log("✅ Zona eliminada:", id);
   } catch (error) {
     console.error("❌ Error eliminando zona:", error);
     throw error;
@@ -209,7 +205,6 @@ export const createSubzona = async (subzona: Omit<Subzona, 'id' | 'fechaCreacion
       fechaCreacion: Timestamp.now()
     };
     const docRef = await addDoc(collection(db, "subzonas"), subzonaData);
-    console.log("✅ Subzona creada con ID:", docRef.id);
     return docRef.id;
   } catch (error) {
     console.error("❌ Error creando subzona:", error);
@@ -253,7 +248,6 @@ export const updateSubzona = async (id: string, subzona: Partial<Subzona>): Prom
   try {
     const subzonaRef = doc(db, "subzonas", id);
     await updateDoc(subzonaRef, subzona);
-    console.log("✅ Subzona actualizada:", id);
   } catch (error) {
     console.error("❌ Error actualizando subzona:", error);
     throw error;
@@ -263,7 +257,6 @@ export const updateSubzona = async (id: string, subzona: Partial<Subzona>): Prom
 export const deleteSubzona = async (id: string): Promise<void> => {
   try {
     await deleteDoc(doc(db, "subzonas", id));
-    console.log("✅ Subzona eliminada:", id);
   } catch (error) {
     console.error("❌ Error eliminando subzona:", error);
     throw error;

@@ -9,6 +9,7 @@ import {
   onSnapshot,
 } from 'firebase/firestore';
 import { db } from '../firebase';
+import type { CargaCamion, PaletCargado } from './CamionService';
 
 export interface PaletPendiente {
   docId: string;
@@ -22,24 +23,6 @@ export interface PaletPendiente {
   zona?: string;
   posicion?: string;
   urgencia?: number;
-}
-
-export interface CargaCamion {
-  matricula: string;
-  palets: PaletCargado[];
-  actualizadoEn: Timestamp;
-  actualizadoPor: string;
-}
-
-export interface PaletCargado {
-  docId: string;
-  codigoBarra: string;
-  cliente: string;
-  descripcion: string;
-  pesoKg: number;
-  volumenM3: number;
-  asignadoEn: Timestamp;
-  asignadoPor: string;
 }
 
 export interface Parada {

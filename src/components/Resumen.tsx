@@ -26,8 +26,8 @@ import {
   Legend,
 } from 'recharts';
 import { KpiCard } from './ui/KpiCard';
-import { useWarehouseStats } from '../useWarehouseStats';
-import { useFleetStats } from '../useFleetStats';
+import { useWarehouseStats } from '../hooks/useWarehouseStats';
+import { useFleetStats } from '../hooks/useFleetStats';
 
 const CHART_COLORS = ['#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 

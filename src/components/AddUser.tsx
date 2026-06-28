@@ -1,23 +1,25 @@
 import { useState } from "react";
 import { UserPlus, Mail, Lock, Loader2 } from "lucide-react";
 import { registerUserInSystem } from "../../services/UserService";
+import { useToast } from "./ui/Toast";
 
 export default function AddUser() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const { addToast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
       await registerUserInSystem(email, password);
-      alert(" Usuario registrado correctamente en el sistema");
+      addToast({ type: "success", title: "Usuario registrado correctamente" });
       setEmail("");
       setPassword("");
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : "No se pudo crear el usuario";
-      alert("❌ Error: " + errorMessage);
+      addToast({ type: "error", title: "Error", message: errorMessage });
     } finally {
       setLoading(false);
     }

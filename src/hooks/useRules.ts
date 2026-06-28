@@ -63,7 +63,6 @@ export const useRules = () => {
       });
       setSubzones(subzonesList);
 
-      console.log('✅ Zonas cargadas:', zonesList.length, 'subzonas cargadas:', subzonesList.length);
     } catch (error) {
       console.error('Error cargando zonas y subzonas:', error);
     }
@@ -85,13 +84,6 @@ export const useRules = () => {
       batch.update(subzonaDoc.ref, {
         default: isDefaultSubzone
       });
-      if (isDefaultSubzone) {
-        console.log('✅ Subzona marcada como default:', {
-          id: subzonaDoc.id,
-          zonaId: data.zonaId,
-          nombre: subzoneName
-        });
-      }
     });
 
     await batch.commit();
@@ -102,9 +94,6 @@ export const useRules = () => {
     const fetchRules = async () => {
       try {
         setLoading(true);
-        console.log('🔄 Cargando reglas desde Firebase...');
-        
-        // Cargar zonas y subzonas primero
         await loadZonesAndSubzones();
         
         const rulesCollection = collection(db, 'reglas_asignacion');
@@ -113,14 +102,12 @@ export const useRules = () => {
         let finalRules: ReglaAsignacion[];
         
         if (snapshot.empty) {
-          console.log('📝 No hay reglas en Firebase, cargando reglas por defecto...');
           const defaultRules = RuleEngine.getReglasPorDefecto();
           await Promise.all(
             defaultRules.map(rule => addDoc(rulesCollection, rule))
           );
           finalRules = defaultRules;
         } else {
-          console.log(`✅ Reglas cargadas desde Firebase: ${snapshot.size} reglas`);
           finalRules = snapshot.docs.map(doc => ({
             ...doc.data(),
             id: doc.id
@@ -143,7 +130,6 @@ export const useRules = () => {
   // Guardar nueva regla
   const saveRule = async (rule: Omit<ReglaAsignacion, 'id'>) => {
     try {
-      console.log('💾 Guardando nueva regla en Firebase...');
       const rulesCollection = collection(db, 'reglas_asignacion');
       const docRef = await addDoc(rulesCollection, rule);
       const newRule = { ...rule, id: docRef.id };
@@ -158,7 +144,6 @@ export const useRules = () => {
   // Actualizar regla existente
   const updateRule = async (id: string, rule: Partial<ReglaAsignacion>) => {
     try {
-      console.log('📝 Actualizando regla en Firebase:', id);
       const previousRule = rules.find(existingRule => existingRule.id === id);
       const ruleToUpdate = previousRule?.esDefecto
         ? { ...rule, esDefecto: true, condiciones: [], activa: true }
@@ -183,7 +168,6 @@ export const useRules = () => {
         throw new Error('La regla por defecto no se puede eliminar');
       }
 
-      console.log('🗑️ Eliminando regla de Firebase:', id);
       const ruleRef = doc(db, 'reglas_asignacion', id);
       await deleteDoc(ruleRef);
       setRules(prev => prev.filter(r => r.id !== id));
@@ -196,7 +180,6 @@ export const useRules = () => {
   // Reordenar reglas
   const reorderRules = async (reorderedRules: ReglaAsignacion[]) => {
     try {
-      console.log('🔄 Reordenando reglas en Firebase...');
       const batch = reorderedRules.map((rule, index) => 
         updateDoc(doc(db, 'reglas_asignacion', rule.id), { prioridad: index + 1 })
       );
@@ -214,8 +197,6 @@ export const useRules = () => {
   // Restaurar posicionamiento de productos
   const restoreDefaults = async () => {
     try {
-      console.log('🔄 Limpiando posicionamiento de productos...');
-      
       const productosCollection = collection(db, 'productos');
       const snapshot = await getDocs(productosCollection);
       const batch = writeBatch(db);
@@ -238,8 +219,6 @@ export const useRules = () => {
   // Aplicar reglas a todos los palets
   const applyRulesToAll = async () => {
     try {
-      console.log('🔄 Aplicando reglas a todos los palets...');
-      
       const productosCollection = collection(db, 'productos');
       const snapshot = await getDocs(productosCollection);
       
@@ -299,14 +278,6 @@ export const useRules = () => {
 
       await Promise.all(updatePromises);
 
-      if (unpositionedProducts.length > 0) {
-        console.group(`⚠️ Productos no posicionados (${unpositionedProducts.length})`);
-        console.table(unpositionedProducts);
-        unpositionedProducts.forEach(producto => {
-          console.log('Producto sin posicionar:', producto);
-        });
-        console.groupEnd();
-      }
       
       const overflowMessage = overflowToDefaultCount > 0
         ? ' Espacio insuficiente en esta subzona, los elementos sobrantes han sido enviados a la zona asignada por defecto'
@@ -327,7 +298,6 @@ export const useRules = () => {
 
   // Aplicar reglas solo a nuevos palets
   const applyRulesToNew = () => {
-    console.log('🆕 Modo para nuevos palets activado');
     return { 
       success: true, 
       message: 'Modo activado: Las reglas se aplicarán solo a nuevos palets' 
@@ -338,21 +308,17 @@ export const useRules = () => {
   const getApplicationMode = (): 'all' | 'new_only' | 'both' => 'both';
   
   // Establecer modo de aplicación
-  const setApplicationMode = (mode: 'all' | 'new_only' | 'both') => {
-    console.log('📝 Modo de aplicación:', mode);
+  const setApplicationMode = (_mode: 'all' | 'new_only' | 'both') => {
   };
 
   // Función de migración para mover datos de reglas_asignacion_v2 a reglas_asignacion
   const migrateRules = async () => {
     try {
-      console.log('🔄 Iniciando migración de reglas...');
-      
       // 1. Leer datos de reglas_asignacion_v2
       const v2Collection = collection(db, 'reglas_asignacion_v2');
       const v2Snapshot = await getDocs(v2Collection);
       
       if (v2Snapshot.empty) {
-        console.log('📝 No hay datos en reglas_asignacion_v2 para migrar');
         return { success: false, message: 'No hay datos para migrar' };
       }
       
@@ -361,14 +327,12 @@ export const useRules = () => {
         id: doc.id
       } as ReglaAsignacion));
       
-      console.log(`📦 Encontradas ${v2Rules.length} reglas en reglas_asignacion_v2`);
       
       // 2. Borrar colección reglas_asignacion si existe
       const oldCollection = collection(db, 'reglas_asignacion');
       const oldSnapshot = await getDocs(oldCollection);
       
       if (!oldSnapshot.empty) {
-        console.log('🗑️ Borrando reglas existentes en reglas_asignacion...');
         await Promise.all(oldSnapshot.docs.map(doc => deleteDoc(doc.ref)));
       }
       
@@ -380,11 +344,9 @@ export const useRules = () => {
       });
       
       await Promise.all(migrationPromises);
-      console.log(`✅ Migradas ${v2Rules.length} reglas a reglas_asignacion`);
       
       // 4. Borrar colección reglas_asignacion_v2
       await Promise.all(v2Snapshot.docs.map(doc => deleteDoc(doc.ref)));
-      console.log('🗑️ Colección reglas_asignacion_v2 borrada');
       
       // 5. Recargar reglas desde la nueva colección
       const newSnapshot = await getDocs(newCollection);
@@ -412,8 +374,6 @@ export const useRules = () => {
   // Función para importar reglas hardcodeadas
   const importHardcodedRules = async () => {
     try {
-      console.log('🔄 Importando reglas hardcodeadas...');
-      
       // Definir las reglas hardcodeadas en formato del motor de reglas
       const hardcodedRules = [
         {

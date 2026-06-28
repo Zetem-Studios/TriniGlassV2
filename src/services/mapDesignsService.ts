@@ -73,7 +73,6 @@ class MapDesignsService {
       };
 
       const docRef = await addDoc(collection(db, this.collection), designData);
-      console.log('Diseño guardado con ID:', docRef.id);
       return docRef.id;
     } catch (error) {
       console.error('Error al guardar diseño:', error);
@@ -91,7 +90,6 @@ class MapDesignsService {
       };
 
       await updateDoc(designRef, updateData);
-      console.log('Diseño actualizado:', id);
     } catch (error) {
       console.error('Error al actualizar diseño:', error);
       throw error;
@@ -129,9 +127,6 @@ class MapDesignsService {
         ...doc.data()
       })) as MapDesign[];
       
-      console.log('Datos obtenidos del servidor:', designs.length, 'diseños');
-      
-      // Si después de la limpieza todavía hay datos, hay un problema grave
       return designs;
     } catch (error) {
       console.error('Error al obtener diseños:', error);
@@ -153,20 +148,10 @@ class MapDesignsService {
   // Verificar si un nombre ya existe
   async nameExists(name: string, excludeId?: string): Promise<boolean> {
     try {
-      console.log('Verificando nombre:', name, 'excludeId:', excludeId);
       const designs = await this.getAllDesigns();
-      console.log('Diseños encontrados:', designs.map(d => ({ id: d.id, name: d.name })));
-      
-      const exists = designs.some(design => {
-        const matches = design.name.toLowerCase() === name.toLowerCase() && 
-                       design.id !== excludeId;
-        if (matches) {
-          console.log('Nombre duplicado encontrado:', design.name, 'ID:', design.id);
-        }
-        return matches;
-      });
-      
-      console.log('¿Existe nombre?', exists);
+      const exists = designs.some(design =>
+        design.name.toLowerCase() === name.toLowerCase() && design.id !== excludeId
+      );
       return exists;
     } catch (error) {
       console.error('Error al verificar nombre:', error);

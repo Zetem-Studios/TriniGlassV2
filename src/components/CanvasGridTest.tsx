@@ -72,7 +72,6 @@ const CanvasGridTest: React.FC = () => {
     const loadZones = async () => {
       try {
         const hierarchy = await getZonasWithSubzonas();
-        console.log('📥 Zonas cargadas desde Firebase:', hierarchy);
         setZonesHierarchy(hierarchy);
       } catch (error) {
         console.error('❌ Error cargando zonas:', error);
@@ -231,11 +230,6 @@ const CanvasGridTest: React.FC = () => {
     let needsExpansion = false;
     
     // DEBUG: Mostrar valores para depuración
-    console.log('=== DEBUG SCROLL/EXPANSIÓN AUTOMÁTICA ===');
-    console.log('Cursor:', { mouseX, mouseY });
-    console.log('Canvas:', { width: canvasRect.width, height: canvasRect.height });
-    console.log('Posición relativa canvas:', { canvasRelativeX, canvasRelativeY });
-    console.log('Scroll actual:', { scrollLeft, scrollTop });
     
     // Verificar si el cursor se acerca al borde del canvas para activar expansión
     const expansionMargin = 100; // Mayor margen para expansión
@@ -245,50 +239,42 @@ const CanvasGridTest: React.FC = () => {
     
     // Expansión horizontal si el cursor se acerca al borde derecho del canvas
     if (canvasRelativeX > canvasWidth - expansionMargin && gridBounds.endCol < MAX_BOUNDS.endCol) {
-      console.log('✅ ACTIVANDO EXPANSIÓN HORIZONTAL (cursor cerca borde derecho)');
       needsExpansion = true;
     }
     // Expansión vertical si el cursor se acerca al borde inferior del canvas
     if (canvasRelativeY > canvasHeight - expansionMargin && gridBounds.endRow < MAX_BOUNDS.endRow) {
-      console.log('✅ ACTIVANDO EXPANSIÓN VERTICAL (cursor cerca borde inferior)');
       needsExpansion = true;
     }
     
     // Scroll horizontal si el cursor se acerca al borde derecho del viewport
     if (relativeX > viewportWidth - scrollMargin) {
-      console.log('✅ ACTIVANDO SCROLL DERECHA (cursor)');
       scrollLeft = Math.min(scrollLeft + scrollSpeed, scrollContainer.scrollWidth - viewportWidth);
       needsScroll = true;
     }
     // Scroll horizontal si el cursor se acerca al borde izquierdo del viewport
     else if (relativeX < scrollMargin) {
-      console.log('✅ ACTIVANDO SCROLL IZQUIERDA (cursor)');
       scrollLeft = Math.max(0, scrollLeft - scrollSpeed);
       needsScroll = true;
     }
     
     // Scroll vertical si el cursor se acerca al borde inferior del viewport
     if (relativeY > viewportHeight - scrollMargin) {
-      console.log('✅ ACTIVANDO SCROLL ABAJO (cursor)');
       scrollTop = Math.min(scrollTop + scrollSpeed, scrollContainer.scrollHeight - viewportHeight);
       needsScroll = true;
     }
     // Scroll vertical si el cursor se acerca al borde superior del viewport
     else if (relativeY < scrollMargin) {
-      console.log('✅ ACTIVANDO SCROLL ARRIBA (cursor)');
       scrollTop = Math.max(0, scrollTop - scrollSpeed);
       needsScroll = true;
     }
     
     // Aplicar expansión si es necesario
     if (needsExpansion) {
-      console.log('🚀 APLICANDO EXPANSIÓN POR PROXIMIDAD DE CURSOR');
       expandCanvasNearCursor(canvasRelativeX, canvasRelativeY);
     }
     
     // Aplicar scroll si es necesario
     if (needsScroll) {
-      console.log('🚀 APLICANDO SCROLL A:', { scrollLeft, scrollTop });
       scrollContainer.scrollTo({
         left: scrollLeft,
         top: scrollTop
@@ -296,9 +282,7 @@ const CanvasGridTest: React.FC = () => {
     }
     
     if (!needsScroll && !needsExpansion) {
-      console.log('❌ NO SE ACTIVA SCROLL/EXPANSIÓN - Cursor dentro de límites');
     }
-    console.log('========================');
   };
 
   // Función para expandir canvas basado en la posición del cursor
@@ -320,38 +304,28 @@ const CanvasGridTest: React.FC = () => {
     // Margen para activar expansión (en píxeles desde el borde)
     const expansionMargin = 150;
     
-    console.log('=== DEBUG EXPANSIÓN POR CURSOR ===');
-    console.log('Cursor position:', { cursorX, cursorY });
-    console.log('Canvas dimensions:', { canvasWidth, canvasHeight });
-    console.log('Grid bounds:', { startCol: gridBounds.startCol, endCol: gridBounds.endCol, startRow: gridBounds.startRow, endRow: gridBounds.endRow });
     
     // Expansión horizontal - si el cursor se acerca al borde derecho del canvas
     const horizontalThreshold = canvasWidth - expansionMargin;
     if (cursorX > horizontalThreshold && currentEndIndex < maxEndIndex) {
-      console.log('✅ CURSOR CERCA BORDE DERECHO - cursorX:', cursorX, 'threshold:', horizontalThreshold);
       
       const currentBlockIndex = Math.floor(currentEndIndex / 26);
       const nextBlockIndex = currentBlockIndex + 1;
       const maxBlockIndex = Math.floor((maxColumns.length - 1) / 26);
       
-      console.log('Block indices - current:', currentBlockIndex, 'next:', nextBlockIndex, 'max:', maxBlockIndex);
       
       if (nextBlockIndex <= maxBlockIndex) {
         const newEndIndex = Math.min((nextBlockIndex + 1) * 26 - 1, maxColumns.length - 1);
         newEndCol = maxColumns[newEndIndex];
         needsHorizontalExpansion = true;
-        console.log('📈 EXPANSIÓN HORIZONTAL A:', newEndCol, 'índice:', newEndIndex);
       } else {
-        console.log('❌ NO SE PUEDE EXPANDIR HORIZONTALMENTE - límite de bloques alcanzado');
       }
     } else {
-      console.log('❌ NO SE ACTIVA EXPANSIÓN HORIZONTAL - cursorX:', cursorX, 'threshold:', horizontalThreshold, 'currentEndIndex:', currentEndIndex, 'maxEndIndex:', maxEndIndex);
     }
     
     // Expansión vertical - si el cursor se acerca al borde inferior del canvas
     const verticalThreshold = canvasHeight - expansionMargin;
     if (cursorY > verticalThreshold && gridBounds.endRow < MAX_BOUNDS.endRow) {
-      console.log('✅ CURSOR CERCA BORDE INFERIOR - cursorY:', cursorY, 'threshold:', verticalThreshold);
       
       const currentEndRow = gridBounds.endRow;
       const nextBlockStart = Math.floor((currentEndRow - 1) / 26) * 26 + 27;
@@ -359,15 +333,11 @@ const CanvasGridTest: React.FC = () => {
       
       newEndRow = Math.min(nextBlockStart + 25, maxEndRow);
       needsVerticalExpansion = true;
-      console.log('📈 EXPANSIÓN VERTICAL A:', newEndRow, 'desde:', currentEndRow);
     } else {
-      console.log('❌ NO SE ACTIVA EXPANSIÓN VERTICAL - cursorY:', cursorY, 'threshold:', verticalThreshold, 'endRow:', gridBounds.endRow, 'maxEndRow:', MAX_BOUNDS.endRow);
     }
     
     // Aplicar expansión
     if (needsHorizontalExpansion || needsVerticalExpansion) {
-      console.log('🚀 APLICANDO EXPANSIÓN - Horizontal:', needsHorizontalExpansion, 'Vertical:', needsVerticalExpansion);
-      console.log('Nuevos bounds:', { endCol: newEndCol, endRow: newEndRow });
       
       setGridBounds(prev => ({
         ...prev,
@@ -375,9 +345,7 @@ const CanvasGridTest: React.FC = () => {
         endRow: newEndRow
       }));
     } else {
-      console.log('📦 SIN EXPANSIÓN APLICAR');
     }
-    console.log('==========================');
   };
 
   // Obtener coordenadas de celda alfanumérica
@@ -432,7 +400,6 @@ const CanvasGridTest: React.FC = () => {
   const addArea = () => {
     const nextPos = findNextAvailableGridPosition();
     if (!nextPos) {
-      console.log('El grid está completamente lleno, no se pueden añadir más áreas');
       return;
     }
     
@@ -499,7 +466,6 @@ const CanvasGridTest: React.FC = () => {
     // Encontrar la próxima posición disponible
     const nextPos = findNextAvailablePosition(parentArea);
     if (!nextPos) {
-      console.log('El área está completamente llena, no se pueden añadir más sub-áreas');
       return;
     }
     
@@ -569,17 +535,12 @@ const CanvasGridTest: React.FC = () => {
     const target = e.target as HTMLElement;
     
     // Debug: mostrar información del target
-    console.log('Click en canvas - Target:', target);
-    console.log('Target classes:', target.className);
-    console.log('Target closest área:', target.closest('.border-brand-600'));
-    console.log('Target closest sub-área:', target.closest('.border-red-600'));
     
     // Verificar si el click fue en el canvas o en una celda del grid
     const isCanvasClick = target === e.currentTarget || target.classList.contains('border-gray-200');
     
     // Solo deseleccionar si no se hizo click en un área o sub-área
     if (isCanvasClick && !target.closest('.border-brand-600') && !target.closest('.border-red-600')) {
-      console.log('Deseleccionando todo');
       setSelectedArea(null);
       setSelectedSubArea(null);
       // Cancelar edición si está activa
@@ -587,7 +548,6 @@ const CanvasGridTest: React.FC = () => {
       setEditingSubArea(null);
       setTempName('');
     } else {
-      console.log('No se deselecciona - click en área/sub-área');
     }
   };
 
@@ -966,13 +926,6 @@ const CanvasGridTest: React.FC = () => {
       const { col: proposedStartCol, row: proposedStartRow } = pixelsToGrid(newX, newY);
       const { col: proposedEndCol, row: proposedEndRow } = pixelsToGrid(newX + newWidth, newY + newHeight);
       
-      console.log('=== DEPURACIÓN REDIMENSIONAMIENTO ===');
-      console.log('handle de redimensionamiento:', resizeHandle);
-      console.log('Área inicial:', areaStart);
-      console.log('Valores propuestos:');
-      console.log('  proposedStartCol:', proposedStartCol, 'proposedStartRow:', proposedStartRow);
-      console.log('  proposedEndCol:', proposedEndCol, 'proposedEndRow:', proposedEndRow);
-      console.log('  Límites canvas - maxColIndex:', maxColIndex, 'maxRowIndex:', maxRowIndex);
       
       // BLOQUEO DURO: Forzar dentro de los límites absolutos del canvas
       const lockedStartCol = Math.max(0, Math.min(proposedStartCol, maxColIndex));
@@ -980,9 +933,6 @@ const CanvasGridTest: React.FC = () => {
       const lockedEndCol = Math.max(lockedStartCol, Math.min(proposedEndCol, maxColIndex));
       const lockedEndRow = Math.max(lockedStartRow, Math.min(proposedEndRow, maxRowIndex));
       
-      console.log('Valores bloqueados:');
-      console.log('  lockedStartCol:', lockedStartCol, 'lockedStartRow:', lockedStartRow);
-      console.log('  lockedEndCol:', lockedEndCol, 'lockedEndRow:', lockedEndRow);
       
       // REDIMENSIONAMIENTO SUAVE: Sin snap-to-grid durante el proceso
       // El snap-to-grid se aplicará solo al soltar el área
@@ -1005,10 +955,6 @@ const CanvasGridTest: React.FC = () => {
         // NOTA: Durante el redimensionamiento NO compensamos el scroll
         // Solo se cambia el tamaño, la posición se mantiene fija
         
-        console.log('Valores finales aplicados:');
-        console.log('  newX:', newX, 'newY:', newY);
-        console.log('  newWidth:', newWidth, 'newHeight:', newHeight);
-        console.log('  pixelStart:', pixelStart, 'pixelEnd:', pixelEnd);
         
         const resizeCoords = getCellCoordinates(newX, newY);
         const updatedArea = { ...areas.find(a => a.id === draggedArea)!, x: newX, y: newY, width: newWidth, height: newHeight, col: resizeCoords.col, row: resizeCoords.row };
@@ -1020,17 +966,9 @@ const CanvasGridTest: React.FC = () => {
         ));
         
         // Scroll automático durante redimensionamiento para mantener el área visible
-        console.log('🔄 LLAMANDO AUTO-SCROLL DURING RESIZE - Cursor:', e.clientX, e.clientY);
         autoScrollIfNeeded(e.clientX, e.clientY);
         
         // Durante redimensionamiento, siempre verificar expansión
-        console.log('=== ANTES DE checkAndExpandCanvas (RESIZE) ===');
-        console.log('updatedArea que se pasa:', updatedArea);
-        console.log('updatedArea.width:', updatedArea.width, 'updatedArea.height:', updatedArea.height);
-        console.log('updatedArea.x:', updatedArea.x, 'updatedArea.y:', updatedArea.y);
-        console.log('¿Estamos en redimensionamiento?', isResizing);
-        console.log('¿Hay draggedArea?', draggedArea);
-        console.log('¿Hay resizeHandle?', resizeHandle);
         
         checkAndExpandCanvas(updatedArea);
       }
@@ -1105,10 +1043,6 @@ const CanvasGridTest: React.FC = () => {
       const parentArea = areas.find(a => a.id === draggedSubAreaParent);
       if (!parentArea) return;
       
-      console.log('=== REDIMENSIONAMIENTO SUB-ÁREA ===');
-      console.log('Handle:', resizeHandle);
-      console.log('Delta X/Y:', deltaX, deltaY);
-      console.log('Posición inicial:', { x: areaStart.x, y: areaStart.y, width: areaStart.width, height: areaStart.height });
       
       switch (resizeHandle) {
         case 'nw':
@@ -1133,7 +1067,6 @@ const CanvasGridTest: React.FC = () => {
           break;
       }
       
-      console.log('Posición después de cálculo:', { newX, newY, newWidth, newHeight });
       
       // Asegurar dimensiones mínimas
       newWidth = Math.max(gridSize.cellWidth, newWidth);
@@ -1145,7 +1078,6 @@ const CanvasGridTest: React.FC = () => {
       const parentRight = parentArea.x + parentArea.width;
       const parentBottom = parentArea.y + parentArea.height;
       
-      console.log('Límites del área padre:', { parentLeft, parentTop, parentRight, parentBottom });
       
       // Ajustar para que no salga del área padre
       newX = Math.max(parentLeft, Math.min(newX, parentRight - newWidth));
@@ -1153,29 +1085,24 @@ const CanvasGridTest: React.FC = () => {
       newWidth = Math.min(newWidth, parentRight - newX);
       newHeight = Math.min(newHeight, parentBottom - newY);
       
-      console.log('Posición después de restricciones:', { newX, newY, newWidth, newHeight });
       
       // Snap-to-grid mejorado para sub-áreas
       const { col: startGridCol, row: startGridRow } = pixelsToGrid(newX, newY);
       const { col: endGridCol, row: endGridRow } = pixelsToGrid(newX + newWidth, newY + newHeight);
       
-      console.log('Grid coords - Start:', { col: startGridCol, row: startGridRow }, 'End:', { col: endGridCol, row: endGridRow });
       
       const snappedStart = gridToPixels(startGridCol, startGridRow);
       const snappedEnd = gridToPixels(endGridCol, endGridRow);
       
-      console.log('Snapped positions - Start:', snappedStart, 'End:', snappedEnd);
       
       newX = snappedStart.x;
       newY = snappedStart.y;
       newWidth = snappedEnd.x - snappedStart.x;
       newHeight = snappedEnd.y - snappedStart.y;
       
-      console.log('Posición final después de snap:', { newX, newY, newWidth, newHeight });
       
       // Calcular coordenadas alfanuméricas correctas
       const finalCoords = getCellCoordinates(newX, newY);
-      console.log('Coordenadas alfanuméricas finales:', finalCoords);
       
       // Actualizar la sub-área
       setAreas(prev => prev.map(area => 
@@ -1195,76 +1122,52 @@ const CanvasGridTest: React.FC = () => {
 
   // Función para verificar expansión horizontal (independiente)
   const checkHorizontalExpansion = (area: Area) => {
-    console.log('=== DEBUG EXPANSIÓN HORIZONTAL INICIO ===');
-    console.log('Grid bounds actuales:', gridBounds);
-    console.log('MAX_BOUNDS:', MAX_BOUNDS);
     
     const columns = generateColumnLetters(gridBounds.startCol, gridBounds.endCol);
-    console.log('Columnas generadas:', columns);
-    console.log('Total columnas:', columns.length);
     
     const currentColIndex = columns.indexOf(area.col);
-    console.log('Índice columna actual:', currentColIndex, 'columna:', area.col);
     
     // Calcular límite horizontal del área
     const areaEndColIndex = currentColIndex + Math.ceil(area.width / gridSize.cellWidth) - 1;
     const areaEndColLetter = columns[areaEndColIndex];
-    console.log('Índice final área:', areaEndColIndex, 'columna final:', areaEndColLetter);
-    console.log('Ancho área:', area.width, 'cellWidth:', gridSize.cellWidth);
     
     // Para comparación correcta de columnas
     const maxColumns = generateColumnLetters(MAX_BOUNDS.startCol, MAX_BOUNDS.endCol);
-    console.log('Max columns (A-AZ):', maxColumns.length, 'primeras:', maxColumns.slice(0, 5), 'últimas:', maxColumns.slice(-5));
     
     const currentEndIndex = columns.indexOf(gridBounds.endCol);
     const maxEndIndex = maxColumns.indexOf(MAX_BOUNDS.endCol);
-    console.log('Índices - actual end:', currentEndIndex, 'max end:', maxEndIndex);
     
     // Verificar si el área alcanza la última columna disponible
     const lastCurrentColLetter = gridBounds.endCol;
     const reachesLastColumn = areaEndColLetter === lastCurrentColLetter;
     const canExpandHorizontally = currentEndIndex < maxEndIndex;
     
-    console.log('Condición - alcanza última columna?', reachesLastColumn);
-    console.log('Condición - puede expandir?', canExpandHorizontally);
-    console.log('Columna final área:', areaEndColLetter, 'última disponible:', lastCurrentColLetter);
     
     if (reachesLastColumn && canExpandHorizontally) {
-      console.log('✅ CONDICIONES CUMPLIDAS - Activando expansión horizontal');
       
       // Expandir al siguiente bloque completo (AA-AZ, BA-BZ, etc.)
       const currentBlockIndex = Math.floor(currentEndIndex / 26);
       const nextBlockIndex = currentBlockIndex + 1;
       const maxBlockIndex = Math.floor((maxColumns.length - 1) / 26);
       
-      console.log('Bloques - current:', currentBlockIndex, 'next:', nextBlockIndex, 'max:', maxBlockIndex);
       
       if (nextBlockIndex <= maxBlockIndex) {
         const newEndIndex = Math.min((nextBlockIndex + 1) * 26 - 1, maxColumns.length - 1);
         const newEndCol = maxColumns[newEndIndex];
-        console.log('🚀 EXPANSIÓN HORIZONTAL APLICADA - Nueva columna:', newEndCol, 'índice:', newEndIndex);
         
         setGridBounds(prev => {
-          console.log('Actualizando gridBounds de:', prev.endCol, 'a:', newEndCol);
           return {
             ...prev,
             endCol: newEndCol
           };
         });
         
-        console.log('===============================');
         return true;
       } else {
-        console.log('❌ Límite de bloques alcanzado');
       }
     } else {
-      console.log('❌ CONDICIONES NO CUMPLIDAS');
-      console.log('  - Alcanza última columna:', reachesLastColumn);
-      console.log('  - Puede expandir:', canExpandHorizontally);
-      console.log('  - Columna final área:', areaEndColLetter, 'última disponible:', lastCurrentColLetter);
     }
     
-    console.log('===============================');
     return false;
   };
 
@@ -1277,15 +1180,8 @@ const CanvasGridTest: React.FC = () => {
     const areaEndRowIndex = currentRowIndex + Math.ceil(area.height / gridSize.cellHeight) - 1;
     const canvasHeight = gridBounds.endRow - gridBounds.startRow + 1;
     
-    console.log('=== DEBUG EXPANSIÓN VERTICAL ===');
-    console.log('Área:', area);
-    console.log('areaEndRowIndex:', areaEndRowIndex, 'canvasHeight - 1:', canvasHeight - 1);
-    console.log('gridBounds.endRow:', gridBounds.endRow, 'MAX_BOUNDS.endRow:', MAX_BOUNDS.endRow);
-    console.log('Condición 1 (areaEndRowIndex >= canvasHeight - 1):', areaEndRowIndex >= canvasHeight - 1);
-    console.log('Condición 2 (gridBounds.endRow < MAX_BOUNDS.endRow):', gridBounds.endRow < MAX_BOUNDS.endRow);
     
     if (areaEndRowIndex >= canvasHeight - 1 && gridBounds.endRow < MAX_BOUNDS.endRow) {
-      console.log('✅ ACTIVANDO EXPANSIÓN VERTICAL');
       
       // Expandir al siguiente bloque completo de 26 filas
       const currentEndRow = gridBounds.endRow;
@@ -1293,7 +1189,6 @@ const CanvasGridTest: React.FC = () => {
       const maxEndRow = MAX_BOUNDS.endRow;
       
       const newEndRow = Math.min(nextBlockStart + 25, maxEndRow);
-      console.log('🚀 EXPANSIÓN VERTICAL A:', newEndRow, 'desde:', currentEndRow);
       
       setGridBounds(prev => ({
         ...prev,
@@ -1302,16 +1197,13 @@ const CanvasGridTest: React.FC = () => {
       
       return true;
     } else {
-      console.log('❌ NO SE ACTIVA EXPANSIÓN VERTICAL');
     }
     
-    console.log('=============================');
     return false;
   };
 
   // Función principal que verifica ambas expansiones de forma independiente
   const checkAndExpandCanvas = (area: Area) => {
-    console.log('=== VERIFICANDO EXPANSIÓN INDEPENDIENTE ===');
     
     // Verificar expansión horizontal (independiente)
     const horizontalExpanded = checkHorizontalExpansion(area);
@@ -1320,11 +1212,8 @@ const CanvasGridTest: React.FC = () => {
     const verticalExpanded = checkVerticalExpansion(area);
     
     if (horizontalExpanded || verticalExpanded) {
-      console.log('🚀 RESUMEN - Horizontal:', horizontalExpanded, 'Vertical:', verticalExpanded);
     } else {
-      console.log('📦 SIN EXPANSIÓN APLICAR');
     }
-    console.log('====================================');
   };
 
   // Finalizar drag/resize

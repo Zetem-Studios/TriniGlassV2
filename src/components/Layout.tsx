@@ -3,7 +3,7 @@ import { Outlet, NavLink } from 'react-router-dom';
 
 import { LayoutDashboard, Package, Building2, Bell, Settings, Sun, Moon, Menu, UserPlus, Truck, PackageOpen, X, LogOut } from 'lucide-react';
 import { useAuth } from '../context/useAuth';
-import { useAlertasCount } from '../useAlertasCount';
+import { useAlertasCount } from '../hooks/useAlertasCount';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 

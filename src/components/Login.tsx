@@ -2,12 +2,14 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Mail, Lock, Box } from 'lucide-react';
 import { loginUser } from "../../services/UserService";
+import { useToast } from "./ui/Toast";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { addToast } = useToast();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,7 +21,7 @@ const Login = () => {
     } catch (error: unknown) {
       console.error("Error en login:", error);
       const errorMessage = error instanceof Error ? error.message : "Error desconocido";
-      alert(`Error al iniciar sesión: ${errorMessage}`);
+      addToast({ type: "error", title: "Error al iniciar sesión", message: errorMessage });
     } finally {
       setLoading(false);
     }
