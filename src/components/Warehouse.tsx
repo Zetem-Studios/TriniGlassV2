@@ -1,5 +1,5 @@
 // Warehouse.tsx - Implementación dinámica sin hardcode
-import { useState, useEffect, useCallback, type KeyboardEvent } from "react";
+import { useState, useEffect, useCallback, useMemo, type KeyboardEvent } from "react";
 import {
   Search, ChevronDown, Check, X, Package, 
   Layers, Maximize2, Zap, Box
@@ -471,6 +471,32 @@ export default function Warehouse() {
     });
     return match?.id;
   }, [zones]);
+
+  // Calcular promedio de días en almacén por subzona para el heatmap del grid
+  const subzoneAvgDays = useMemo(() => {
+    const daysMap = new Map<string, { total: number; count: number }>();
+    blocks.forEach(block => {
+      const subzone = block.area || (block as any).subzona;
+      if (!subzone) return;
+      const entry = daysMap.get(subzone) || { total: 0, count: 0 };
+      entry.total += block.daysInStorage;
+      entry.count += 1;
+      daysMap.set(subzone, entry);
+    });
+    const result = new Map<string, number>();
+    daysMap.forEach((value, key) => {
+      result.set(key, value.count > 0 ? Math.round(value.total / value.count) : 0);
+    });
+    return result;
+  }, [blocks]);
+
+  const getAvgDaysColor = (avgDays: number): string => {
+    if (avgDays > 30) return 'bg-red-500/40';
+    if (avgDays > 20) return 'bg-orange-500/40';
+    if (avgDays >= 10) return 'bg-yellow-500/40';
+    if (avgDays > 0) return 'bg-green-500/40';
+    return 'bg-gray-500/40';
+  };
 
   // Cargar el mapa activo desde Firebase al montar el componente y cuando cambien los diseños
   useEffect(() => {
@@ -1511,11 +1537,10 @@ const renderSubzonesFromMap = () => {
                     
                     if (area) {
                       if (subArea) {
-                        // Subárea: color más oscuro con bordes exteriores
-                        bgColor = 'bg-gray-500/40';
+                        const avgDays = subzoneAvgDays.get(subArea.name) ?? 0;
+                        bgColor = getAvgDaysColor(avgDays);
                         borderClass = getSubAreaBorders(row, col, subArea);
                       } else {
-                        // Área principal: color gris claro con bordes exteriores
                         bgColor = 'bg-gray-300/30';
                         borderClass = getCellBorders(row, col, area);
                       }
@@ -1525,7 +1550,7 @@ const renderSubzonesFromMap = () => {
                       <div
                         key={index}
                         className={`overflow-hidden ${area ? 'cursor-pointer' : ''} ${bgColor} ${borderClass}`}
-                        title={`${position}${area ? ` - ${area.name}` : ''}${subArea ? ` (${subArea.name})` : ''}`}
+                        title={`${position}${area ? ` - ${area.name}` : ''}${subArea ? ` (${subArea.name})` : ''}${subArea ? ` - Promedio ${subzoneAvgDays.get(subArea.name) ?? 0} días` : ''}`}
                         style={{
                           width: `${cellSize}px`,
                           height: `${cellSize}px`
