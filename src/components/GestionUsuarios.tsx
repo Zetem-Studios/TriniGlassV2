@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { listUsers, setUserRole, deleteUser } from "../../services/UserService";
 import type { UserProfile, Rol } from "../../services/UserService";
 import { useAuth } from "../context/useAuth";
+import { ConfirmDialog } from "./ui/Modal";
+import { useToast } from "./ui/Toast";
 
 const ROL_LABELS: Record<Rol, string> = {
   operario: "Operario",
@@ -20,50 +22,59 @@ const ROL_BADGE: Record<Rol, string> = {
 export default function GestionUsuarios() {
   const { user, rol: rolActual } = useAuth();
   const navigate = useNavigate();
+  const { addToast } = useToast();
   const [usuarios, setUsuarios] = useState<UserProfile[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [changingUid, setChangingUid] = useState<string | null>(null);
   const [deletingUid, setDeletingUid] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null);
 
   const esAdmin = rolActual === "admin";
 
   useEffect(() => {
+    let cancelled = false;
     listUsers()
-      .then(setUsuarios)
-      .catch(() => setError("No se pudo cargar la lista de usuarios."))
-      .finally(() => setLoadingList(false));
+      .then(lista => {
+        if (!cancelled) setUsuarios(lista);
+      })
+      .catch(() => {
+        if (!cancelled) setError("No se pudo cargar la lista de usuarios.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingList(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const handleDeleteUser = async (uid: string) => {
+  const handleDeleteUser = (uid: string) => {
     const usuario = usuarios.find(u => u.uid === uid);
     if (!usuario) return;
 
-    const confirmar = window.confirm(
-      `¿Eliminar al usuario "${usuario.email}"? Esta acción no se puede deshacer.`
-    );
-    if (!confirmar) return;
-
-    setDeletingUid(uid);
-    setError(null);
-    try {
-      await deleteUser(uid);
-      setUsuarios(prev => prev.filter(u => u.uid !== uid));
-    } catch {
-      setError(`No se pudo eliminar a ${usuario.email}.`);
-    } finally {
-      setDeletingUid(null);
-    }
+    setConfirm({
+      message: `¿Eliminar al usuario "${usuario.email}"? Esta acción no se puede deshacer.`,
+      onConfirm: async () => {
+        setDeletingUid(uid);
+        setError(null);
+        try {
+          await deleteUser(uid);
+          setUsuarios(prev => prev.filter(u => u.uid !== uid));
+          addToast({ type: "success", title: "Usuario eliminado", message: usuario.email });
+        } catch {
+          setError(`No se pudo eliminar a ${usuario.email}.`);
+          addToast({ type: "error", title: "Error al eliminar", message: usuario.email });
+        } finally {
+          setDeletingUid(null);
+        }
+      },
+    });
   };
 
   const handleRolChange = async (uid: string, nuevoRol: Rol) => {
     const usuario = usuarios.find(u => u.uid === uid);
     if (!usuario || usuario.rol === nuevoRol) return;
-
-    const confirmar = window.confirm(
-      `¿Cambiar el rol de "${usuario.email}" de ${ROL_LABELS[usuario.rol]} a ${ROL_LABELS[nuevoRol]}?`
-    );
-    if (!confirmar) return;
 
     setChangingUid(uid);
     setError(null);
@@ -72,8 +83,14 @@ export default function GestionUsuarios() {
       setUsuarios(prev =>
         prev.map(u => (u.uid === uid ? { ...u, rol: nuevoRol } : u))
       );
+      addToast({
+        type: "success",
+        title: "Rol actualizado",
+        message: `${usuario.email} ahora es ${ROL_LABELS[nuevoRol]}`,
+      });
     } catch {
       setError(`No se pudo cambiar el rol de ${usuario.email}.`);
+      addToast({ type: "error", title: "Error al cambiar el rol", message: usuario.email });
     } finally {
       setChangingUid(null);
     }
@@ -129,6 +146,16 @@ export default function GestionUsuarios() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                {usuarios.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={esAdmin ? 5 : 4}
+                      className="py-12 px-6 text-center text-sm text-slate-400 dark:text-slate-500"
+                    >
+                      No hay usuarios todavía
+                    </td>
+                  </tr>
+                )}
                 {usuarios.map(u => {
                   const esMismoUsuario = u.uid === user?.uid;
                   const cambiando = changingUid === u.uid;
@@ -202,6 +229,18 @@ export default function GestionUsuarios() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={confirm !== null}
+        onClose={() => setConfirm(null)}
+        onConfirm={() => {
+          confirm?.onConfirm();
+          setConfirm(null);
+        }}
+        title="Confirmar"
+        message={confirm?.message ?? ""}
+        variant="danger"
+      />
     </div>
   );
 }

@@ -1,12 +1,35 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Mail, Lock, Box } from 'lucide-react';
+import { Mail, Lock, Box, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { loginUser } from "../../services/UserService";
 import { useToast } from "./ui/Toast";
+
+// Traduce los códigos de error de Firebase Auth a mensajes claros en español.
+function friendlyAuthError(error: unknown): string {
+  const code = (error as { code?: string })?.code ?? "";
+  switch (code) {
+    case "auth/invalid-credential":
+    case "auth/wrong-password":
+    case "auth/user-not-found":
+      return "Correo o contraseña incorrectos.";
+    case "auth/invalid-email":
+      return "El correo electrónico no tiene un formato válido.";
+    case "auth/user-disabled":
+      return "Esta cuenta está deshabilitada. Contacta con el administrador.";
+    case "auth/too-many-requests":
+      return "Demasiados intentos. Espera unos minutos e inténtalo de nuevo.";
+    case "auth/network-request-failed":
+      return "Sin conexión. Comprueba tu red e inténtalo de nuevo.";
+    default:
+      return "No se pudo iniciar sesión. Inténtalo de nuevo.";
+  }
+}
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { addToast } = useToast();
@@ -16,12 +39,11 @@ const Login = () => {
     setLoading(true);
 
     try {
-      await loginUser(email, password);
-      navigate("/");
+      await loginUser(email, password, remember);
+      void navigate("/");
     } catch (error: unknown) {
       console.error("Error en login:", error);
-      const errorMessage = error instanceof Error ? error.message : "Error desconocido";
-      addToast({ type: "error", title: "Error al iniciar sesión", message: errorMessage });
+      addToast({ type: "error", title: "Error al iniciar sesión", message: friendlyAuthError(error) });
     } finally {
       setLoading(false);
     }
@@ -54,6 +76,8 @@ const Login = () => {
               <input
                 type="email"
                 required
+                autoFocus
+                autoComplete="email"
                 disabled={loading}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -72,14 +96,23 @@ const Login = () => {
                 <Lock className="h-4 w-4 text-slate-400" strokeWidth={1.75} />
               </div>
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 required
+                autoComplete="current-password"
                 disabled={loading}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••••"
-                className="w-full h-10 pl-9 pr-3 py-2 bg-white dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800/80 rounded-lg text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors disabled:bg-slate-50 dark:disabled:bg-slate-900"
+                className="w-full h-10 pl-9 pr-10 py-2 bg-white dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800/80 rounded-lg text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors disabled:bg-slate-50 dark:disabled:bg-slate-900"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" strokeWidth={1.75} /> : <Eye className="h-4 w-4" strokeWidth={1.75} />}
+              </button>
             </div>
           </div>
 
@@ -88,6 +121,8 @@ const Login = () => {
               <input
                 id="remember_me"
                 type="checkbox"
+                checked={remember}
+                onChange={(e) => setRemember(e.target.checked)}
                 className="h-4 w-4 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 rounded text-brand-600 focus:ring-brand-500"
               />
               <label htmlFor="remember_me" className="ml-2 block text-sm text-slate-600 dark:text-slate-400">
@@ -99,12 +134,13 @@ const Login = () => {
           <button
             type="submit"
             disabled={loading}
-            className={`w-full h-10 mt-2 text-white rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-900 ${
+            className={`w-full h-10 mt-2 flex items-center justify-center gap-2 text-white rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-900 ${
               loading
               ? "bg-slate-400 dark:bg-slate-700 cursor-not-allowed"
               : "bg-slate-900 dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 focus:ring-slate-900 dark:focus:ring-white"
             }`}
           >
+            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
             {loading ? "Iniciando sesión…" : "Iniciar sesión"}
           </button>
         </form>

@@ -25,6 +25,7 @@ import {
   Cell,
   Legend,
 } from 'recharts';
+import { useMemo } from 'react';
 import { KpiCard } from './ui/KpiCard';
 import { useWarehouseStats } from '../hooks/useWarehouseStats';
 import { useFleetStats } from '../hooks/useFleetStats';
@@ -34,6 +35,35 @@ const CHART_COLORS = ['#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#e
 export default function Resumen() {
   const { stats, loading, error } = useWarehouseStats();
   const { stats: fleet, loading: fleetLoading, error: fleetError } = useFleetStats();
+
+  // Datos para gráfico de barras (ocupación por zona)
+  const barChartData = useMemo(() => stats?.zonas.map(zona => ({
+    name: zona.zoneName,
+    ocupados: zona.occupied,
+    libres: Math.max(0, zona.total - zona.occupied),
+    total: zona.total,
+  })) ?? [], [stats]);
+
+  // Datos para gráfico circular (distribución de ocupación)
+  const pieChartData = useMemo(() => stats?.zonas
+    .filter(zona => zona.occupied > 0)
+    .map(zona => ({
+      name: zona.zoneName,
+      value: zona.occupied,
+    })) ?? [], [stats]);
+
+  // Datos para gráfico de prioridades
+  const priorityData = useMemo(() => stats ? [
+    { name: 'Alta', value: stats.prioridadAlta, color: '#ef4444' },
+    { name: 'Media', value: stats.prioridadMedia, color: '#f59e0b' },
+    { name: 'Normal', value: stats.prioridadNormal, color: '#10b981' },
+  ].filter(d => d.value > 0) : [], [stats]);
+
+  // Datos para gráfico de tipos de vidrio
+  const glassTypeData = useMemo(() => stats ? [
+    { name: 'Vidrio Simple', value: stats.vidrioSimple, color: '#06b6d4' },
+    { name: 'Doble Acristalamiento', value: stats.dobleAcristalamiento, color: '#8b5cf6' },
+  ].filter(d => d.value > 0) : [], [stats]);
 
   if (error) {
     return (
@@ -49,35 +79,6 @@ export default function Resumen() {
   }
 
   const chartCardClass = "bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200/80 dark:border-slate-800/80 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-150";
-
-  // Datos para gráfico de barras (ocupación por zona)
-  const barChartData = stats?.zonas.map(zona => ({
-    name: zona.zoneName,
-    ocupados: zona.occupied,
-    libres: Math.max(0, zona.total - zona.occupied),
-    total: zona.total,
-  })) || [];
-
-  // Datos para gráfico circular (distribución de ocupación)
-  const pieChartData = stats?.zonas
-    .filter(zona => zona.occupied > 0)
-    .map(zona => ({
-      name: zona.zoneName,
-      value: zona.occupied,
-    })) || [];
-
-  // Datos para gráfico de prioridades
-  const priorityData = stats ? [
-    { name: 'Alta', value: stats.prioridadAlta, color: '#ef4444' },
-    { name: 'Media', value: stats.prioridadMedia, color: '#f59e0b' },
-    { name: 'Normal', value: stats.prioridadNormal, color: '#10b981' },
-  ].filter(d => d.value > 0) : [];
-
-  // Datos para gráfico de tipos de vidrio
-  const glassTypeData = stats ? [
-    { name: 'Vidrio Simple', value: stats.vidrioSimple, color: '#06b6d4' },
-    { name: 'Doble Acristalamiento', value: stats.dobleAcristalamiento, color: '#8b5cf6' },
-  ].filter(d => d.value > 0) : [];
 
   return (
     <div className="space-y-6">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { collection, onSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -127,6 +127,7 @@ export function useFleetStats() {
       err => {
         console.error('camiones:', err);
         setError('Error al cargar camiones');
+        setReadiness(r => ({ ...r, camiones: true }));
       }
     );
     const unsubCargas = onSnapshot(
@@ -142,6 +143,7 @@ export function useFleetStats() {
       err => {
         console.error('cargas:', err);
         setError('Error al cargar cargas');
+        setReadiness(r => ({ ...r, cargas: true }));
       }
     );
     const unsubRutas = onSnapshot(
@@ -177,7 +179,7 @@ export function useFleetStats() {
 
   const loading = !readiness.camiones || !readiness.cargas || !readiness.rutas || !readiness.entregados;
 
-  const stats: FleetStats | null = (() => {
+  const stats = useMemo<FleetStats | null>(() => {
     if (loading) return null;
 
     const camionesList = Object.values(camiones);
@@ -329,7 +331,7 @@ export function useFleetStats() {
       entregasPorDia,
       topCamiones,
     };
-  })();
+  }, [camiones, cargas, rutas, entregados, loading]);
 
   return { stats, loading, error };
 }

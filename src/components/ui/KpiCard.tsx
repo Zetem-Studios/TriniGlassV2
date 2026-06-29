@@ -35,20 +35,20 @@ export function KpiCard({
 
   if (loading) {
     return (
-      <div className="p-5 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl animate-shimmer">
+      <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl animate-shimmer">
         <div className="flex items-center justify-between">
-          <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-3/4" />
-          <div className="h-10 w-10 bg-neutral-200 dark:bg-neutral-700 rounded-xl" />
+          <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-3/4" />
+          <div className="h-10 w-10 bg-slate-200 dark:bg-slate-700 rounded-xl" />
         </div>
-        <div className="mt-4 h-8 bg-neutral-200 dark:bg-neutral-700 rounded" />
-        <div className="mt-2 h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-1/2" />
-        {subtitle && <div className="mt-2 h-3 bg-neutral-200 dark:bg-neutral-700 rounded w-3/4" />}
+        <div className="mt-4 h-8 bg-slate-200 dark:bg-slate-700 rounded" />
+        <div className="mt-2 h-4 bg-slate-200 dark:bg-slate-700 rounded w-1/2" />
+        {subtitle && <div className="mt-2 h-3 bg-slate-200 dark:bg-slate-700 rounded w-3/4" />}
       </div>
     );
   }
 
   return (
-    <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-5 shadow-sm transition-all duration-150 hover:shadow-md">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm transition-all duration-150 hover:shadow-md">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{title}</p>

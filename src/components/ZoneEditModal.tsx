@@ -63,6 +63,18 @@ export const ZoneEditModal: React.FC<ZoneEditModalProps> = ({
     }
   });
 
+  const [validationError, setValidationError] = useState('');
+
+  // Cerrar con tecla Escape
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   // Efecto para actualizar formData cuando el item cambia
   useEffect(() => {
     if (editType === 'zona') {
@@ -89,26 +101,30 @@ export const ZoneEditModal: React.FC<ZoneEditModalProps> = ({
     e.preventDefault();
     
     if (!formData.nombre.trim()) {
+      setValidationError('El nombre es obligatorio');
       return;
     }
 
     if (editType === 'subzona' && !formData.zonaId) {
+      setValidationError('Debes seleccionar una zona para la subzona');
       return;
     }
 
+    setValidationError('');
     onSave(formData);
     onClose();
   };
 
   const handleChange = (field: string, value: any) => {
+    setValidationError('');
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+    <div onClick={onClose} className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div onClick={(e) => e.stopPropagation()} className="bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-brand-600 to-purple-600 text-white px-6 py-4 flex justify-between items-center">
           <h2 className="text-xl font-semibold">
@@ -125,6 +141,14 @@ export const ZoneEditModal: React.FC<ZoneEditModalProps> = ({
         {/* Content */}
         <div className="p-6 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 120px)' }}>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Error de validación */}
+            {validationError && (
+              <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-md">
+                <AlertCircle size={16} className="text-red-500 flex-shrink-0" />
+                <p className="text-sm font-medium text-red-700 dark:text-red-400">{validationError}</p>
+              </div>
+            )}
+
             {/* Nombre */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

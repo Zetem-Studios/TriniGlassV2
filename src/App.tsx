@@ -14,6 +14,7 @@ import Configuracion from "./components/Configuracion";
 import GestionUsuarios from "./components/GestionUsuarios";
 import MobileScanner from "./components/Scanner";
 import CanvasGridTest from "./components/CanvasGridTest";
+import Presupuesto from "./components/Presupuesto";
 import { useIsMobilePhone } from "./hooks/useIsMobilePhone";
 
 
@@ -59,6 +60,14 @@ function App() {
           <Route path="camiones/cargar/:matricula" element={<CargaCamion />} />
           <Route path="alertas" element={<Alertas />} />
           <Route path="canvas-test" element={<CanvasGridTest />} />
+          <Route
+            path="presupuesto"
+            element={
+              <RoleRoute requiredRol="admin">
+                <Presupuesto />
+              </RoleRoute>
+            }
+          />
           <Route
             path="configuracion"
             element={

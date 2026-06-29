@@ -7,6 +7,7 @@ import {
   resolverAlertaUbicacion,
   type AlertaUbicacion,
 } from "../../services/AlertasService";
+import { useToast } from "./ui/Toast";
 
 interface PaletAlerta {
   id: string;
@@ -35,13 +36,16 @@ const formatIsoDate = (iso: string): string => {
 };
 
 export default function Alertas() {
+  const { addToast } = useToast();
   const [alertas, setAlertas] = useState<PaletAlerta[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorAlertas, setErrorAlertas] = useState<string | null>(null);
   const [alertasUbicacion, setAlertasUbicacion] = useState<AlertaUbicacion[]>([]);
   const [loadingUbicacion, setLoadingUbicacion] = useState(true);
+  const [errorUbicacion, setErrorUbicacion] = useState<string | null>(null);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
-  const [section1Open, setSection1Open] = useState(false);
-  const [section2Open, setSection2Open] = useState(false);
+  const [section1Open, setSection1Open] = useState(true);
+  const [section2Open, setSection2Open] = useState(true);
 
   useEffect(() => {
     const fetchAlertas = async () => {
@@ -77,8 +81,10 @@ export default function Alertas() {
         // Ordenar por días en almacén descendente (más crítico primero)
         resultado.sort((a, b) => b.daysInStorage - a.daysInStorage);
         setAlertas(resultado);
+        setErrorAlertas(null);
       } catch (err) {
         console.error("Error cargando alertas:", err);
+        setErrorAlertas("No se pudieron cargar las alertas de almacenamiento. Inténtalo de nuevo.");
       } finally {
         setLoading(false);
       }
@@ -87,8 +93,10 @@ export default function Alertas() {
     const fetchAlertasUbicacion = async () => {
       try {
         setAlertasUbicacion(await obtenerAlertasUbicacion());
+        setErrorUbicacion(null);
       } catch (err) {
         console.error("Error cargando alertas de ubicación:", err);
+        setErrorUbicacion("No se pudieron cargar las alertas de ubicación. Inténtalo de nuevo.");
       } finally {
         setLoadingUbicacion(false);
       }
@@ -103,8 +111,18 @@ export default function Alertas() {
     try {
       await resolverAlertaUbicacion(id);
       setAlertasUbicacion((prev) => prev.filter((a) => a.id !== id));
+      addToast({
+        type: "success",
+        title: "Alerta resuelta",
+        message: "El palet se ha marcado como ubicado correctamente.",
+      });
     } catch (err) {
       console.error("Error resolviendo alerta:", err);
+      addToast({
+        type: "error",
+        title: "No se pudo resolver la alerta",
+        message: "Ha ocurrido un error al resolver la alerta. Inténtalo de nuevo.",
+      });
     } finally {
       setResolvingId(null);
     }
@@ -124,13 +142,14 @@ export default function Alertas() {
       <section className="space-y-4">
         <button
           onClick={() => setSection1Open((v) => !v)}
-          className="flex items-center gap-2 w-full text-left"
+          aria-expanded={section1Open}
+          className="flex items-center gap-2 w-full text-left rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
         >
           <Clock className="w-5 h-5 text-red-500 shrink-0" />
           <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-white">
             Palets con más de 30 días en almacén
           </h2>
-          {!loading && (
+          {!loading && alertas.length > 0 && (
             <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400">
               {alertas.length}
             </span>
@@ -140,8 +159,21 @@ export default function Alertas() {
 
         {section1Open && (
         <>
+        {/* BANNER DE ERROR */}
+        {!loading && errorAlertas && (
+          <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-500/5 border border-red-200/80 dark:border-red-500/20 rounded-xl">
+            <div className="p-2 bg-red-100 dark:bg-red-500/10 rounded-lg">
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+            </div>
+            <div>
+              <p className="font-medium text-sm text-red-700 dark:text-red-400">Error al cargar las alertas</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{errorAlertas}</p>
+            </div>
+          </div>
+        )}
+
         {/* BANNER RESUMEN */}
-        {!loading && alertas.length > 0 && (
+        {!loading && !errorAlertas && alertas.length > 0 && (
           <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-500/5 border border-red-200/80 dark:border-red-500/20 rounded-xl">
             <div className="p-2 bg-red-100 dark:bg-red-500/10 rounded-lg">
               <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
@@ -158,6 +190,7 @@ export default function Alertas() {
         )}
 
         {/* TABLA */}
+        {!errorAlertas && (
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800/80 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-sm">
@@ -191,7 +224,7 @@ export default function Alertas() {
                     <td colSpan={6} className="px-4 py-16 text-center">
                       <div className="flex flex-col items-center gap-3">
                         <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 rounded-full">
-                          <AlertTriangle size={20} className="text-emerald-600 dark:text-emerald-400" />
+                          <CheckCircle2 size={20} className="text-emerald-600 dark:text-emerald-400" />
                         </div>
                         <p className="font-medium text-slate-900 dark:text-white">Sin alertas activas</p>
                         <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -237,6 +270,7 @@ export default function Alertas() {
             </div>
           )}
         </div>
+        )}
         </>
         )}
       </section>
@@ -245,13 +279,14 @@ export default function Alertas() {
       <section className="space-y-4">
         <button
           onClick={() => setSection2Open((v) => !v)}
-          className="flex items-center gap-2 w-full text-left"
+          aria-expanded={section2Open}
+          className="flex items-center gap-2 w-full text-left rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
         >
           <PackageX className="w-5 h-5 text-amber-500 shrink-0" />
           <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-white">
             Palets mal colocados
           </h2>
-          {!loadingUbicacion && (
+          {!loadingUbicacion && alertasUbicacion.length > 0 && (
             <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
               {alertasUbicacion.length}
             </span>
@@ -265,8 +300,21 @@ export default function Alertas() {
           Alertas enviadas desde el escáner cuando un palet no está en su ubicación.
         </p>
 
+        {/* BANNER DE ERROR */}
+        {!loadingUbicacion && errorUbicacion && (
+          <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-500/5 border border-red-200/80 dark:border-red-500/20 rounded-xl">
+            <div className="p-2 bg-red-100 dark:bg-red-500/10 rounded-lg">
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+            </div>
+            <div>
+              <p className="font-medium text-sm text-red-700 dark:text-red-400">Error al cargar las alertas de ubicación</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{errorUbicacion}</p>
+            </div>
+          </div>
+        )}
+
         {/* BANNER RESUMEN */}
-        {!loadingUbicacion && alertasUbicacion.length > 0 && (
+        {!loadingUbicacion && !errorUbicacion && alertasUbicacion.length > 0 && (
           <div className="flex items-center gap-3 p-4 bg-amber-50 dark:bg-amber-500/5 border border-amber-200/80 dark:border-amber-500/20 rounded-xl">
             <div className="p-2 bg-amber-100 dark:bg-amber-500/10 rounded-lg">
               <PackageX className="w-5 h-5 text-amber-600 dark:text-amber-400" />
@@ -286,7 +334,7 @@ export default function Alertas() {
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800/80 px-4 py-10 text-center text-slate-500 dark:text-slate-400">
             Cargando alertas de ubicación...
           </div>
-        ) : alertasUbicacion.length === 0 ? (
+        ) : errorUbicacion ? null : alertasUbicacion.length === 0 ? (
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800/80 px-4 py-16">
             <div className="flex flex-col items-center gap-3">
               <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 rounded-full">

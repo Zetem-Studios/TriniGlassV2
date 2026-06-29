@@ -220,8 +220,8 @@ export default function CargaCamion() {
   const [previewAuto, setPreviewAuto] = useState<ResultadoCargaAutomatica | null>(null);
   const [undoAutoIds, setUndoAutoIds] = useState<string[] | null>(null);
   const [deshaciendo, setDeshaciendo] = useState(false);
-  const [limitePesoAuto, setLimitePesoAuto] = useState(100);
-  const [limiteVolumenAuto, setLimiteVolumenAuto] = useState(100);
+  const [limitePesoAuto, setLimitePesoAuto] = useState(Math.round(CAPACITY_LIMIT * 100));
+  const [limiteVolumenAuto, setLimiteVolumenAuto] = useState(Math.round(CAPACITY_LIMIT * 100));
   const [mapaDiseno, setMapaDiseno] = useState<MapaDiseno | null>(null);
   const [vaciando, setVaciando] = useState(false);
   const [confirmVaciar, setConfirmVaciar] = useState(false);
@@ -1027,7 +1027,7 @@ export default function CargaCamion() {
                     <Gauge
                       label="Peso"
                       unit="kg"
-                      value={validacion?.pesoTotal ?? 0}
+                      value={(validacion?.pesoTotal ?? 0) - (draggingPalet?.pesoKg ?? 0)}
                       capacity={selectedCamion.capacidadPeso}
                       exceeds={validacion?.excedePeso ?? false}
                       preview={
@@ -1037,7 +1037,7 @@ export default function CargaCamion() {
                     <Gauge
                       label="Volumen"
                       unit="m³"
-                      value={validacion?.volumenTotal ?? 0}
+                      value={(validacion?.volumenTotal ?? 0) - (draggingPalet?.volumenM3 ?? 0)}
                       capacity={selectedCamion.capacidadVolumen}
                       exceeds={validacion?.excedeVolumen ?? false}
                       preview={

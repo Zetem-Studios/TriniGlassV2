@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   getDocs,
+  onSnapshot,
   setDoc,
   deleteDoc,
   serverTimestamp,
@@ -91,6 +92,26 @@ export const getCamiones = async (): Promise<Camion[]> => {
       capacidadVolumen: Number(data.capacidadVolumen ?? 0),
       estado: normalizeEstado(data.estado),
     };
+  });
+};
+
+export const subscribeToCamiones = (
+  cb: (camiones: Camion[]) => void
+): (() => void) => {
+  const q = query(collection(db, COLLECTION), orderBy("matricula"));
+  return onSnapshot(q, (snapshot) => {
+    const list = snapshot.docs.map((d) => {
+      const data = d.data() as Partial<Camion>;
+      return {
+        matricula: data.matricula ?? d.id,
+        tipo: data.tipo ?? "",
+        conductor: data.conductor ?? "",
+        capacidadPeso: Number(data.capacidadPeso ?? 0),
+        capacidadVolumen: Number(data.capacidadVolumen ?? 0),
+        estado: normalizeEstado(data.estado),
+      };
+    });
+    cb(list);
   });
 };
 

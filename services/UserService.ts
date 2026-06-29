@@ -1,10 +1,16 @@
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  signOut
+  signOut,
+  getAuth,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence
 } from "firebase/auth";
+import { initializeApp, deleteApp } from "firebase/app";
 import { doc, setDoc, serverTimestamp, collection, getDocs, updateDoc, deleteDoc } from "firebase/firestore";
 import { auth, db } from "../src/firebase";
+import { firebaseConfig } from "../src/firebase";
 
 export type Rol = "operario" | "encargado" | "admin";
 
@@ -16,20 +22,31 @@ export interface UserProfile {
   creadoEn: Date | null;
 }
 
-// Registrar nuevo usuario y crear su perfil en Firestore
+// Registrar nuevo usuario y crear su perfil en Firestore.
+// Se usa una app de Firebase secundaria para crear la cuenta sin reemplazar
+// la sesión del administrador que está dando de alta al usuario.
 export const registerUserInSystem = async (email: string, pass: string) => {
-  const userCred = await createUserWithEmailAndPassword(auth, email.trim(), pass);
-  const uid = userCred.user.uid;
+  const secondaryApp = initializeApp(firebaseConfig, `secondary-${Date.now()}`);
+  const secondaryAuth = getAuth(secondaryApp);
 
-  await setDoc(doc(db, "usuarios", uid), {
-    email: email.toLowerCase().trim(),
-    rol: "operario",
-    activo: true,
-    creadoEn: serverTimestamp(),
-    uid: uid
-  });
+  try {
+    const userCred = await createUserWithEmailAndPassword(secondaryAuth, email.trim(), pass);
+    const uid = userCred.user.uid;
 
-  return { success: true, uid };
+    await setDoc(doc(db, "usuarios", uid), {
+      email: email.toLowerCase().trim(),
+      rol: "operario",
+      activo: true,
+      creadoEn: serverTimestamp(),
+      uid: uid
+    });
+
+    return { success: true, uid };
+  } finally {
+    // Cerrar sesión en la app secundaria y eliminarla para liberar recursos
+    await signOut(secondaryAuth).catch(() => undefined);
+    await deleteApp(secondaryApp).catch(() => undefined);
+  }
 };
 
 // Obtener todos los usuarios
@@ -58,8 +75,9 @@ export const deleteUser = async (uid: string): Promise<void> => {
   await deleteDoc(doc(db, "usuarios", uid));
 };
 
-// Iniciar sesión
-export const loginUser = async (email: string, pass: string) => {
+// Iniciar sesión. `remember` controla si la sesión persiste tras cerrar el navegador.
+export const loginUser = async (email: string, pass: string, remember = true) => {
+  await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
   const userCred = await signInWithEmailAndPassword(auth, email.trim(), pass);
   return userCred.user;
 };

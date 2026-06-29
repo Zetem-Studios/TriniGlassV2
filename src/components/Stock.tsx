@@ -8,8 +8,8 @@ import {
   addDoc, updateDoc, doc, startAfter, DocumentSnapshot 
 } from "firebase/firestore";
 import { db } from "../firebase";
-import { 
-  Button, Input, Select, Card, Badge, Table, Modal, useToast 
+import {
+  Button, Input, Select, Card, Badge, Table, Modal, ConfirmDialog, useToast
 } from "./ui";
 import { formatDate } from "../lib/utils";
 import type { Column, SelectOption } from "./ui";
@@ -193,6 +193,8 @@ export default function Stock() {
   
   const [inventory, setInventory] = useState<Palet[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(false);
+  const isInitialLoadRef = useRef(true);
   const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearch = useDebounce(searchTerm, 300);
@@ -222,6 +224,7 @@ export default function Stock() {
 
   const [isViewMode, setIsViewMode] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [confirmErroneoOpen, setConfirmErroneoOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
@@ -255,7 +258,12 @@ export default function Stock() {
     (filters: ServerFilters) => {
       const conditions: ReturnType<typeof where>[] = [];
       if (filters.dateFrom) conditions.push(where("fecha_linea_pedido", ">=", Timestamp.fromDate(new Date(filters.dateFrom))));
-      if (filters.dateTo) conditions.push(where("fecha_linea_pedido", "<=", Timestamp.fromDate(new Date(filters.dateTo))));
+      if (filters.dateTo) {
+        // Incluir todo el día indicado (hasta las 23:59:59.999)
+        const endOfDay = new Date(filters.dateTo);
+        endOfDay.setHours(23, 59, 59, 999);
+        conditions.push(where("fecha_linea_pedido", "<=", Timestamp.fromDate(endOfDay)));
+      }
       if (filters.status) conditions.push(where("estado_pedido", "==", filters.status));
       if (filters.zone) conditions.push(where("subzona", "==", filters.zone));
       if (filters.codificador) conditions.push(where("codificador", "==", filters.codificador));
@@ -281,7 +289,7 @@ export default function Stock() {
       id: (data.numero_linea_pedido as string) || doc.id,
       docId: doc.id,
       type: (data.descripcion_producido_longitud as string) || (data.estado_linea_pdd as string) || "Sin descripción",
-      dimensions: `${ancho || alto || 0}x${alto || 0}x${grosor || 0}`,
+      dimensions: `${ancho || 0}x${alto || 0}x${grosor || 0}`,
       client: (data.apellido_cliente as string) || (data.nombre_abreviado as string) || "Cliente desconocido",
       date: dateString,
       location: locationValue,
@@ -298,9 +306,10 @@ export default function Stock() {
     const filters = JSON.parse(debouncedServerFilters) as ServerFilters;
     setLastVisible(null);
     setHasMore(false);
-    if (inventory.length === 0) {
+    if (isInitialLoadRef.current) {
       setLoading(true);
     }
+    setIsFetching(true);
     try {
       const conditions = buildFilters(filters);
 
@@ -323,14 +332,16 @@ export default function Stock() {
       setInventory(firestoreInventory);
     } catch (error) {
       console.error("Error cargando inventario desde Firestore:", error);
-      if (inventory.length === 0) {
+      if (isInitialLoadRef.current) {
         setInventory([]);
       }
       addToast({ type: "error", title: "Error", message: "No se pudo cargar el inventario." });
     } finally {
       setLoading(false);
+      setIsFetching(false);
+      isInitialLoadRef.current = false;
     }
-  }, [debouncedServerFilters, addToast, buildFilters, mapDocToPalet, inventory.length]);
+  }, [debouncedServerFilters, addToast, buildFilters, mapDocToPalet]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !lastVisible) return;
@@ -462,7 +473,7 @@ export default function Stock() {
 
   const handleMarkAsErroneous = useCallback(async () => {
     if (!selectedPalet?.docId) return;
-    if (!window.confirm("¿Estás seguro de marcar este palet como erróneo?")) return;
+    setConfirmErroneoOpen(false);
     setSaving(true);
     setActionError(null);
     setInfoMessage(null);
@@ -802,7 +813,10 @@ export default function Stock() {
         )}
 
         {/* TABLA DE RESULTADOS */}
-        <div className="overflow-x-auto flex-1 min-h-0">
+        <div className="overflow-x-auto flex-1 min-h-0 relative">
+          {isFetching && !loading && (
+            <div className="absolute top-0 inset-x-0 h-0.5 bg-brand-500 animate-pulse z-10" />
+          )}
           <Table
             columns={columns}
             data={paginatedInventory}
@@ -860,7 +874,7 @@ export default function Stock() {
         onClose={handleClosePanel}
         title={isViewMode ? "Ver Palet" : selectedPalet?.docId ? "Editar Palet" : "Crear Palet"}
         description={selectedPalet?.id || selectedPalet?.docId || "Nuevo palet"}
-        size="md"
+        size="lg"
         footer={
           <div className="flex justify-end gap-3">
             <Button variant="secondary" onClick={handleClosePanel}>
@@ -907,13 +921,13 @@ export default function Stock() {
             <div className="grid grid-cols-2 gap-4">
               <Input
                 label="Nº de línea"
-                value={selectedPalet.numero_linea_pedido}
+                value={selectedPalet.numero_linea_pedido ?? ""}
                 disabled={isViewMode}
                 onChange={(e) => updateSelectedPaletField("numero_linea_pedido", e.target.value)}
               />
               <Input
                 label="Referencia"
-                value={selectedPalet.referencia_linea_pedido}
+                value={selectedPalet.referencia_linea_pedido ?? ""}
                 disabled={isViewMode}
                 onChange={(e) => updateSelectedPaletField("referencia_linea_pedido", e.target.value)}
               />
@@ -988,7 +1002,7 @@ export default function Stock() {
                 {!isViewMode && (
                   <Button
                     variant="outline"
-                    onClick={handleMarkAsErroneous}
+                    onClick={() => setConfirmErroneoOpen(true)}
                     disabled={saving}
                     leftIcon={<AlertCircle size={18} />}
                     className="w-full"
@@ -998,7 +1012,7 @@ export default function Stock() {
                 )}
                 <Button
                   variant="secondary"
-                  onClick={() => handleCopyId(selectedPalet)}
+                  onClick={() => void handleCopyId(selectedPalet)}
                   leftIcon={<Copy size={18} />}
                   className="w-full"
                 >
@@ -1020,6 +1034,17 @@ export default function Stock() {
           </div>
         )}
       </Modal>
+
+      <ConfirmDialog
+        isOpen={confirmErroneoOpen}
+        onClose={() => setConfirmErroneoOpen(false)}
+        onConfirm={() => void handleMarkAsErroneous()}
+        title="Marcar palet como erróneo"
+        message="¿Seguro que quieres marcar este palet como erróneo? Cambiará su estado en el inventario."
+        variant="danger"
+        confirmText="Marcar erróneo"
+        loading={saving}
+      />
     </div>
   );
 }

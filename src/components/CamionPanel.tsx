@@ -70,6 +70,15 @@ export default function CamionPanel({
     }
   }, [isOpen, mode, initial]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async () => {
@@ -121,7 +130,17 @@ export default function CamionPanel({
   const isEdit = mode === "edit";
 
   return (
-    <div className="fixed top-0 right-0 h-full w-[440px] bg-white dark:bg-slate-900 border-l border-slate-200/80 dark:border-slate-800/80 z-50 shadow-xl animate-in slide-in-from-right duration-200 flex flex-col overflow-hidden">
+    <>
+      <div
+        className="fixed inset-0 bg-black/50 z-40 animate-in fade-in duration-200"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="fixed top-0 right-0 h-full w-full max-w-[440px] bg-white dark:bg-slate-900 border-l border-slate-200/80 dark:border-slate-800/80 z-50 shadow-xl animate-in slide-in-from-right duration-200 flex flex-col overflow-hidden"
+      >
       <div className="p-6 border-b border-slate-200/80 dark:border-slate-800/80 flex justify-between items-center bg-white dark:bg-slate-900 shrink-0">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-brand-50 dark:bg-brand-500/10 rounded-lg text-brand-600 dark:text-brand-400">
@@ -241,7 +260,7 @@ export default function CamionPanel({
             Estado
           </label>
           <div className="grid grid-cols-2 gap-2">
-            {ESTADOS_CAMION.map((opt) => {
+            {ESTADOS_CAMION.filter((opt) => opt.value !== "en_ruta").map((opt) => {
               const active = form.estado === opt.value;
               return (
                 <button
@@ -310,6 +329,7 @@ export default function CamionPanel({
           )}
         </button>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

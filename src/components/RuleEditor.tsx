@@ -4,8 +4,12 @@ import { collection, getDocs, limit, query } from 'firebase/firestore';
 import type { ReglaAsignacion } from '../utils/RuleEngine';
 import { useRules } from '../hooks/useRules';
 import { db } from '../firebase';
+import { useToast } from './ui/Toast';
+import { ConfirmDialog } from './ui/Modal';
 
 const RuleEditor = () => {
+  const { addToast } = useToast();
+  const [confirmState, setConfirmState] = useState<{ message: string; onConfirm: () => void } | null>(null);
   const { 
     rules, 
     loading, 
@@ -292,10 +296,21 @@ const RuleEditor = () => {
   const handleSaveRule = async () => {
     try {
       if (!newRule.nombre || newRule.nombre.trim() === '') {
-        alert('El nombre de la regla es obligatorio');
+        addToast({ type: 'error', title: 'El nombre de la regla es obligatorio' });
         return;
       }
-      
+      if (!newRule.acciones?.zona || !newRule.acciones?.subzona) {
+        addToast({ type: 'error', title: 'Selecciona una zona y subzona de destino' });
+        return;
+      }
+      const condicionesValidas = (newRule.condiciones ?? []).every(
+        (c) => c.campo && String(c.valor ?? '').trim() !== ''
+      );
+      if (!condicionesValidas) {
+        addToast({ type: 'error', title: 'Cada condición necesita un atributo y un valor' });
+        return;
+      }
+
       await saveRule(normalizeRuleDecimalValues(newRule as ReglaAsignacion));
       setNewRule({
         nombre: '',
@@ -312,8 +327,9 @@ const RuleEditor = () => {
         }
       });
       setIsCreating(false);
-    } catch (err) {
-      alert('Error al guardar la regla');
+      addToast({ type: 'success', title: 'Regla guardada correctamente' });
+    } catch {
+      addToast({ type: 'error', title: 'Error al guardar la regla' });
     }
   };
 
@@ -324,8 +340,9 @@ const RuleEditor = () => {
     try {
       await updateRule(editingRule.id, normalizeRuleDecimalValues(editingRule));
       setEditingRule(null);
-    } catch (err) {
-      alert('Error al actualizar la regla');
+      addToast({ type: 'success', title: 'Regla actualizada' });
+    } catch {
+      addToast({ type: 'error', title: 'Error al actualizar la regla' });
     }
   };
 
@@ -335,33 +352,41 @@ const RuleEditor = () => {
     try {
       setTogglingRuleId(rule.id);
       await updateRule(rule.id, { activa: !rule.activa });
-    } catch (err) {
-      alert('Error al cambiar el estado de la regla');
+    } catch {
+      addToast({ type: 'error', title: 'Error al cambiar el estado de la regla' });
     } finally {
       setTogglingRuleId(null);
     }
   };
 
   // Eliminar regla
-  const handleDeleteRule = async (id: string) => {
-    if (!confirm('¿Estás seguro de eliminar esta regla?')) return;
-    
-    try {
-      await deleteRule(id);
-    } catch (err) {
-      alert('Error al eliminar la regla');
-    }
+  const handleDeleteRule = (id: string) => {
+    setConfirmState({
+      message: '¿Estás seguro de eliminar esta regla?',
+      onConfirm: async () => {
+        try {
+          await deleteRule(id);
+          addToast({ type: 'success', title: 'Regla eliminada' });
+        } catch {
+          addToast({ type: 'error', title: 'Error al eliminar la regla' });
+        }
+      },
+    });
   };
 
   // Restaurar posicionamiento de productos
-  const handleRestoreDefaults = async () => {
-    if (!confirm('¿Estás seguro de limpiar el posicionamiento de todos los productos? Las reglas no se eliminarán.')) return;
-    
-    try {
-      await restoreDefaults();
-    } catch (err) {
-      alert('Error al limpiar el posicionamiento de los productos');
-    }
+  const handleRestoreDefaults = () => {
+    setConfirmState({
+      message: '¿Seguro que quieres limpiar el posicionamiento de todos los productos? Las reglas no se eliminarán.',
+      onConfirm: async () => {
+        try {
+          await restoreDefaults();
+          addToast({ type: 'success', title: 'Posicionamiento restablecido' });
+        } catch {
+          addToast({ type: 'error', title: 'Error al limpiar el posicionamiento de los productos' });
+        }
+      },
+    });
   };
 
   const handleApplyRulesToAll = async () => {
@@ -370,9 +395,9 @@ const RuleEditor = () => {
     setIsApplyingAllRules(true);
     try {
       const result = await applyRulesToAll();
-      alert(`✅ ${result.message}`);
+      addToast({ type: 'success', title: 'Reglas aplicadas', message: result.message });
     } catch (error) {
-      alert(`❌ Error: ${(error as Error).message}`);
+      addToast({ type: 'error', title: 'Error al aplicar las reglas', message: (error as Error).message });
     } finally {
       setIsApplyingAllRules(false);
     }
@@ -389,7 +414,7 @@ const RuleEditor = () => {
 
   if (error) {
     return (
-      <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+      <div className="bg-red-50 dark:bg-red-950/30 border border-red-300 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg">
         <p>Error: {error}</p>
       </div>
     );
@@ -398,9 +423,9 @@ const RuleEditor = () => {
   return (
     <div className="h-full flex flex-col">
       {/* ENCABEZADO Y BOTONERA ESTÁTICOS - ABSOLUTAMENTE FIJOS */}
-      <div className="flex-shrink-0 p-6 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-900 sticky top-0 z-10">
+      <div className="flex-shrink-0 p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 sticky top-0 z-10">
         <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-white">Editor de Reglas de Asignación</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Editor de Reglas de Asignación</h1>
           <div className="flex gap-2">
             <button
               onClick={handleRestoreDefaults}
@@ -424,26 +449,26 @@ const RuleEditor = () => {
       <div className="flex-1 overflow-y-auto scrollbar-vertical-custom p-6">
         {/* Formulario de nueva regla */}
         {isCreating && (
-          <div className="bg-brand-50 border border-brand-200 rounded-lg p-4 mb-6">
-            <h3 className="font-semibold mb-4 text-black">Nueva Regla</h3>
+          <div className="bg-brand-50 dark:bg-brand-500/10 border border-brand-200 dark:border-brand-500/20 rounded-lg p-4 mb-6">
+            <h3 className="font-semibold mb-4 text-slate-900 dark:text-white">Nueva Regla</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-black mb-1">Nombre de la Regla</label>
+                <label className="block text-sm font-medium text-slate-900 dark:text-white mb-1">Nombre de la Regla</label>
                 <input
                   type="text"
                   placeholder="Ej: Productos pesados a expediciones"
                   value={newRule.nombre}
                   onChange={(e) => setNewRule({...newRule, nombre: e.target.value})}
-                  className="px-3 py-2 border rounded text-black w-full"
+                  className="px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 rounded text-slate-900 dark:text-white w-full focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500"
                 />
-                <p className="text-xs text-gray-600 mt-1">Nombre descriptivo para identificar la regla</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Nombre descriptivo para identificar la regla</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-black mb-1">Zona de Destino</label>
+                <label className="block text-sm font-medium text-slate-900 dark:text-white mb-1">Zona de Destino</label>
                 <select
                   value={newRule.acciones?.zona}
                   onChange={(e) => setNewRule({...newRule, acciones: {...newRule.acciones!, zona: e.target.value}})}
-                  className="px-3 py-2 border rounded text-black w-full"
+                  className="px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 rounded text-slate-900 dark:text-white w-full focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500"
                 >
                   <option value="">Selecciona una zona</option>
                   {zones.map(zone => (
@@ -452,14 +477,14 @@ const RuleEditor = () => {
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-gray-600 mt-1">Área donde se asignarán los productos</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Área donde se asignarán los productos</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-black mb-1">Subzona Específica</label>
+                <label className="block text-sm font-medium text-slate-900 dark:text-white mb-1">Subzona Específica</label>
                 <select
                   value={newRule.acciones?.subzona}
                   onChange={(e) => setNewRule({...newRule, acciones: {...newRule.acciones!, subzona: e.target.value}})}
-                  className="px-3 py-2 border rounded text-black w-full"
+                  className="px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 rounded text-slate-900 dark:text-white w-full focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500"
                 >
                   <option value="">Selecciona una subzona</option>
                   {newRule.acciones?.zona && getSubzonesForZone(newRule.acciones.zona).map((subzone: any) => (
@@ -468,13 +493,13 @@ const RuleEditor = () => {
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-gray-600 mt-1">Ubicación exacta dentro de la zona</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Ubicación exacta dentro de la zona</p>
               </div>
             </div>
             
             <div>
               <div className="flex items-center justify-between mb-2">
-                <h4 className="font-medium text-black">Condiciones:</h4>
+                <h4 className="font-medium text-slate-900 dark:text-white">Condiciones:</h4>
                 <button
                   type="button"
                   onClick={addNewRuleCondition}
@@ -490,7 +515,7 @@ const RuleEditor = () => {
                     <select
                       value={condition.campo}
                       onChange={(e) => updateNewRuleCondition(conditionIndex, 'campo', e.target.value)}
-                      className="px-3 py-2 border rounded text-black"
+                      className="px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 rounded text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500"
                     >
                       <option value="">Selecciona un atributo</option>
                       {conditionFieldOptions.map(field => (
@@ -502,7 +527,7 @@ const RuleEditor = () => {
                     <select
                       value={condition.operador}
                       onChange={(e) => updateNewRuleCondition(conditionIndex, 'operador', e.target.value)}
-                      className="px-3 py-2 border rounded text-black"
+                      className="px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 rounded text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500"
                     >
                       {getOperatorOptions(condition.campo).map(option => (
                         <option key={option.value} value={option.value}>
@@ -517,14 +542,14 @@ const RuleEditor = () => {
                           placeholder="Desde"
                           value={getRangeValues(condition.valor).from}
                           onChange={(e) => updateNewRuleCondition(conditionIndex, 'valor', updateRangeValue(condition.valor, 'from', e.target.value))}
-                          className="px-3 py-2 border rounded text-black"
+                          className="px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 rounded text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500"
                         />
                         <input
                           type={condition.operador === 'fecha_entre' ? 'date' : 'number'}
                           placeholder="Hasta"
                           value={getRangeValues(condition.valor).to}
                           onChange={(e) => updateNewRuleCondition(conditionIndex, 'valor', updateRangeValue(condition.valor, 'to', e.target.value))}
-                          className="px-3 py-2 border rounded text-black"
+                          className="px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 rounded text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500"
                         />
                       </div>
                     ) : (
@@ -539,7 +564,7 @@ const RuleEditor = () => {
                         placeholder="Valor"
                         value={condition.valor as string || ''}
                         onChange={(e) => updateNewRuleCondition(conditionIndex, 'valor', e.target.value)}
-                        className="px-3 py-2 border rounded text-black"
+                        className="px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 rounded text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500"
                       />
                     )}
                     <button
@@ -577,28 +602,28 @@ const RuleEditor = () => {
         {/* Lista de reglas existentes */}
         <div className="space-y-4">
           {rules.map((rule, index) => (
-            <div key={rule.id} className={`border rounded-lg p-4 ${rule.activa ? 'bg-white' : 'bg-gray-50'}`}>
+            <div key={rule.id} className={`border border-slate-200 dark:border-slate-800 rounded-lg p-4 ${rule.activa ? 'bg-white dark:bg-slate-900' : 'bg-slate-50 dark:bg-slate-900/50'}`}>
               {editingRule?.id === rule.id ? (
                 // Modo edición
                 <div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                     <div>
-                      <label className="block text-sm font-medium text-black mb-1">Nombre de la Regla</label>
+                      <label className="block text-sm font-medium text-slate-900 dark:text-white mb-1">Nombre de la Regla</label>
                       <input
                         type="text"
                         placeholder="Ej: Productos pesados a expediciones"
                         value={editingRule.nombre}
                         onChange={(e) => setEditingRule({...editingRule, nombre: e.target.value})}
-                        className="px-3 py-2 border rounded text-black w-full"
+                        className="px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 rounded text-slate-900 dark:text-white w-full focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500"
                       />
-                      <p className="text-xs text-gray-600 mt-1">Nombre descriptivo para identificar la regla</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Nombre descriptivo para identificar la regla</p>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-black mb-1">Zona de Destino</label>
+                      <label className="block text-sm font-medium text-slate-900 dark:text-white mb-1">Zona de Destino</label>
                       <select
                         value={editingRule.acciones?.zona}
                         onChange={(e) => setEditingRule({...editingRule, acciones: {...editingRule.acciones, zona: e.target.value}})}
-                        className="px-3 py-2 border rounded text-black w-full"
+                        className="px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 rounded text-slate-900 dark:text-white w-full focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500"
                       >
                         <option value="">Selecciona una zona</option>
                         {zones.map(zone => (
@@ -607,14 +632,14 @@ const RuleEditor = () => {
                           </option>
                         ))}
                       </select>
-                      <p className="text-xs text-gray-600 mt-1">Área donde se asignarán los productos</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Área donde se asignarán los productos</p>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-black mb-1">Subzona Específica</label>
+                      <label className="block text-sm font-medium text-slate-900 dark:text-white mb-1">Subzona Específica</label>
                       <select
                         value={editingRule.acciones?.subzona}
                         onChange={(e) => setEditingRule({...editingRule, acciones: {...editingRule.acciones, subzona: e.target.value}})}
-                        className="px-3 py-2 border rounded text-black w-full"
+                        className="px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 rounded text-slate-900 dark:text-white w-full focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500"
                       >
                         <option value="">Selecciona una subzona</option>
                         {editingRule.acciones?.zona && getSubzonesForZone(editingRule.acciones.zona).map((subzone: any) => (
@@ -623,14 +648,14 @@ const RuleEditor = () => {
                           </option>
                         ))}
                       </select>
-                      <p className="text-xs text-gray-600 mt-1">Ubicación exacta dentro de la zona</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Ubicación exacta dentro de la zona</p>
                     </div>
                   </div>
                   
                   {!editingRule.esDefecto && (
                     <div className="mb-4">
                       <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-medium text-black">Condiciones:</h4>
+                        <h4 className="font-medium text-slate-900 dark:text-white">Condiciones:</h4>
                         <button
                           type="button"
                           onClick={addEditingRuleCondition}
@@ -646,7 +671,7 @@ const RuleEditor = () => {
                           <select
                             value={condition.campo}
                             onChange={(e) => updateEditingRuleCondition(conditionIndex, 'campo', e.target.value)}
-                            className="px-3 py-2 border rounded text-black"
+                            className="px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 rounded text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500"
                           >
                             <option value="">Selecciona un atributo</option>
                             {conditionFieldOptions.map(field => (
@@ -658,7 +683,7 @@ const RuleEditor = () => {
                           <select
                             value={condition.operador}
                             onChange={(e) => updateEditingRuleCondition(conditionIndex, 'operador', e.target.value)}
-                            className="px-3 py-2 border rounded text-black"
+                            className="px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 rounded text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500"
                           >
                             {getOperatorOptions(condition.campo).map(option => (
                               <option key={option.value} value={option.value}>
@@ -673,14 +698,14 @@ const RuleEditor = () => {
                                 placeholder="Desde"
                                 value={getRangeValues(condition.valor).from}
                                 onChange={(e) => updateEditingRuleCondition(conditionIndex, 'valor', updateRangeValue(condition.valor, 'from', e.target.value))}
-                                className="px-3 py-2 border rounded text-black"
+                                className="px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 rounded text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500"
                               />
                               <input
                                 type={condition.operador === 'fecha_entre' ? 'date' : 'number'}
                                 placeholder="Hasta"
                                 value={getRangeValues(condition.valor).to}
                                 onChange={(e) => updateEditingRuleCondition(conditionIndex, 'valor', updateRangeValue(condition.valor, 'to', e.target.value))}
-                                className="px-3 py-2 border rounded text-black"
+                                className="px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 rounded text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500"
                               />
                             </div>
                           ) : (
@@ -695,7 +720,7 @@ const RuleEditor = () => {
                               placeholder="Valor"
                               value={condition.valor as string || ''}
                               onChange={(e) => updateEditingRuleCondition(conditionIndex, 'valor', e.target.value)}
-                              className="px-3 py-2 border rounded text-black"
+                              className="px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 rounded text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500"
                             />
                           )}
                           <button
@@ -735,9 +760,9 @@ const RuleEditor = () => {
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="font-semibold text-black">{rule.nombre}</span>
-                        <span className="text-sm text-gray-500">Prioridad: {rule.prioridad}</span>
-                        <span className={`px-2 py-1 text-xs rounded ${rule.activa ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        <span className="font-semibold text-slate-900 dark:text-white">{rule.nombre}</span>
+                        <span className="text-sm text-slate-400 dark:text-slate-500">Prioridad: {rule.prioridad}</span>
+                        <span className={`px-2 py-1 text-xs rounded ${rule.activa ? 'bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-300'}`}>
                           {rule.activa ? 'Activa' : 'Inactiva'}
                         </span>
                         {rule.esDefecto && (
@@ -747,7 +772,7 @@ const RuleEditor = () => {
                         )}
                       </div>
                       
-                      <div className="text-sm text-gray-600">
+                      <div className="text-sm text-slate-500 dark:text-slate-400">
                         <strong>Condiciones:</strong>
                         <div className="mt-1 space-y-1">
                           {rule.esDefecto ? (
@@ -761,7 +786,7 @@ const RuleEditor = () => {
                           )}
                         </div>
                       </div>
-                      <div className="text-sm text-gray-600">
+                      <div className="text-sm text-slate-500 dark:text-slate-400">
                         <strong>Acción:</strong> zona: {rule.acciones.zona}, subzona: {rule.acciones.subzona}
                       </div>
                     </div>
@@ -770,14 +795,14 @@ const RuleEditor = () => {
                       <button
                         onClick={() => moveRule(index, 'up')}
                         disabled={index === 0 || rule.esDefecto}
-                        className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-30"
+                        className="p-1 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30"
                       >
                         <ChevronUp size={16} />
                       </button>
                       <button
                         onClick={() => moveRule(index, 'down')}
                         disabled={index === rules.length - 1 || rule.esDefecto}
-                        className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-30"
+                        className="p-1 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30"
                       >
                         <ChevronDown size={16} />
                       </button>
@@ -788,7 +813,7 @@ const RuleEditor = () => {
                           className={`p-1 disabled:opacity-40 ${
                             rule.activa
                               ? 'text-green-600 hover:text-green-800'
-                              : 'text-gray-400 hover:text-gray-600'
+                              : 'text-gray-400 hover:text-slate-500 dark:text-slate-400'
                           }`}
                           title={rule.activa ? 'Desactivar regla' : 'Activar regla'}
                           aria-label={rule.activa ? 'Desactivar regla' : 'Activar regla'}
@@ -819,15 +844,15 @@ const RuleEditor = () => {
         </div>
         
         {rules.length === 0 && !isCreating && (
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-8 text-slate-400 dark:text-slate-500">
             <p>No hay reglas configuradas.</p>
             <p>Crea tu primera regla para empezar a automatizar la asignación de palets.</p>
           </div>
         )}
         
         {/* Sección de aplicación de reglas */}
-        <div className="mt-8 p-6 bg-gray-50 rounded-xl border border-gray-200">
-          <h3 className="text-lg font-bold mb-4 text-gray-800">Aplicación de Reglas</h3>
+        <div className="mt-8 p-6 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800">
+          <h3 className="text-lg font-bold mb-4 text-slate-900 dark:text-white">Aplicación de Reglas</h3>
 
           <div className="flex gap-3">
             <button
@@ -847,6 +872,19 @@ const RuleEditor = () => {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmState !== null}
+        onClose={() => setConfirmState(null)}
+        onConfirm={() => {
+          confirmState?.onConfirm();
+          setConfirmState(null);
+        }}
+        title="Confirmar acción"
+        message={confirmState?.message ?? ''}
+        variant="danger"
+        confirmText="Confirmar"
+      />
     </div>
   );
 };

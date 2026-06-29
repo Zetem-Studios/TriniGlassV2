@@ -17,7 +17,7 @@ import { useNavigate } from "react-router-dom";
 import type { Camion, EstadoCamion } from "../../services/CamionService";
 import {
   ESTADOS_CAMION,
-  getCamiones,
+  subscribeToCamiones,
   updateEstadoCamion,
 } from "../../services/CamionService";
 import {
@@ -74,24 +74,14 @@ export default function Camiones() {
     return () => unsub();
   }, []);
 
-  const loadCamiones = async () => {
-    try {
-      setLoading(true);
-      setLoadError("");
-      const data = await getCamiones();
-      setCamiones(data);
-    } catch (e: unknown) {
-      console.error("Error cargando camiones:", e);
-      setLoadError(
-        e instanceof Error ? e.message : "No se pudo cargar la flota"
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadCamiones();
+    setLoading(true);
+    setLoadError("");
+    const unsub = subscribeToCamiones((data) => {
+      setCamiones(data);
+      setLoading(false);
+    });
+    return () => unsub();
   }, []);
 
   const filtered = useMemo(() => {
@@ -248,6 +238,7 @@ export default function Camiones() {
           {ESTADOS_CAMION.map((e) => (
             <button
               key={e.value}
+              aria-pressed={estadoFilter === e.value}
               onClick={() =>
                 setEstadoFilter((prev) => (prev === e.value ? "todos" : e.value))
               }

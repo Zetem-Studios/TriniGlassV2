@@ -1,14 +1,27 @@
 import { useState, useEffect } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 
-import { LayoutDashboard, Package, Building2, Bell, Settings, Sun, Moon, Menu, UserPlus, Truck, PackageOpen, X, LogOut } from 'lucide-react';
+import { LayoutDashboard, Package, Building2, Bell, Settings, Sun, Moon, Menu, UserPlus, Truck, PackageOpen, X, LogOut, FileText } from 'lucide-react';
 import { useAuth } from '../context/useAuth';
 import { useAlertasCount } from '../hooks/useAlertasCount';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 
+const THEME_KEY = 'triniglass-theme';
+
+function getInitialDarkMode(): boolean {
+  const stored = localStorage.getItem(THEME_KEY);
+  if (stored === 'dark') return true;
+  if (stored === 'light') return false;
+  // Sin preferencia guardada: respetar el sistema (por defecto oscuro)
+  if (typeof window !== 'undefined' && window.matchMedia) {
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? false : true;
+  }
+  return true;
+}
+
 export default function Layout() {
-  const [isDarkMode, setIsDarkMode] = useState(true);
+  const [isDarkMode, setIsDarkMode] = useState(getInitialDarkMode);
   const { user, rol } = useAuth();
   const isAdmin = rol === "admin";
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -20,6 +33,7 @@ export default function Layout() {
     } else {
       document.documentElement.classList.remove('dark');
     }
+    localStorage.setItem(THEME_KEY, isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
   const handleLogout = async () => {
     try {
@@ -32,12 +46,13 @@ export default function Layout() {
   const allNavItems = [
     { to: "/add-user", icon: UserPlus, label: "Añadir usuario", pill: null, adminOnly: true },
     { to: "/", icon: LayoutDashboard, label: "Resumen", pill: null, adminOnly: false },
-    { to: "/inventario", icon: Package, label: "Inventario", pill: { text: "98", type: "grey" }, adminOnly: false },
+    { to: "/inventario", icon: Package, label: "Inventario", pill: null, adminOnly: false },
     { to: "/almacen", icon: Building2, label: "Almacén", pill: null, adminOnly: false },
     { to: "/camiones", icon: Truck, label: "Flota", pill: null, adminOnly: false },
     { to: "/camiones/cargar", icon: PackageOpen, label: "Carga camión", pill: null, adminOnly: false },
     { to: "/alertas", icon: Bell, label: "Alertas", pill: alertasCount > 0 ? { text: String(alertasCount), type: "red" } : null, adminOnly: false },
     { to: "/configuracion", icon: Settings, label: "Configuración", pill: null, adminOnly: true },
+    { to: "/presupuesto", icon: FileText, label: "Presupuesto", pill: null, adminOnly: true },
   ];
 
   const navItems = allNavItems.filter(item => !item.adminOnly || isAdmin);
@@ -170,15 +185,15 @@ export default function Layout() {
             </button>
             <div className="hidden sm:flex items-center gap-2.5 ml-2 pl-3 border-l border-slate-200 dark:border-slate-800">
               <div className="w-7 h-7 bg-brand-600 rounded-full flex items-center justify-center text-white text-xs font-medium">
-                {user?.email?.charAt(0).toUpperCase() || "U"}
+                {user?.email?.charAt(0).toUpperCase() ?? "U"}
               </div>
               <span className="text-sm font-medium text-slate-700 dark:text-slate-300 max-w-[180px] truncate">
-                {user?.email || "Usuario"}
+                {user?.email ?? "Usuario"}
               </span>
             </div>
             {user && (
               <button
-                onClick={handleLogout}
+                onClick={() => void handleLogout()}
                 aria-label="Cerrar sesión"
                 className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-950/30 rounded-md transition-colors"
               >

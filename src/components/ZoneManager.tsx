@@ -38,27 +38,16 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({ onClose }) => {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editType, setEditType] = useState<'zona' | 'subzona'>('zona');
   const [editingItem, setEditingItem] = useState<Zona | Subzona | null>(null);
+  const [preselectedZonaId, setPreselectedZonaId] = useState<string | undefined>(undefined);
 
 
   // Cargar zonas y subzonas y crear las faltantes directamente
   useEffect(() => {
     const loadAndCreateMissingZones = async () => {
       try {
-        console.log('🔍 Verificando y creando zonas y subzonas faltantes...');
-        
         // Importar funciones de Firebase
-        const { db, collection, getDocs, doc, writeBatch, Timestamp, auth } = await import('../firebase');
-        
-        // Verificar autenticación
-        const currentUser = auth.currentUser;
-        console.log('👤 Usuario autenticado:', currentUser ? 'SÍ' : 'NO');
-        if (currentUser) {
-          console.log('📧 Email:', currentUser.email);
-          console.log('🆔 UID:', currentUser.uid);
-        } else {
-          console.log('❌ No hay usuario autenticado - esto podría causar problemas de permisos');
-        }
-        
+        const { db, collection, getDocs, doc, writeBatch, Timestamp } = await import('../firebase');
+
         // Definir todas las zonas y subzonas que deberían existir
         const allZonesData = [
           {
@@ -147,8 +136,6 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({ onClose }) => {
         const zonasSnapshot = await getDocs(collection(db, 'zonas'));
         const subzonasSnapshot = await getDocs(collection(db, 'subzonas'));
         
-        console.log(`📋 Encontradas ${zonasSnapshot.size} zonas existentes`);
-        console.log(`📋 Encontradas ${subzonasSnapshot.size} subzonas existentes`);
         
         const existingZoneIds = new Set();
         const existingSubzoneIds = new Set();
@@ -168,19 +155,15 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({ onClose }) => {
           });
         });
         
-        console.log(`📊 Zonas faltantes: ${missingZones.length}`);
-        console.log(`📍 Subzonas faltantes: ${allMissingSubzones.length}`);
         
         // Crear zonas y subzonas faltantes
         if (missingZones.length > 0 || allMissingSubzones.length > 0) {
-          console.log('🔧 Creando zonas y subzonas faltantes...');
           
           const batch = writeBatch(db);
           const now = Timestamp.now();
           
           // Crear zonas faltantes
           missingZones.forEach((zonaData) => {
-            console.log(`🏭 Creando zona: ${zonaData.nombre}`);
             
             const zonaRef = doc(db, 'zonas', zonaData.id);
             const zonaDoc = {
@@ -198,7 +181,6 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({ onClose }) => {
           
           // Crear subzonas faltantes
           allMissingSubzones.forEach((subzonaData) => {
-            console.log(`   📍 Creando subzona: ${subzonaData.nombre}`);
             
             // Encontrar a qué zona pertenece esta subzona
             const parentZone = allZonesData.find(zona => 
@@ -223,10 +205,8 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({ onClose }) => {
           });
           
           // Ejecutar el batch
-          console.log('🔄 Ejecutando batch de operaciones...');
           try {
             await batch.commit();
-            console.log('✅ Zonas y subzonas faltantes creadas exitosamente');
           } catch (batchError: any) {
             console.error('❌ Error en batch.commit():', batchError);
             console.error('Código de error:', batchError.code);
@@ -258,8 +238,6 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({ onClose }) => {
             });
           });
           
-          console.log(`📊 Total final: ${loadedZonas.length} zonas`);
-          console.log(`📍 Total final: ${loadedZonas.reduce((total, zona) => total + zona.subzonas.length, 0)} subzonas`);
           
           setZonas(loadedZonas);
           setLoading(false);
@@ -287,7 +265,6 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({ onClose }) => {
             });
           });
           
-          console.log(`✅ Todas las zonas ya existen. Cargadas ${loadedZonas.length} zonas`);
           
           setZonas(loadedZonas);
           setLoading(false);
@@ -414,14 +391,14 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({ onClose }) => {
   const handleCreateSubzona = (zonaId: string) => {
     setEditType('subzona');
     setEditingItem(null);
+    setPreselectedZonaId(zonaId);
     setEditModalOpen(true);
-    // Guardar el zonaId para pasarlo al modal
-    (window as any).tempZonaId = zonaId;
   };
 
   const handleEditSubzona = (subzona: Subzona) => {
     setEditType('subzona');
     setEditingItem(subzona);
+    setPreselectedZonaId(undefined);
     setEditModalOpen(true);
   };
 
@@ -707,7 +684,7 @@ export const ZoneManager: React.FC<ZoneManagerProps> = ({ onClose }) => {
           item={editingItem || undefined}
           zonas={zonas}
           onSave={editType === 'zona' ? handleSaveZona : handleSaveSubzona}
-          preselectedZonaId={(window as any).tempZonaId}
+          preselectedZonaId={preselectedZonaId}
         />
       </div>
     </div>

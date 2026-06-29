@@ -1,5 +1,5 @@
 import type { SelectHTMLAttributes} from 'react';
-import { forwardRef } from 'react';
+import { forwardRef, useId } from 'react';
 import { cn } from '../../lib/utils';
 
 export interface SelectOption {
@@ -32,7 +32,8 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
     },
     ref
   ) => {
-    const selectId = id || `select-${Math.random().toString(36).slice(2, 9)}`;
+    const generatedId = useId();
+    const selectId = id ?? generatedId;
     const errorId = `${selectId}-error`;
     const hintId = `${selectId}-hint`;
 
@@ -41,7 +42,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         {label && (
           <label
             htmlFor={selectId}
-            className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5"
+            className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5"
           >
             {label}
           </label>
@@ -51,10 +52,10 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             ref={ref}
             id={selectId}
             className={cn(
-              'w-full px-3 py-2.5 bg-white dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-700 rounded-lg',
-              'text-neutral-900 dark:text-neutral-100',
+              'w-full px-3 py-2.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg',
+              'text-slate-900 dark:text-slate-100',
               'focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent',
-              'disabled:bg-neutral-100 dark:disabled:bg-neutral-800 disabled:cursor-not-allowed',
+              'disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:cursor-not-allowed',
               'transition-colors duration-150 appearance-none',
               'pr-10',
               error && 'border-danger-500 focus:ring-danger-500',
@@ -75,7 +76,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
               </option>
             ))}
           </select>
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400">
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
@@ -87,7 +88,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           </p>
         )}
         {hint && !error && (
-          <p id={hintId} className="mt-1.5 text-sm text-neutral-500 dark:text-neutral-400">
+          <p id={hintId} className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
             {hint}
           </p>
         )}

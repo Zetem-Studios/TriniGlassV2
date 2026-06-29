@@ -2239,12 +2239,6 @@ const renderSubzonesFromMap = () => {
                 <Maximize2 size={16}/> {moveMode ? 'Cancelar' : 'Mover'}
               </button>
               <button
-                className="bg-yellow-400 hover:bg-yellow-500 disabled:bg-yellow-300 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow active:scale-95 transition-all"
-                disabled={moveLoading || deleteLoading || releaseLoading}
-              >
-                <Package size={16}/> Despachar
-              </button>
-              <button
                 className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow active:scale-95 transition-all"
                 onClick={handleReleasePalletPosition}
                 disabled={moveLoading || deleteLoading || releaseLoading}

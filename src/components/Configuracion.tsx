@@ -1,4 +1,4 @@
-import { ShieldCheck, Map, ChevronRight, Settings, Layers } from "lucide-react";
+import { ShieldCheck, Map, ChevronRight, Settings, Layers, FileText } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ZoneManager } from "./ZoneManager";
@@ -29,6 +29,15 @@ const opciones = [
     titulo: "Editor de mapas",
     descripcion: "Crea y edita diseños de almacenamiento personalizados con el editor visual.",
     destino: "/canvas-test",
+    externo: false,
+  },
+  {
+    icon: FileText,
+    iconBg: "bg-green-50 dark:bg-green-500/10",
+    iconColor: "text-green-600 dark:text-green-400",
+    titulo: "Presupuesto comercial",
+    descripcion: "Consulta y descarga el presupuesto del producto con planes, precios y mejoras.",
+    destino: "/presupuesto",
     externo: false,
   },
 ];
